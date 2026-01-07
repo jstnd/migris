@@ -1,5 +1,3 @@
-use std::any::type_name;
-
 use sqlx::{Column as SqlxColumn, Row as SqlxRow, TypeInfo};
 
 use crate::{BirbError, Column, ColumnFlag, Row, Value};
