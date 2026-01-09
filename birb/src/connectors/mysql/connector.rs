@@ -37,10 +37,8 @@ impl Connector for MySqlConnector {
         query: &str,
     ) -> Result<impl Stream<Item = Result<Row<Self::Column>, BirbError>>, BirbError> {
         let Some(pool) = self.pool.as_ref() else {
-            return Err(BirbError::DatabaseReadFailed {
+            return Err(BirbError::DatabaseReadBeforeConnect {
                 identifier: self.identifier.clone(),
-                message: "no connection was made to the database before attempting to read data"
-                    .into(),
             });
         };
 
