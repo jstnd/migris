@@ -63,7 +63,7 @@ impl Value {
                 let date: chrono::NaiveDateTime =
                     date.and_hms_opt(0, 0, 0)
                         .ok_or(BirbError::ValueReadFailed {
-                            message: "failed to convert date to datetime".into(),
+                            message: "failed to convert date to datetime".to_string(),
                         })?;
 
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))

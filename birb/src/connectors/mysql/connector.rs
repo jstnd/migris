@@ -10,7 +10,7 @@ pub struct MySqlConnector {
 impl MySqlConnector {
     pub fn new(identifier: &str) -> Self {
         Self {
-            identifier: identifier.into(),
+            identifier: identifier.to_string(),
             pool: None,
         }
     }
@@ -24,7 +24,7 @@ impl Connector for MySqlConnector {
             sqlx::MySqlPool::connect(&self.identifier)
                 .await
                 .map_err(|err| BirbError::DatabaseConnectFailed {
-                    identifier: self.identifier.clone(),
+                    identifier: self.identifier.to_string(),
                     message: err.to_string(),
                 })?,
         );
@@ -38,13 +38,13 @@ impl Connector for MySqlConnector {
     ) -> Result<impl Stream<Item = Result<Row<Self::Column>, BirbError>>, BirbError> {
         let Some(pool) = self.pool.as_ref() else {
             return Err(BirbError::DatabaseReadBeforeConnect {
-                identifier: self.identifier.clone(),
+                identifier: self.identifier.to_string(),
             });
         };
 
         Ok(sqlx::query(query).fetch(pool).map(|row| {
             row.map_err(|err| BirbError::DatabaseReadFailed {
-                identifier: self.identifier.clone(),
+                identifier: self.identifier.to_string(),
                 message: err.to_string(),
             })
             .and_then(Row::<Self::Column>::from)
