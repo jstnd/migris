@@ -32,7 +32,7 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    fn read_data(
+    fn read(
         &self,
         query: &str,
     ) -> Result<impl Stream<Item = Result<Row<Self::Column>, BirbError>>, BirbError> {
@@ -51,5 +51,12 @@ impl Connector for MySqlConnector {
             })
             .and_then(Row::<Self::Column>::from)
         }))
+    }
+
+    fn write(
+        &self,
+        stream: impl Stream<Item = Result<Row<Self::Column>, BirbError>>,
+    ) -> Result<(), BirbError> {
+        Ok(())
     }
 }

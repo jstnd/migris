@@ -12,8 +12,13 @@ pub trait Connector {
 
     fn connect(&mut self) -> impl std::future::Future<Output = Result<(), BirbError>> + Send;
 
-    fn read_data(
+    fn read(
         &self,
         query: &str,
     ) -> Result<impl Stream<Item = Result<Row<Self::Column>, BirbError>>, BirbError>;
+
+    fn write(
+        &self,
+        stream: impl Stream<Item = Result<Row<Self::Column>, BirbError>>,
+    ) -> Result<(), BirbError>;
 }
