@@ -1,6 +1,6 @@
-use futures_util::{Stream, StreamExt};
+use futures_util::StreamExt;
 
-use crate::{BirbError, Connector, Row, mysql::MySqlColumn};
+use crate::{BirbError, Connector, Row, connectors::RowStream, mysql::MySqlColumn};
 
 pub struct MySqlConnector {
     identifier: String,
@@ -32,29 +32,25 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    fn read(
-        &self,
-        query: &str,
-    ) -> Result<impl Stream<Item = Result<Row<Self::Column>, BirbError>>, BirbError> {
+    fn read<'a>(&'a self, query: &'a str) -> Result<RowStream<'a, Self::Column>, BirbError> {
         let Some(pool) = self.pool.as_ref() else {
             return Err(BirbError::DatabaseReadBeforeConnect {
                 identifier: self.identifier.to_string(),
             });
         };
 
-        Ok(sqlx::query(query).fetch(pool).map(|row| {
+        let stream = sqlx::query(query).fetch(pool).map(|row| {
             row.map_err(|err| BirbError::DatabaseReadFailed {
                 identifier: self.identifier.to_string(),
                 message: err.to_string(),
             })
             .and_then(Row::<Self::Column>::from)
-        }))
+        });
+
+        Ok(Box::pin(stream))
     }
 
-    fn write(
-        &self,
-        stream: impl Stream<Item = Result<Row<Self::Column>, BirbError>>,
-    ) -> Result<(), BirbError> {
+    fn write<'a>(&self, stream: RowStream<'a, Self::Column>) -> Result<(), BirbError> {
         Ok(())
     }
 }
