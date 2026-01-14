@@ -2,10 +2,8 @@ mod connectors;
 mod schema;
 mod value;
 
-pub use connectors::Connector;
-pub use schema::Column;
-pub use schema::ColumnFlag;
-pub use schema::Row;
+pub use connectors::{Connector, WriteOptions};
+pub use schema::{Column, ColumnFlag, Row};
 pub use value::Value;
 
 pub mod mysql {

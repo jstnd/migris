@@ -18,5 +18,14 @@ pub trait Connector {
 
     fn read<'a>(&'a self, query: &'a str) -> Result<RowStream<'a, Self::Column>, BirbError>;
 
-    fn write<'a>(&self, stream: RowStream<'a, Self::Column>) -> Result<(), BirbError>;
+    fn write<'a>(
+        &self,
+        stream: RowStream<'a, Self::Column>,
+        options: Option<WriteOptions>,
+    ) -> Result<(), BirbError>;
+}
+
+pub struct WriteOptions {
+    pub table_schema: String,
+    pub table_name: String,
 }

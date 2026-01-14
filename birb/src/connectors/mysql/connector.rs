@@ -1,6 +1,6 @@
 use futures_util::StreamExt;
 
-use crate::{BirbError, Connector, Row, connectors::RowStream, mysql::MySqlColumn};
+use crate::{BirbError, Connector, Row, WriteOptions, connectors::RowStream, mysql::MySqlColumn};
 
 pub struct MySqlConnector {
     identifier: String,
@@ -50,7 +50,11 @@ impl Connector for MySqlConnector {
         Ok(Box::pin(stream))
     }
 
-    fn write<'a>(&self, stream: RowStream<'a, Self::Column>) -> Result<(), BirbError> {
+    fn write<'a>(
+        &self,
+        stream: RowStream<'a, Self::Column>,
+        options: Option<WriteOptions>,
+    ) -> Result<(), BirbError> {
         Ok(())
     }
 }
