@@ -7,6 +7,7 @@ use crate::{BirbError, Column, Row};
 pub(crate) mod mysql {
     pub(crate) mod connector;
     pub(crate) mod schema;
+    pub(crate) mod value;
 }
 
 type RowStream<'a, T> = Pin<Box<dyn Stream<Item = Result<Row<T>, BirbError>> + 'a>>;

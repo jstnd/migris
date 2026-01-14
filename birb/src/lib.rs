@@ -1,5 +1,6 @@
 mod connectors;
 mod schema;
+mod util;
 mod value;
 
 pub use connectors::{Connector, WriteOptions};
