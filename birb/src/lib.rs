@@ -18,11 +18,16 @@ pub enum BirbError {
     #[error("failed to connect to database at {identifier}: {message}")]
     DatabaseConnectFailed { identifier: String, message: String },
 
-    #[error("no connection was made to database at {identifier} before attempting to read data")]
-    DatabaseReadBeforeConnect { identifier: String },
+    #[error(
+        "no connection was made to database at {identifier} before attempting to interact with data"
+    )]
+    DatabaseInteractBeforeConnect { identifier: String },
 
     #[error("failed to read from database at {identifier}: {message}")]
     DatabaseReadFailed { identifier: String, message: String },
+
+    #[error("failed to write to database at {identifier}: {message}")]
+    DatabaseWriteFailed { identifier: String, message: String },
 
     #[error("failed to read value: {message}")]
     ValueReadFailed { message: String },

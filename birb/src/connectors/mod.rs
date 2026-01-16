@@ -10,7 +10,7 @@ pub(crate) mod mysql {
     pub(crate) mod value;
 }
 
-type RowStream<'a, T> = Pin<Box<dyn Stream<Item = Result<Row<T>, BirbError>> + 'a>>;
+type RowStream<'a, T> = Pin<Box<dyn Stream<Item = Result<Row<T>, BirbError>> + Send + 'a>>;
 
 pub trait Connector {
     type Column: Column;
@@ -22,8 +22,8 @@ pub trait Connector {
     fn write<'a>(
         &self,
         stream: RowStream<'a, Self::Column>,
-        options: Option<WriteOptions>,
-    ) -> Result<(), BirbError>;
+        options: WriteOptions,
+    ) -> impl std::future::Future<Output = Result<(), BirbError>> + Send;
 }
 
 pub struct WriteOptions {

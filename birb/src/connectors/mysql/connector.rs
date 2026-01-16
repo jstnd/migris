@@ -1,10 +1,17 @@
 use futures_util::StreamExt;
+use sqlx::{MySql, MySqlPool, QueryBuilder};
 
-use crate::{BirbError, Connector, Row, WriteOptions, connectors::RowStream, mysql::MySqlColumn};
+use crate::{
+    BirbError, Column, Connector, Row, Value, WriteOptions,
+    connectors::{RowStream, mysql::value},
+    mysql::MySqlColumn,
+};
+
+const MYSQL_MAX_ARGUMENTS: u16 = u16::MAX;
 
 pub struct MySqlConnector {
     identifier: String,
-    pub pool: Option<sqlx::MySqlPool>,
+    pub pool: Option<MySqlPool>,
 }
 
 impl MySqlConnector {
@@ -13,6 +20,14 @@ impl MySqlConnector {
             identifier: identifier.to_string(),
             pool: None,
         }
+    }
+
+    pub(crate) fn pool(&self) -> Result<&MySqlPool, BirbError> {
+        self.pool
+            .as_ref()
+            .ok_or_else(|| BirbError::DatabaseInteractBeforeConnect {
+                identifier: self.identifier.to_string(),
+            })
     }
 }
 
@@ -33,12 +48,7 @@ impl Connector for MySqlConnector {
     }
 
     fn read<'a>(&'a self, query: &'a str) -> Result<RowStream<'a, Self::Column>, BirbError> {
-        let Some(pool) = self.pool.as_ref() else {
-            return Err(BirbError::DatabaseReadBeforeConnect {
-                identifier: self.identifier.to_string(),
-            });
-        };
-
+        let pool = self.pool()?;
         let stream = sqlx::query(query).fetch(pool).map(|row| {
             row.map_err(|err| BirbError::DatabaseReadFailed {
                 identifier: self.identifier.to_string(),
@@ -50,11 +60,57 @@ impl Connector for MySqlConnector {
         Ok(Box::pin(stream))
     }
 
-    fn write<'a>(
+    async fn write<'a>(
         &self,
         stream: RowStream<'a, Self::Column>,
-        options: Option<WriteOptions>,
+        options: WriteOptions,
     ) -> Result<(), BirbError> {
+        // TODO: validate options
+
+        let pool = self.pool()?;
+        let mut txn = pool
+            .begin()
+            .await
+            .map_err(|err| BirbError::DatabaseWriteFailed {
+                identifier: self.identifier.to_string(),
+                message: err.to_string(),
+            })?;
+
+        let mut stream = stream.enumerate();
+        let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
+            "INSERT INTO {}.{} ",
+            options.table_schema, options.table_name
+        ));
+
+        while let Some((idx, row)) = stream.next().await {
+            let row = row?;
+
+            // Perform data extraction using first row encountered
+            if idx == 0 {}
+
+            builder.push_values(std::iter::once(row), |mut b, row| {
+                for value in row.values {
+                    b.push_bind(value);
+                }
+            });
+        }
+
+        let query = builder.build();
+        query
+            .execute(&mut *txn)
+            .await
+            .map_err(|err| BirbError::DatabaseWriteFailed {
+                identifier: self.identifier.to_string(),
+                message: err.to_string(),
+            })?;
+
+        txn.commit()
+            .await
+            .map_err(|err| BirbError::DatabaseWriteFailed {
+                identifier: self.identifier.to_string(),
+                message: err.to_string(),
+            })?;
+
         Ok(())
     }
 }
