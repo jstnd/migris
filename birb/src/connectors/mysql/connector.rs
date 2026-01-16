@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use sqlx::{MySql, MySqlPool, QueryBuilder};
+use sqlx::{Execute, MySql, MySqlPool, QueryBuilder};
 
 use crate::{
     BirbError, Column, Connector, Row, Value, WriteOptions,
@@ -78,7 +78,7 @@ impl Connector for MySqlConnector {
 
         let mut stream = stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
-            "INSERT INTO {}.{} ",
+            "INSERT INTO {}.{} VALUES ",
             options.table_schema, options.table_name
         ));
 
@@ -88,11 +88,18 @@ impl Connector for MySqlConnector {
             // Perform data extraction using first row encountered
             if idx == 0 {}
 
-            builder.push_values(std::iter::once(row), |mut b, row| {
-                for value in row.values {
-                    b.push_bind(value);
-                }
-            });
+            if idx > 0 {
+                builder.push(", ");
+            }
+
+            builder.push("(");
+            let mut separated = builder.separated(", ");
+
+            for value in row.values {
+                separated.push_bind(value);
+            }
+
+            separated.push_unseparated(")");
         }
 
         let query = builder.build();
