@@ -1,13 +1,9 @@
 use futures_util::StreamExt;
-use sqlx::{Execute, MySql, MySqlPool, QueryBuilder};
+use sqlx::{MySql, MySqlPool, QueryBuilder};
 
-use crate::{
-    BirbError, Column, Connector, Row, Value, WriteOptions,
-    connectors::{RowStream, mysql::value},
-    mysql::MySqlColumn,
-};
+use crate::{BirbError, Connector, Row, WriteOptions, connectors::RowStream, mysql::MySqlColumn};
 
-const MYSQL_MAX_ARGUMENTS: u16 = u16::MAX;
+const MYSQL_MAX_PARAMETERS: usize = 65535;
 
 pub struct MySqlConnector {
     identifier: String,
@@ -82,13 +78,19 @@ impl Connector for MySqlConnector {
             options.table_schema, options.table_name
         ));
 
+        let mut rows_per_txn = 0;
+        let mut current_rows_in_txn = 0;
+
         while let Some((idx, row)) = stream.next().await {
             let row = row?;
 
-            // Perform data extraction using first row encountered
-            if idx == 0 {}
+            // Perform data extraction using first row encountered.
+            if idx == 0 {
+                // Determine the maximum number of rows we can fit into a transaction.
+                rows_per_txn = MYSQL_MAX_PARAMETERS / row.columns.len();
+            }
 
-            if idx > 0 {
+            if current_rows_in_txn > 0 {
                 builder.push(", ");
             }
 
@@ -100,16 +102,33 @@ impl Connector for MySqlConnector {
             }
 
             separated.push_unseparated(")");
+            current_rows_in_txn += 1;
+
+            if current_rows_in_txn == rows_per_txn {
+                let query = builder.build();
+                query
+                    .execute(&mut *txn)
+                    .await
+                    .map_err(|err| BirbError::DatabaseWriteFailed {
+                        identifier: self.identifier.to_string(),
+                        message: err.to_string(),
+                    })?;
+
+                builder.reset();
+                current_rows_in_txn = 0;
+            }
         }
 
-        let query = builder.build();
-        query
-            .execute(&mut *txn)
-            .await
-            .map_err(|err| BirbError::DatabaseWriteFailed {
-                identifier: self.identifier.to_string(),
-                message: err.to_string(),
-            })?;
+        if current_rows_in_txn > 0 {
+            let query = builder.build();
+            query
+                .execute(&mut *txn)
+                .await
+                .map_err(|err| BirbError::DatabaseWriteFailed {
+                    identifier: self.identifier.to_string(),
+                    message: err.to_string(),
+                })?;
+        }
 
         txn.commit()
             .await
