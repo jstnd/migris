@@ -59,7 +59,7 @@ impl Connector for MySqlConnector {
     async fn write<'a>(
         &self,
         stream: RowStream<'a, Self::Column>,
-        options: WriteOptions,
+        options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {
         // TODO: validate options
 

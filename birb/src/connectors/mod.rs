@@ -22,11 +22,11 @@ pub trait Connector {
     fn write<'a>(
         &self,
         stream: RowStream<'a, Self::Column>,
-        options: WriteOptions,
+        options: WriteOptions<'a>,
     ) -> impl std::future::Future<Output = Result<(), BirbError>> + Send;
 }
 
-pub struct WriteOptions {
-    pub table_schema: String,
-    pub table_name: String,
+pub struct WriteOptions<'a> {
+    pub table_schema: &'a str,
+    pub table_name: &'a str,
 }
