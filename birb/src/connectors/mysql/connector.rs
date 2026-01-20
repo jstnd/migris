@@ -7,7 +7,7 @@ const MYSQL_MAX_PARAMETERS: usize = 65535;
 
 pub struct MySqlConnector {
     identifier: String,
-    pub pool: Option<MySqlPool>,
+    pool: Option<MySqlPool>,
 }
 
 impl MySqlConnector {
