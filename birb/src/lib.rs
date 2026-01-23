@@ -14,19 +14,17 @@ pub mod mysql {
 
 #[derive(thiserror::Error, Debug)]
 pub enum BirbError {
-    #[error("failed to connect to database at {identifier}: {message}")]
-    DatabaseConnectFailed { identifier: String, message: String },
+    #[error("failed to connect to database: {message}")]
+    DatabaseConnectFailed { message: String },
 
-    #[error(
-        "no connection was made to database at {identifier} before attempting to interact with data"
-    )]
-    DatabaseInteractBeforeConnect { identifier: String },
+    #[error("no connection was made to database before attempting to interact with data")]
+    DatabaseInteractBeforeConnect,
 
-    #[error("failed to read from database at {identifier}: {message}")]
-    DatabaseReadFailed { identifier: String, message: String },
+    #[error("failed to read from database: {message}")]
+    DatabaseReadFailed { message: String },
 
-    #[error("failed to write to database at {identifier}: {message}")]
-    DatabaseWriteFailed { identifier: String, message: String },
+    #[error("failed to write to database: {message}")]
+    DatabaseWriteFailed { message: String },
 
     #[error("failed to read value: {message}")]
     ValueReadFailed { message: String },
