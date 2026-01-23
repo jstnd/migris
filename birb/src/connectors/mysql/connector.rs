@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use futures_util::StreamExt;
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
 
@@ -48,8 +50,9 @@ impl Connector for MySqlConnector {
         let mut stream = sqlx::query(query).fetch(pool).peekable();
         let mut columns = Vec::new();
 
-        if let Some(row) = stream.next().await {
-            let row = row.map_err(|err| BirbError::DatabaseReadFailed {
+        let peekable = Pin::new(&mut stream);
+        if let Some(row) = peekable.peek().await {
+            let row = row.as_ref().map_err(|err| BirbError::DatabaseReadFailed {
                 identifier: self.identifier.to_string(),
                 message: err.to_string(),
             })?;
