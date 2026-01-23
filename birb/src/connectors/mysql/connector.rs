@@ -13,9 +13,9 @@ pub struct MySqlConnector {
 }
 
 impl MySqlConnector {
-    pub fn new(identifier: &str) -> Self {
+    pub fn new(identifier: impl Into<String>) -> Self {
         Self {
-            identifier: identifier.to_string(),
+            identifier: identifier.into(),
             pool: None,
         }
     }
