@@ -16,36 +16,23 @@ pub trait Column {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnFlag {
     Unsigned,
 }
 
 #[derive(Debug)]
-pub struct Row<T>
-where
-    T: Column,
-{
-    pub columns: Vec<T>,
+pub struct Row {
     pub values: Vec<Value>,
 }
 
-impl<T> Row<T>
-where
-    T: Column,
-{
+impl Row {
     pub fn new() -> Self {
-        Self {
-            columns: Vec::new(),
-            values: Vec::new(),
-        }
+        Self { values: Vec::new() }
     }
 }
 
-impl<T> Default for Row<T>
-where
-    T: Column,
-{
+impl Default for Row {
     fn default() -> Self {
         Self::new()
     }

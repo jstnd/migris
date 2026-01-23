@@ -3,14 +3,13 @@ mod schema;
 mod util;
 mod value;
 
-pub use connectors::{Connector, WriteOptions};
+pub use connectors::{Connector, ConnectorData, WriteOptions};
 pub use schema::{Column, ColumnFlag, Row};
 pub use value::Value;
 
 pub mod mysql {
     pub use crate::connectors::mysql::connector::MySqlConnector;
-    pub use crate::connectors::mysql::schema::MySqlColumn;
-    pub use crate::connectors::mysql::schema::MySqlColumnType;
+    pub use crate::connectors::mysql::schema::{MySqlColumn, MySqlColumnType};
 }
 
 #[derive(thiserror::Error, Debug)]

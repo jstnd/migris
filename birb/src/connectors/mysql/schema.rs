@@ -2,7 +2,7 @@ use sqlx::{Column as SqlxColumn, Row as SqlxRow, TypeInfo};
 
 use crate::{BirbError, Column, ColumnFlag, Row, Value};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MySqlColumn {
     flags: Vec<ColumnFlag>,
     name: String,
@@ -143,14 +143,21 @@ impl From<&str> for MySqlColumnType {
     }
 }
 
-impl Row<MySqlColumn> {
-    pub fn from(sqlx_row: sqlx::mysql::MySqlRow) -> Result<Self, BirbError> {
+impl Row {
+    pub fn from_mysql(
+        sqlx_row: sqlx::mysql::MySqlRow,
+        columns: &[MySqlColumn],
+    ) -> Result<Self, BirbError> {
         let mut row = Self::new();
 
-        for column in sqlx_row.columns() {
-            let column = MySqlColumn::from(column);
-            row.values.push(Value::from_mysql(&column, &sqlx_row)?);
-            row.columns.push(column);
+        for column in columns {
+            let value = sqlx_row.try_get_raw(column.ordinal()).map_err(|err| {
+                BirbError::ValueReadFailed {
+                    message: err.to_string(),
+                }
+            })?;
+
+            row.values.push(Value::from_mysql(value, column)?);
         }
 
         Ok(row)

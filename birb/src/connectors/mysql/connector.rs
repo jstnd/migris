@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
-use sqlx::{MySql, MySqlPool, QueryBuilder};
+use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
 
-use crate::{BirbError, Connector, Row, WriteOptions, connectors::RowStream, mysql::MySqlColumn};
+use crate::{BirbError, Connector, ConnectorData, Row, WriteOptions, mysql::MySqlColumn};
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
@@ -43,22 +43,38 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    fn read<'a>(&'a self, query: &'a str) -> Result<RowStream<'a, Self::Column>, BirbError> {
+    async fn read<'a>(&self, query: &'a str) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
         let pool = self.pool()?;
-        let stream = sqlx::query(query).fetch(pool).map(|row| {
-            row.map_err(|err| BirbError::DatabaseReadFailed {
+        let mut stream = sqlx::query(query).fetch(pool).peekable();
+        let mut columns = Vec::new();
+
+        if let Some(row) = stream.next().await {
+            let row = row.map_err(|err| BirbError::DatabaseReadFailed {
                 identifier: self.identifier.to_string(),
                 message: err.to_string(),
+            })?;
+
+            for column in row.columns() {
+                columns.push(MySqlColumn::from(column));
+            }
+        }
+
+        let identifier = self.identifier.clone();
+        let stream_columns = columns.clone();
+        let stream = stream.map(move |row| {
+            row.map_err(|err| BirbError::DatabaseReadFailed {
+                identifier: identifier.clone(),
+                message: err.to_string(),
             })
-            .and_then(Row::<Self::Column>::from)
+            .and_then(|row| Row::from_mysql(row, &stream_columns))
         });
 
-        Ok(Box::pin(stream))
+        Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
     async fn write<'a>(
         &self,
-        stream: RowStream<'a, Self::Column>,
+        data: ConnectorData<'a, Self::Column>,
         options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {
         // TODO: validate options
@@ -72,7 +88,7 @@ impl Connector for MySqlConnector {
                 message: err.to_string(),
             })?;
 
-        let mut stream = stream.enumerate();
+        let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "INSERT INTO {}.{} VALUES ",
             options.table_schema, options.table_name
@@ -87,7 +103,7 @@ impl Connector for MySqlConnector {
             // Perform data extraction using first row encountered.
             if idx == 0 {
                 // Determine the maximum number of rows we can fit into a transaction.
-                rows_per_txn = MYSQL_MAX_PARAMETERS / row.columns.len();
+                rows_per_txn = MYSQL_MAX_PARAMETERS / data.columns.len();
             }
 
             if current_rows_in_txn > 0 {

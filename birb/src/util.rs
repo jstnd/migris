@@ -1,14 +1,14 @@
-use crate::{BirbError, Column};
+use sqlx::{Database, Decode, ValueRef};
 
-pub(crate) fn decode_sqlx<'a, T, C, R>(column: &C, row: &'a R) -> Result<T, BirbError>
+use crate::BirbError;
+
+pub(crate) fn decode_sqlx<'a, T, DB, V>(value: V) -> Result<T, BirbError>
 where
-    T: sqlx::Decode<'a, <R as sqlx::Row>::Database> + sqlx::Type<<R as sqlx::Row>::Database>,
-    C: Column,
-    R: sqlx::Row,
-    usize: sqlx::ColumnIndex<R>,
+    T: Decode<'a, DB>,
+    DB: Database<ValueRef<'a> = V>,
+    V: ValueRef<'a>,
 {
-    row.try_get(column.ordinal())
-        .map_err(|err| BirbError::ValueReadFailed {
-            message: err.to_string(),
-        })
+    T::decode(value).map_err(|err| BirbError::ValueReadFailed {
+        message: err.to_string(),
+    })
 }

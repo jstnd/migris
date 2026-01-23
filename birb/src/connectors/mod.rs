@@ -10,20 +10,40 @@ pub(crate) mod mysql {
     pub(crate) mod value;
 }
 
-type RowStream<'a, T> = Pin<Box<dyn Stream<Item = Result<Row<T>, BirbError>> + Send + 'a>>;
+type RowStream<'a> = Pin<Box<dyn Stream<Item = Result<Row, BirbError>> + Send + 'a>>;
+
+pub struct ConnectorData<'a, T>
+where
+    T: Column,
+{
+    pub columns: Vec<T>,
+    pub stream: RowStream<'a>,
+}
+
+impl<'a, T> ConnectorData<'a, T>
+where
+    T: Column,
+{
+    pub fn new(columns: Vec<T>, stream: RowStream<'a>) -> Self {
+        Self { columns, stream }
+    }
+}
 
 pub trait Connector {
     type Column: Column;
 
-    fn connect(&mut self) -> impl std::future::Future<Output = Result<(), BirbError>> + Send;
+    fn connect(&mut self) -> impl Future<Output = Result<(), BirbError>> + Send;
 
-    fn read<'a>(&'a self, query: &'a str) -> Result<RowStream<'a, Self::Column>, BirbError>;
+    fn read<'a>(
+        &self,
+        query: &'a str,
+    ) -> impl Future<Output = Result<ConnectorData<'a, Self::Column>, BirbError>> + Send;
 
     fn write<'a>(
         &self,
-        stream: RowStream<'a, Self::Column>,
+        data: ConnectorData<'a, Self::Column>,
         options: WriteOptions<'a>,
-    ) -> impl std::future::Future<Output = Result<(), BirbError>> + Send;
+    ) -> impl Future<Output = Result<(), BirbError>> + Send;
 }
 
 pub struct WriteOptions<'a> {
