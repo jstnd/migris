@@ -42,7 +42,10 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    async fn read<'a>(&self, query: &'a str) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
+    async fn read<'a>(
+        &mut self,
+        query: &'a str,
+    ) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
         let pool = self.pool()?;
         let mut stream = sqlx::query(query).fetch(pool).peekable();
         let mut columns = Vec::new();
@@ -70,7 +73,7 @@ impl Connector for MySqlConnector {
     }
 
     async fn write<'a>(
-        &self,
+        &mut self,
         data: ConnectorData<'a, Self::Column>,
         options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {

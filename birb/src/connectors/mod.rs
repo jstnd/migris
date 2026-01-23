@@ -4,6 +4,11 @@ use futures_util::Stream;
 
 use crate::{BirbError, Column, Row};
 
+pub(crate) mod csv {
+    pub(crate) mod connector;
+    pub(crate) mod schema;
+}
+
 pub(crate) mod mysql {
     pub(crate) mod connector;
     pub(crate) mod schema;
@@ -35,12 +40,12 @@ pub trait Connector {
     fn connect(&mut self) -> impl Future<Output = Result<(), BirbError>> + Send;
 
     fn read<'a>(
-        &self,
+        &mut self,
         query: &'a str,
     ) -> impl Future<Output = Result<ConnectorData<'a, Self::Column>, BirbError>> + Send;
 
     fn write<'a>(
-        &self,
+        &mut self,
         data: ConnectorData<'a, Self::Column>,
         options: WriteOptions<'a>,
     ) -> impl Future<Output = Result<(), BirbError>> + Send;
