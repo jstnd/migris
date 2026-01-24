@@ -1,6 +1,6 @@
 use csv::Reader;
 
-use crate::{BirbError, Connector, ConnectorData, Row, WriteOptions, csv::CsvColumn};
+use crate::{BirbError, Column, Connector, ConnectorData, Row, WriteOptions, csv::CsvColumn};
 
 #[derive(Debug)]
 pub struct CsvConnector {
@@ -50,9 +50,9 @@ impl Connector for CsvConnector {
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
-    async fn write<'a>(
+    async fn write<'a, T: Column + Send>(
         &mut self,
-        data: ConnectorData<'a, Self::Column>,
+        data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {
         unimplemented!()

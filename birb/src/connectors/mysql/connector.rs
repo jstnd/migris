@@ -3,7 +3,7 @@ use std::pin::Pin;
 use futures_util::StreamExt;
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
 
-use crate::{BirbError, Connector, ConnectorData, Row, WriteOptions, mysql::MySqlColumn};
+use crate::{BirbError, Column, Connector, ConnectorData, Row, WriteOptions, mysql::MySqlColumn};
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
@@ -72,9 +72,9 @@ impl Connector for MySqlConnector {
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
-    async fn write<'a>(
+    async fn write<'a, T: Column + Send>(
         &mut self,
-        data: ConnectorData<'a, Self::Column>,
+        data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {
         // TODO: validate options

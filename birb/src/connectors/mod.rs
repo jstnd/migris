@@ -44,9 +44,9 @@ pub trait Connector {
         query: &'a str,
     ) -> impl Future<Output = Result<ConnectorData<'a, Self::Column>, BirbError>> + Send;
 
-    fn write<'a>(
+    fn write<'a, T: Column + Send>(
         &mut self,
-        data: ConnectorData<'a, Self::Column>,
+        data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
     ) -> impl Future<Output = Result<(), BirbError>> + Send;
 }
