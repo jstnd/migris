@@ -52,7 +52,7 @@ impl Connector for CsvConnector {
     async fn write<'a, T: Column + Send>(
         &mut self,
         data: ConnectorData<'a, T>,
-        _options: WriteOptions<'a>,
+        _options: WriteOptions,
     ) -> BirbResult<()> {
         let mut writer =
             csv::Writer::from_path(&self.path).map_err(|err| BirbError::FileOpenFailed {

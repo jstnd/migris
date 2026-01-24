@@ -47,6 +47,6 @@ pub trait Connector {
     fn write<'a, T: Column + Send>(
         &mut self,
         data: ConnectorData<'a, T>,
-        options: WriteOptions<'a>,
+        options: WriteOptions,
     ) -> impl Future<Output = BirbResult<()>> + Send;
 }

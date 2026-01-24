@@ -78,8 +78,11 @@ impl Connector for MySqlConnector {
     async fn write<'a, T: Column + Send>(
         &mut self,
         data: ConnectorData<'a, T>,
-        options: WriteOptions<'a>,
+        options: WriteOptions,
     ) -> BirbResult<()> {
+        // Validate the given write options for fields that are required.
+        validate_write_options(&options)?;
+
         // Ensure a connection exists before performing operations.
         self.connect().await?;
 
@@ -94,7 +97,8 @@ impl Connector for MySqlConnector {
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "INSERT INTO {}.{} VALUES ",
-            options.table_schema, options.table_name
+            options.table_schema.unwrap(),
+            options.table_name.unwrap()
         ));
 
         let mut rows_per_txn = 0;
@@ -155,4 +159,8 @@ impl Connector for MySqlConnector {
 
         Ok(())
     }
+}
+
+fn validate_write_options(options: &WriteOptions) -> BirbResult<()> {
+    Ok(())
 }
