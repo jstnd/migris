@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use futures_util::Stream;
 
-use crate::{BirbResult, Column, Row};
+use crate::{BirbResult, Column, Row, WriteOptions};
 
 pub(crate) mod csv {
     pub(crate) mod connector;
@@ -49,9 +49,4 @@ pub trait Connector {
         data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
     ) -> impl Future<Output = BirbResult<()>> + Send;
-}
-
-pub struct WriteOptions<'a> {
-    pub table_schema: &'a str,
-    pub table_name: &'a str,
 }

@@ -1,9 +1,11 @@
 mod connectors;
+mod options;
 mod schema;
 mod util;
 mod value;
 
-pub use connectors::{Connector, ConnectorData, WriteOptions};
+pub use connectors::{Connector, ConnectorData};
+pub use options::WriteOptions;
 pub use schema::{Column, ColumnFlag, Row};
 pub use value::Value;
 
