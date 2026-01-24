@@ -1,3 +1,5 @@
+use crate::BirbError;
+
 #[derive(Debug)]
 pub enum Value {
     Null,
@@ -16,4 +18,31 @@ pub enum Value {
     U16(u16),
     U32(u32),
     U64(u64),
+}
+
+impl Value {
+    pub fn to_string(self) -> Result<String, BirbError> {
+        Ok(match self {
+            Value::Null => "".into(),
+            Value::Bytes(value) => {
+                String::from_utf8(value).map_err(|err| BirbError::ValueError {
+                    message: err.to_string(),
+                })?
+            }
+            Value::Date(value) => value.to_string(),
+            Value::Decimal(value) => value.to_string(),
+            Value::String(value) => value,
+            Value::Time(value) => value.to_string(),
+            Value::F32(value) => value.to_string(),
+            Value::F64(value) => value.to_string(),
+            Value::I8(value) => value.to_string(),
+            Value::I16(value) => value.to_string(),
+            Value::I32(value) => value.to_string(),
+            Value::I64(value) => value.to_string(),
+            Value::U8(value) => value.to_string(),
+            Value::U16(value) => value.to_string(),
+            Value::U32(value) => value.to_string(),
+            Value::U64(value) => value.to_string(),
+        })
+    }
 }

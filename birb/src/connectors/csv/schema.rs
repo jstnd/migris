@@ -1,6 +1,6 @@
 use csv::StringRecord;
 
-use crate::{Column, ColumnFlag, Row, Value};
+use crate::{BirbError, Column, ColumnFlag, Row, Value};
 
 #[derive(Clone, Debug)]
 pub struct CsvColumn {
@@ -55,5 +55,15 @@ impl Row {
         }
 
         row
+    }
+
+    pub fn into_csv(self) -> Result<StringRecord, BirbError> {
+        let mut record = StringRecord::new();
+
+        for value in self.values {
+            record.push_field(&value.to_string()?);
+        }
+
+        Ok(record)
     }
 }

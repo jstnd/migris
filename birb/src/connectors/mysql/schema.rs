@@ -151,11 +151,12 @@ impl Row {
         let mut row = Self::new();
 
         for column in columns {
-            let value = sqlx_row.try_get_raw(column.ordinal()).map_err(|err| {
-                BirbError::ValueReadFailed {
-                    message: err.to_string(),
-                }
-            })?;
+            let value =
+                sqlx_row
+                    .try_get_raw(column.ordinal())
+                    .map_err(|err| BirbError::ValueError {
+                        message: err.to_string(),
+                    })?;
 
             row.values.push(Value::from_mysql(value, column)?);
         }

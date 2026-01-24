@@ -1,4 +1,4 @@
-use csv::Reader;
+use futures_util::StreamExt;
 
 use crate::{BirbError, Column, Connector, ConnectorData, Row, WriteOptions, csv::CsvColumn};
 
@@ -26,7 +26,7 @@ impl Connector for CsvConnector {
         _query: &'a str,
     ) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
         let mut reader =
-            Reader::from_path(&self.path).map_err(|err| BirbError::FileOpenFailed {
+            csv::Reader::from_path(&self.path).map_err(|err| BirbError::FileOpenFailed {
                 message: err.to_string(),
             })?;
 
@@ -53,8 +53,36 @@ impl Connector for CsvConnector {
     async fn write<'a, T: Column + Send>(
         &mut self,
         data: ConnectorData<'a, T>,
-        options: WriteOptions<'a>,
+        _options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {
-        unimplemented!()
+        let mut writer =
+            csv::Writer::from_path(&self.path).map_err(|err| BirbError::FileOpenFailed {
+                message: err.to_string(),
+            })?;
+
+        //
+        let headers = data.columns.iter().map(|c| c.name());
+        writer
+            .write_record(headers)
+            .map_err(|err| BirbError::FileWriteFailed {
+                message: err.to_string(),
+            })?;
+
+        //
+        let mut stream = data.stream;
+        while let Some(row) = stream.next().await {
+            let record = row?.into_csv()?;
+            writer
+                .write_record(&record)
+                .map_err(|err| BirbError::FileWriteFailed {
+                    message: err.to_string(),
+                })?;
+        }
+
+        writer.flush().map_err(|err| BirbError::FileWriteFailed {
+            message: err.to_string(),
+        })?;
+
+        Ok(())
     }
 }

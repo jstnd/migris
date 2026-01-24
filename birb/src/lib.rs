@@ -37,6 +37,6 @@ pub enum BirbError {
     #[error("failed to write to file: {message}")]
     FileWriteFailed { message: String },
 
-    #[error("failed to read value: {message}")]
-    ValueReadFailed { message: String },
+    #[error("value error encountered: {message}")]
+    ValueError { message: String },
 }
