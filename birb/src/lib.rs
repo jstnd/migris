@@ -22,9 +22,6 @@ pub enum BirbError {
     #[error("failed to connect to database: {message}")]
     DatabaseConnectFailed { message: String },
 
-    #[error("no connection was made to database before attempting to interact with data")]
-    DatabaseInteractBeforeConnect,
-
     #[error("failed to read from database: {message}")]
     DatabaseReadFailed { message: String },
 

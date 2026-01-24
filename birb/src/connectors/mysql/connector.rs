@@ -20,10 +20,10 @@ impl MySqlConnector {
         }
     }
 
-    pub(crate) fn pool(&self) -> Result<&MySqlPool, BirbError> {
-        self.pool
-            .as_ref()
-            .ok_or(BirbError::DatabaseInteractBeforeConnect)
+    fn pool(&self) -> &MySqlPool {
+        // This function should only be called after a connection
+        // is already established, so we use unwrap here.
+        self.pool.as_ref().unwrap()
     }
 }
 
@@ -31,13 +31,15 @@ impl Connector for MySqlConnector {
     type Column = MySqlColumn;
 
     async fn connect(&mut self) -> Result<(), BirbError> {
-        self.pool = Some(
-            sqlx::MySqlPool::connect(&self.identifier)
-                .await
-                .map_err(|err| BirbError::DatabaseConnectFailed {
-                    message: err.to_string(),
-                })?,
-        );
+        if self.pool.is_none() {
+            self.pool = Some(
+                sqlx::MySqlPool::connect(&self.identifier)
+                    .await
+                    .map_err(|err| BirbError::DatabaseConnectFailed {
+                        message: err.to_string(),
+                    })?,
+            );
+        }
 
         Ok(())
     }
@@ -46,8 +48,10 @@ impl Connector for MySqlConnector {
         &mut self,
         query: &'a str,
     ) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
-        let pool = self.pool()?;
-        let mut stream = sqlx::query(query).fetch(pool).peekable();
+        // Ensure a connection exists before performing operations.
+        self.connect().await?;
+
+        let mut stream = sqlx::query(query).fetch(self.pool()).peekable();
         let mut columns = Vec::new();
 
         let peekable = Pin::new(&mut stream);
@@ -77,10 +81,11 @@ impl Connector for MySqlConnector {
         data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
     ) -> Result<(), BirbError> {
-        // TODO: validate options
+        // Ensure a connection exists before performing operations.
+        self.connect().await?;
 
-        let pool = self.pool()?;
-        let mut txn = pool
+        let mut txn = self
+            .pool()
             .begin()
             .await
             .map_err(|err| BirbError::DatabaseWriteFailed {
