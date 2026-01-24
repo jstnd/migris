@@ -3,13 +3,13 @@ use rust_decimal::Decimal;
 use sqlx::{Encode, MySql, Type, ValueRef, mysql::MySqlValueRef};
 
 use crate::{
-    BirbError, Column, Value,
+    BirbError, BirbResult, Column, Value,
     mysql::{MySqlColumn, MySqlColumnType},
     util::decode_sqlx,
 };
 
 impl Value {
-    pub fn from_mysql(value: MySqlValueRef, column: &MySqlColumn) -> Result<Self, BirbError> {
+    pub fn from_mysql(value: MySqlValueRef, column: &MySqlColumn) -> BirbResult<Self> {
         // Check if the value is null first.
         if value.is_null() {
             return Ok(Value::Null);
@@ -40,10 +40,9 @@ impl Value {
             MySqlColumnType::DATE => {
                 let date: chrono::NaiveDate = decode_sqlx(value)?;
                 let date: chrono::NaiveDateTime =
-                    date.and_hms_opt(0, 0, 0)
-                        .ok_or(BirbError::ValueError {
-                            message: "failed to convert date to datetime".to_string(),
-                        })?;
+                    date.and_hms_opt(0, 0, 0).ok_or(BirbError::ValueError {
+                        message: "failed to convert date to datetime".to_string(),
+                    })?;
 
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))
             }

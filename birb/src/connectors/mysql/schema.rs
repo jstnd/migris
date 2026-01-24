@@ -1,6 +1,6 @@
 use sqlx::{Column as SqlxColumn, Row as SqlxRow, TypeInfo};
 
-use crate::{BirbError, Column, ColumnFlag, Row, Value};
+use crate::{BirbError, BirbResult, Column, ColumnFlag, Row, Value};
 
 #[derive(Clone, Debug)]
 pub struct MySqlColumn {
@@ -147,7 +147,7 @@ impl Row {
     pub fn from_mysql(
         sqlx_row: sqlx::mysql::MySqlRow,
         columns: &[MySqlColumn],
-    ) -> Result<Self, BirbError> {
+    ) -> BirbResult<Self> {
         let mut row = Self::new();
 
         for column in columns {

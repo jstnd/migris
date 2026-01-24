@@ -1,4 +1,4 @@
-use crate::BirbError;
+use crate::{BirbError, BirbResult};
 
 #[derive(Debug)]
 pub enum Value {
@@ -21,7 +21,7 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn to_string(self) -> Result<String, BirbError> {
+    pub fn to_string(self) -> BirbResult<String> {
         Ok(match self {
             Value::Null => "".into(),
             Value::Bytes(value) => {

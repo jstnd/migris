@@ -1,6 +1,8 @@
 use futures_util::StreamExt;
 
-use crate::{BirbError, Column, Connector, ConnectorData, Row, WriteOptions, csv::CsvColumn};
+use crate::{
+    BirbError, BirbResult, Column, Connector, ConnectorData, Row, WriteOptions, csv::CsvColumn,
+};
 
 #[derive(Debug)]
 pub struct CsvConnector {
@@ -16,15 +18,12 @@ impl CsvConnector {
 impl Connector for CsvConnector {
     type Column = CsvColumn;
 
-    async fn connect(&mut self) -> Result<(), BirbError> {
+    async fn connect(&mut self) -> BirbResult<()> {
         // Nothing to connect to for files.
         Ok(())
     }
 
-    async fn read<'a>(
-        &mut self,
-        _query: &'a str,
-    ) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
+    async fn read<'a>(&mut self, _query: &'a str) -> BirbResult<ConnectorData<'a, Self::Column>> {
         let mut reader =
             csv::Reader::from_path(&self.path).map_err(|err| BirbError::FileOpenFailed {
                 message: err.to_string(),
@@ -54,7 +53,7 @@ impl Connector for CsvConnector {
         &mut self,
         data: ConnectorData<'a, T>,
         _options: WriteOptions<'a>,
-    ) -> Result<(), BirbError> {
+    ) -> BirbResult<()> {
         let mut writer =
             csv::Writer::from_path(&self.path).map_err(|err| BirbError::FileOpenFailed {
                 message: err.to_string(),

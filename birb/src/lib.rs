@@ -17,6 +17,8 @@ pub mod mysql {
     pub use crate::connectors::mysql::schema::{MySqlColumn, MySqlColumnType};
 }
 
+type BirbResult<T> = Result<T, BirbError>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum BirbError {
     #[error("failed to connect to database: {message}")]

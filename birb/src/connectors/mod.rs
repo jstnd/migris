@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use futures_util::Stream;
 
-use crate::{BirbError, Column, Row};
+use crate::{BirbResult, Column, Row};
 
 pub(crate) mod csv {
     pub(crate) mod connector;
@@ -15,7 +15,7 @@ pub(crate) mod mysql {
     pub(crate) mod value;
 }
 
-type RowStream<'a> = Pin<Box<dyn Stream<Item = Result<Row, BirbError>> + Send + 'a>>;
+type RowStream<'a> = Pin<Box<dyn Stream<Item = BirbResult<Row>> + Send + 'a>>;
 
 pub struct ConnectorData<'a, T>
 where
@@ -37,18 +37,18 @@ where
 pub trait Connector {
     type Column: Column;
 
-    fn connect(&mut self) -> impl Future<Output = Result<(), BirbError>> + Send;
+    fn connect(&mut self) -> impl Future<Output = BirbResult<()>> + Send;
 
     fn read<'a>(
         &mut self,
         query: &'a str,
-    ) -> impl Future<Output = Result<ConnectorData<'a, Self::Column>, BirbError>> + Send;
+    ) -> impl Future<Output = BirbResult<ConnectorData<'a, Self::Column>>> + Send;
 
     fn write<'a, T: Column + Send>(
         &mut self,
         data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
-    ) -> impl Future<Output = Result<(), BirbError>> + Send;
+    ) -> impl Future<Output = BirbResult<()>> + Send;
 }
 
 pub struct WriteOptions<'a> {

@@ -3,7 +3,9 @@ use std::pin::Pin;
 use futures_util::StreamExt;
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
 
-use crate::{BirbError, Column, Connector, ConnectorData, Row, WriteOptions, mysql::MySqlColumn};
+use crate::{
+    BirbError, BirbResult, Column, Connector, ConnectorData, Row, WriteOptions, mysql::MySqlColumn,
+};
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
@@ -30,7 +32,7 @@ impl MySqlConnector {
 impl Connector for MySqlConnector {
     type Column = MySqlColumn;
 
-    async fn connect(&mut self) -> Result<(), BirbError> {
+    async fn connect(&mut self) -> BirbResult<()> {
         if self.pool.is_none() {
             self.pool = Some(
                 sqlx::MySqlPool::connect(&self.identifier)
@@ -44,10 +46,7 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    async fn read<'a>(
-        &mut self,
-        query: &'a str,
-    ) -> Result<ConnectorData<'a, Self::Column>, BirbError> {
+    async fn read<'a>(&mut self, query: &'a str) -> BirbResult<ConnectorData<'a, Self::Column>> {
         // Ensure a connection exists before performing operations.
         self.connect().await?;
 
@@ -80,7 +79,7 @@ impl Connector for MySqlConnector {
         &mut self,
         data: ConnectorData<'a, T>,
         options: WriteOptions<'a>,
-    ) -> Result<(), BirbError> {
+    ) -> BirbResult<()> {
         // Ensure a connection exists before performing operations.
         self.connect().await?;
 
