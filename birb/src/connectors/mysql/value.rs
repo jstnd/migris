@@ -39,10 +39,9 @@ impl Value {
             | MySqlColumnType::VARCHAR => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlColumnType::DATE => {
                 let date: chrono::NaiveDate = decode_sqlx(value)?;
-                let date: chrono::NaiveDateTime =
-                    date.and_hms_opt(0, 0, 0).ok_or(BirbError::ValueError {
-                        message: "failed to convert date to datetime".to_string(),
-                    })?;
+                let date: chrono::NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
+                    BirbError::ValueError("failed to convert date to datetime".into()),
+                )?;
 
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))
             }

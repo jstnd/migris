@@ -37,9 +37,7 @@ impl Connector for MySqlConnector {
             self.pool = Some(
                 sqlx::MySqlPool::connect(&self.identifier)
                     .await
-                    .map_err(|err| BirbError::DatabaseConnectFailed {
-                        message: err.to_string(),
-                    })?,
+                    .map_err(|err| BirbError::DatabaseConnectFailed(err.to_string()))?,
             );
         }
 
@@ -55,9 +53,9 @@ impl Connector for MySqlConnector {
 
         let peekable = Pin::new(&mut stream);
         if let Some(row) = peekable.peek().await {
-            let row = row.as_ref().map_err(|err| BirbError::DatabaseReadFailed {
-                message: err.to_string(),
-            })?;
+            let row = row
+                .as_ref()
+                .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
 
             for column in row.columns() {
                 columns.push(MySqlColumn::from(column));
@@ -66,10 +64,8 @@ impl Connector for MySqlConnector {
 
         let stream_columns = columns.clone();
         let stream = stream.map(move |row| {
-            row.map_err(|err| BirbError::DatabaseReadFailed {
-                message: err.to_string(),
-            })
-            .and_then(|row| Row::from_mysql(row, &stream_columns))
+            row.map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))
+                .and_then(|row| Row::from_mysql(row, &stream_columns))
         });
 
         Ok(ConnectorData::new(columns, Box::pin(stream)))
@@ -90,9 +86,7 @@ impl Connector for MySqlConnector {
             .pool()
             .begin()
             .await
-            .map_err(|err| BirbError::DatabaseWriteFailed {
-                message: err.to_string(),
-            })?;
+            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
@@ -132,9 +126,7 @@ impl Connector for MySqlConnector {
                 query
                     .execute(&mut *txn)
                     .await
-                    .map_err(|err| BirbError::DatabaseWriteFailed {
-                        message: err.to_string(),
-                    })?;
+                    .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
                 builder.reset();
                 current_rows_in_txn = 0;
@@ -146,16 +138,12 @@ impl Connector for MySqlConnector {
             query
                 .execute(&mut *txn)
                 .await
-                .map_err(|err| BirbError::DatabaseWriteFailed {
-                    message: err.to_string(),
-                })?;
+                .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
         }
 
         txn.commit()
             .await
-            .map_err(|err| BirbError::DatabaseWriteFailed {
-                message: err.to_string(),
-            })?;
+            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
         Ok(())
     }

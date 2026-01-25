@@ -8,7 +8,5 @@ where
     DB: Database<ValueRef<'a> = V>,
     V: ValueRef<'a>,
 {
-    T::decode(value).map_err(|err| BirbError::ValueError {
-        message: err.to_string(),
-    })
+    T::decode(value).map_err(|err| BirbError::ValueError(err.to_string()))
 }

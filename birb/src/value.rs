@@ -25,9 +25,7 @@ impl Value {
         Ok(match self {
             Value::Null => "".into(),
             Value::Bytes(value) => {
-                String::from_utf8(value).map_err(|err| BirbError::ValueError {
-                    message: err.to_string(),
-                })?
+                String::from_utf8(value).map_err(|err| BirbError::ValueError(err.to_string()))?
             }
             Value::Date(value) => value.to_string(),
             Value::Decimal(value) => value.to_string(),
