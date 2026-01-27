@@ -29,6 +29,7 @@ impl MySqlConnector {
     }
 }
 
+#[async_trait::async_trait]
 impl Connector for MySqlConnector {
     type Column = MySqlColumn;
 
@@ -71,9 +72,9 @@ impl Connector for MySqlConnector {
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
-    async fn write<'a, T: Column + Send>(
+    async fn write<'a>(
         &mut self,
-        data: ConnectorData<'a, T>,
+        data: ConnectorData<'a, Self::Column>,
         options: WriteOptions,
     ) -> BirbResult<()> {
         // Validate the given write options for fields that are required.

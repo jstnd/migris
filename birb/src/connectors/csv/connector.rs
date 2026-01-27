@@ -15,6 +15,7 @@ impl CsvConnector {
     }
 }
 
+#[async_trait::async_trait]
 impl Connector for CsvConnector {
     type Column = CsvColumn;
 
@@ -45,9 +46,9 @@ impl Connector for CsvConnector {
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
-    async fn write<'a, T: Column + Send>(
+    async fn write<'a>(
         &mut self,
-        data: ConnectorData<'a, T>,
+        data: ConnectorData<'a, Self::Column>,
         _options: WriteOptions,
     ) -> BirbResult<()> {
         let mut writer = csv::Writer::from_path(&self.path)

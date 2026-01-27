@@ -34,19 +34,17 @@ where
     }
 }
 
+#[async_trait::async_trait]
 pub trait Connector {
     type Column: Column;
 
-    fn connect(&mut self) -> impl Future<Output = BirbResult<()>> + Send;
+    async fn connect(&mut self) -> BirbResult<()>;
 
-    fn read<'a>(
-        &mut self,
-        query: &'a str,
-    ) -> impl Future<Output = BirbResult<ConnectorData<'a, Self::Column>>> + Send;
+    async fn read<'a>(&mut self, query: &'a str) -> BirbResult<ConnectorData<'a, Self::Column>>;
 
-    fn write<'a, T: Column + Send>(
+    async fn write<'a>(
         &mut self,
-        data: ConnectorData<'a, T>,
+        data: ConnectorData<'a, Self::Column>,
         options: WriteOptions,
-    ) -> impl Future<Output = BirbResult<()>> + Send;
+    ) -> BirbResult<()>;
 }
