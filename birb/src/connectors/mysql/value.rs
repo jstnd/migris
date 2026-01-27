@@ -15,7 +15,7 @@ impl Value {
             return Ok(Value::Null);
         }
 
-        match column.r#type() {
+        match column.r#type().as_mysql() {
             MySqlColumnType::BIGINT => {
                 if column.is_unsigned() {
                     Ok(Value::U64(decode_sqlx(value)?))

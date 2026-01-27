@@ -1,15 +1,13 @@
-use crate::Value;
+use crate::{Value, csv::CsvColumnType, mysql::MySqlColumnType};
 
 pub trait Column {
-    type Type;
-
     fn flags(&self) -> &Vec<ColumnFlag>;
 
     fn name(&self) -> &str;
 
     fn ordinal(&self) -> usize;
 
-    fn r#type(&self) -> Self::Type;
+    fn r#type(&self) -> ColumnType;
 
     fn is_unsigned(&self) -> bool {
         self.flags().contains(&ColumnFlag::Unsigned)
@@ -19,6 +17,21 @@ pub trait Column {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnFlag {
     Unsigned,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ColumnType {
+    Csv(CsvColumnType),
+    MySql(MySqlColumnType),
+}
+
+impl ColumnType {
+    pub fn as_mysql(&self) -> MySqlColumnType {
+        match self {
+            ColumnType::Csv(_) => unimplemented!(),
+            ColumnType::MySql(column_type) => *column_type,
+        }
+    }
 }
 
 #[derive(Debug)]

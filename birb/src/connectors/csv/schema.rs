@@ -1,6 +1,6 @@
 use csv::StringRecord;
 
-use crate::{BirbResult, Column, ColumnFlag, Row, Value};
+use crate::{BirbResult, Column, ColumnFlag, ColumnType, Row, Value};
 
 #[derive(Clone, Debug)]
 pub struct CsvColumn {
@@ -22,8 +22,6 @@ impl CsvColumn {
 }
 
 impl Column for CsvColumn {
-    type Type = CsvColumnType;
-
     fn flags(&self) -> &Vec<ColumnFlag> {
         &self.flags
     }
@@ -36,8 +34,8 @@ impl Column for CsvColumn {
         self.ordinal
     }
 
-    fn r#type(&self) -> Self::Type {
-        self.r#type
+    fn r#type(&self) -> ColumnType {
+        ColumnType::Csv(self.r#type)
     }
 }
 

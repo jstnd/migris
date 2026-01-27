@@ -1,6 +1,6 @@
 use sqlx::{Column as SqlxColumn, Row as SqlxRow, TypeInfo};
 
-use crate::{BirbError, BirbResult, Column, ColumnFlag, Row, Value};
+use crate::{BirbError, BirbResult, Column, ColumnFlag, ColumnType, Row, Value};
 
 #[derive(Clone, Debug)]
 pub struct MySqlColumn {
@@ -11,8 +11,6 @@ pub struct MySqlColumn {
 }
 
 impl Column for MySqlColumn {
-    type Type = MySqlColumnType;
-
     fn flags(&self) -> &Vec<ColumnFlag> {
         &self.flags
     }
@@ -25,8 +23,8 @@ impl Column for MySqlColumn {
         self.ordinal
     }
 
-    fn r#type(&self) -> Self::Type {
-        self.r#type
+    fn r#type(&self) -> ColumnType {
+        ColumnType::MySql(self.r#type)
     }
 }
 
