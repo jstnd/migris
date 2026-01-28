@@ -4,25 +4,20 @@ use crate::{BirbError, BirbResult, Column, ColumnFlag, ColumnType, Row, Value};
 
 impl Column {
     pub fn from_mysql(column: &sqlx::mysql::MySqlColumn) -> Self {
+        let mut flags = Vec::new();
+        let type_parts: Vec<&str> = column.type_info().name().split_whitespace().collect();
+
+        if type_parts.len() > 1 && type_parts[1] == "UNSIGNED" {
+            flags.push(ColumnFlag::Unsigned);
+        }
+
         Self {
-            column_type: ColumnType::MySql(MySqlColumnType::from(column.type_info().name())),
-            flags: extract_flags(column),
+            column_type: ColumnType::MySql(MySqlColumnType::from(type_parts[0])),
+            flags,
             name: column.name().to_string(),
             ordinal: column.ordinal(),
         }
     }
-}
-
-fn extract_flags(value: &sqlx::mysql::MySqlColumn) -> Vec<ColumnFlag> {
-    let mut flags = Vec::new();
-    let type_name = value.type_info().name();
-    let type_parts: Vec<&str> = type_name.split_whitespace().collect();
-
-    if type_parts.len() > 1 && type_parts[1] == "UNSIGNED" {
-        flags.push(ColumnFlag::Unsigned);
-    }
-
-    flags
 }
 
 /// https://dev.mysql.com/doc/refman/8.4/en/data-types.html
@@ -71,8 +66,7 @@ pub enum MySqlColumnType {
 
 impl From<&str> for MySqlColumnType {
     fn from(value: &str) -> Self {
-        let values: Vec<&str> = value.split_whitespace().collect();
-        match values[0] {
+        match value.to_uppercase().as_str() {
             "BIGINT" => Self::BIGINT,
             "BINARY" => Self::BINARY,
             "BIT" => Self::BIT,
