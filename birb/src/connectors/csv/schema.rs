@@ -1,41 +1,15 @@
 use csv::StringRecord;
 
-use crate::{BirbResult, Column, ColumnFlag, ColumnType, Row, Value};
+use crate::{BirbResult, Column, ColumnType, Row, Value};
 
-#[derive(Clone, Debug)]
-pub struct CsvColumn {
-    flags: Vec<ColumnFlag>,
-    name: String,
-    ordinal: usize,
-    r#type: CsvColumnType,
-}
-
-impl CsvColumn {
-    pub fn new(name: impl Into<String>, ordinal: usize) -> Self {
+impl Column {
+    pub fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
         Self {
+            column_type: ColumnType::Csv(CsvColumnType::String),
             flags: Vec::new(),
             name: name.into(),
             ordinal,
-            r#type: CsvColumnType::String,
         }
-    }
-}
-
-impl Column for CsvColumn {
-    fn flags(&self) -> &Vec<ColumnFlag> {
-        &self.flags
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn ordinal(&self) -> usize {
-        self.ordinal
-    }
-
-    fn r#type(&self) -> ColumnType {
-        ColumnType::Csv(self.r#type)
     }
 }
 

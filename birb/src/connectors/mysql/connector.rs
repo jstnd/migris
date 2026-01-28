@@ -3,9 +3,7 @@ use std::pin::Pin;
 use futures_util::StreamExt;
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
 
-use crate::{
-    BirbError, BirbResult, Column, Connector, ConnectorData, Row, WriteOptions, mysql::MySqlColumn,
-};
+use crate::{BirbError, BirbResult, Column, Connector, ConnectorData, Row, WriteOptions};
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
@@ -31,8 +29,6 @@ impl MySqlConnector {
 
 #[async_trait::async_trait]
 impl Connector for MySqlConnector {
-    type Column = MySqlColumn;
-
     async fn connect(&mut self) -> BirbResult<()> {
         if self.pool.is_none() {
             self.pool = Some(
@@ -45,7 +41,7 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    async fn read<'a>(&mut self, query: &'a str) -> BirbResult<ConnectorData<'a, Self::Column>> {
+    async fn read<'a>(&mut self, query: &'a str) -> BirbResult<ConnectorData<'a>> {
         // Ensure a connection exists before performing operations.
         self.connect().await?;
 
@@ -59,7 +55,7 @@ impl Connector for MySqlConnector {
                 .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
 
             for column in row.columns() {
-                columns.push(MySqlColumn::from(column));
+                columns.push(Column::from_mysql(column));
             }
         }
 
@@ -74,7 +70,7 @@ impl Connector for MySqlConnector {
 
     async fn write<'a>(
         &mut self,
-        data: ConnectorData<'a, Self::Column>,
+        data: ConnectorData<'a>,
         options: WriteOptions,
     ) -> BirbResult<()> {
         // Validate the given write options for fields that are required.
@@ -150,6 +146,6 @@ impl Connector for MySqlConnector {
     }
 }
 
-fn validate_write_options(options: &WriteOptions) -> BirbResult<()> {
+fn validate_write_options(_options: &WriteOptions) -> BirbResult<()> {
     Ok(())
 }

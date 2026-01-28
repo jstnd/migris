@@ -1,16 +1,16 @@
 use crate::{Value, csv::CsvColumnType, mysql::MySqlColumnType};
 
-pub trait Column {
-    fn flags(&self) -> &Vec<ColumnFlag>;
+#[derive(Clone, Debug)]
+pub struct Column {
+    pub(crate) column_type: ColumnType,
+    pub(crate) flags: Vec<ColumnFlag>,
+    pub(crate) name: String,
+    pub(crate) ordinal: usize,
+}
 
-    fn name(&self) -> &str;
-
-    fn ordinal(&self) -> usize;
-
-    fn r#type(&self) -> ColumnType;
-
-    fn is_unsigned(&self) -> bool {
-        self.flags().contains(&ColumnFlag::Unsigned)
+impl Column {
+    pub fn is_unsigned(&self) -> bool {
+        self.flags.contains(&ColumnFlag::Unsigned)
     }
 }
 

@@ -2,39 +2,13 @@ use sqlx::{Column as SqlxColumn, Row as SqlxRow, TypeInfo};
 
 use crate::{BirbError, BirbResult, Column, ColumnFlag, ColumnType, Row, Value};
 
-#[derive(Clone, Debug)]
-pub struct MySqlColumn {
-    flags: Vec<ColumnFlag>,
-    name: String,
-    ordinal: usize,
-    r#type: MySqlColumnType,
-}
-
-impl Column for MySqlColumn {
-    fn flags(&self) -> &Vec<ColumnFlag> {
-        &self.flags
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn ordinal(&self) -> usize {
-        self.ordinal
-    }
-
-    fn r#type(&self) -> ColumnType {
-        ColumnType::MySql(self.r#type)
-    }
-}
-
-impl From<&sqlx::mysql::MySqlColumn> for MySqlColumn {
-    fn from(value: &sqlx::mysql::MySqlColumn) -> Self {
+impl Column {
+    pub fn from_mysql(column: &sqlx::mysql::MySqlColumn) -> Self {
         Self {
-            flags: extract_flags(value),
-            name: value.name().to_string(),
-            ordinal: value.ordinal(),
-            r#type: MySqlColumnType::from(value.type_info().name()),
+            column_type: ColumnType::MySql(MySqlColumnType::from(column.type_info().name())),
+            flags: extract_flags(column),
+            name: column.name().to_string(),
+            ordinal: column.ordinal(),
         }
     }
 }
@@ -142,15 +116,12 @@ impl From<&str> for MySqlColumnType {
 }
 
 impl Row {
-    pub fn from_mysql(
-        sqlx_row: sqlx::mysql::MySqlRow,
-        columns: &[MySqlColumn],
-    ) -> BirbResult<Self> {
+    pub fn from_mysql(sqlx_row: sqlx::mysql::MySqlRow, columns: &[Column]) -> BirbResult<Self> {
         let mut row = Self::new();
 
         for column in columns {
             let value = sqlx_row
-                .try_get_raw(column.ordinal())
+                .try_get_raw(column.ordinal)
                 .map_err(|err| BirbError::ValueError(err.to_string()))?;
 
             row.values.push(Value::from_mysql(value, column)?);

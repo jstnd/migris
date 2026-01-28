@@ -2,20 +2,16 @@ use chrono::TimeZone;
 use rust_decimal::Decimal;
 use sqlx::{Encode, MySql, Type, ValueRef, mysql::MySqlValueRef};
 
-use crate::{
-    BirbError, BirbResult, Column, Value,
-    mysql::{MySqlColumn, MySqlColumnType},
-    util::decode_sqlx,
-};
+use crate::{BirbError, BirbResult, Column, Value, mysql::MySqlColumnType, util::decode_sqlx};
 
 impl Value {
-    pub fn from_mysql(value: MySqlValueRef, column: &MySqlColumn) -> BirbResult<Self> {
+    pub fn from_mysql(value: MySqlValueRef, column: &Column) -> BirbResult<Self> {
         // Check if the value is null first.
         if value.is_null() {
             return Ok(Value::Null);
         }
 
-        match column.r#type().as_mysql() {
+        match column.column_type.as_mysql() {
             MySqlColumnType::BIGINT => {
                 if column.is_unsigned() {
                     Ok(Value::U64(decode_sqlx(value)?))
