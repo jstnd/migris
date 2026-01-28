@@ -44,3 +44,16 @@ pub enum BirbError {
     #[error("value error encountered: {0}")]
     ValueError(String),
 }
+
+pub fn connector_from_str(str: &str) -> Option<Box<dyn Connector>> {
+    if str.starts_with("mysql://") {
+        Some(Box::new(mysql::MySqlConnector::new(str)))
+    } else if let Some(extension) = util::get_file_extension(str) {
+        match extension {
+            "csv" => Some(Box::new(csv::CsvConnector::new(str))),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}

@@ -1,3 +1,5 @@
+use std::{ffi::OsStr, path::Path};
+
 use sqlx::{Database, Decode, ValueRef};
 
 use crate::{BirbError, BirbResult};
@@ -9,4 +11,8 @@ where
     V: ValueRef<'a>,
 {
     T::decode(value).map_err(|err| BirbError::ValueError(err.to_string()))
+}
+
+pub(crate) fn get_file_extension(file: &str) -> Option<&str> {
+    Path::new(file).extension().and_then(OsStr::to_str)
 }
