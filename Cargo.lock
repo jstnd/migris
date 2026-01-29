@@ -139,7 +139,6 @@ dependencies = [
  "rust_decimal",
  "sqlx",
  "thiserror",
- "tokio",
 ]
 
 [[package]]
