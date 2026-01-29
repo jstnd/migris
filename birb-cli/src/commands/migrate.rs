@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use clap::Args;
 
 #[derive(Args, Debug)]
@@ -39,19 +38,8 @@ impl MigrateEngine {
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
-        let mut source = birb::connector_from_str(&self.args.source).ok_or_else(|| {
-            anyhow!(
-                "Failed to create connector for source: {}",
-                self.args.source
-            )
-        })?;
-
-        let mut target = birb::connector_from_str(&self.args.target).ok_or_else(|| {
-            anyhow!(
-                "Failed to create connector for target: {}",
-                self.args.target
-            )
-        })?;
+        let mut source = crate::create_connector(&self.args.source)?;
+        let mut target = crate::create_connector(&self.args.target)?;
 
         let read_options = birb::ReadOptions::new().with_query(format!(
             "SELECT * FROM {}.{}",
