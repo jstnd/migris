@@ -3,3 +3,4 @@ members = ["birb", "birb-cli"]
 resolver = "3"
 
 [workspace.dependencies]
+birb = { path = "birb" }
