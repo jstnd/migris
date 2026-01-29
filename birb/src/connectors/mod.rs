@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use futures_util::Stream;
 
-use crate::{BirbResult, Column, Row, WriteOptions};
+use crate::{BirbResult, Column, ReadOptions, Row, WriteOptions};
 
 pub(crate) mod csv {
     pub(crate) mod connector;
@@ -32,7 +32,7 @@ impl<'a> ConnectorData<'a> {
 pub trait Connector {
     async fn connect(&mut self) -> BirbResult<()>;
 
-    async fn read<'a>(&mut self, query: &'a str) -> BirbResult<ConnectorData<'a>>;
+    async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>>;
 
     async fn write<'a>(&mut self, data: ConnectorData<'a>, options: WriteOptions)
     -> BirbResult<()>;

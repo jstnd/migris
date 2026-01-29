@@ -3,7 +3,9 @@ use std::pin::Pin;
 use futures_util::StreamExt;
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
 
-use crate::{BirbError, BirbResult, Column, Connector, ConnectorData, Row, WriteOptions};
+use crate::{
+    BirbError, BirbResult, Column, Connector, ConnectorData, ReadOptions, Row, WriteOptions,
+};
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
@@ -41,14 +43,20 @@ impl Connector for MySqlConnector {
         Ok(())
     }
 
-    async fn read<'a>(&mut self, query: &'a str) -> BirbResult<ConnectorData<'a>> {
+    async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
+        // Validate the given read options for fields that are required.
+        validate_read_options(options)?;
+
         // Ensure a connection exists before performing operations.
         self.connect().await?;
 
-        let mut stream = sqlx::query(query).fetch(self.pool()).peekable();
-        let mut columns = Vec::new();
+        let mut stream = sqlx::query(options.query.as_ref().unwrap())
+            .fetch(self.pool())
+            .peekable();
 
+        let mut columns = Vec::new();
         let peekable = Pin::new(&mut stream);
+
         if let Some(row) = peekable.peek().await {
             let row = row
                 .as_ref()
@@ -144,6 +152,10 @@ impl Connector for MySqlConnector {
 
         Ok(())
     }
+}
+
+fn validate_read_options(_options: &ReadOptions) -> BirbResult<()> {
+    Ok(())
 }
 
 fn validate_write_options(_options: &WriteOptions) -> BirbResult<()> {
