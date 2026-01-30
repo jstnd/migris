@@ -154,10 +154,22 @@ impl Connector for MySqlConnector {
     }
 }
 
-fn validate_read_options(_options: &ReadOptions) -> BirbResult<()> {
+fn validate_read_options(options: &ReadOptions) -> BirbResult<()> {
+    if options.query.is_none() {
+        return Err(BirbError::InvalidOption(
+            "query is required when reading from database".into(),
+        ));
+    }
+
     Ok(())
 }
 
-fn validate_write_options(_options: &WriteOptions) -> BirbResult<()> {
+fn validate_write_options(options: &WriteOptions) -> BirbResult<()> {
+    if options.table_name.is_none() || options.table_schema.is_none() {
+        return Err(BirbError::InvalidOption(
+            "table schema and name are required when writing to database".into(),
+        ));
+    }
+
     Ok(())
 }

@@ -41,6 +41,9 @@ pub enum BirbError {
     #[error("failed to write to file: {0}")]
     FileWriteFailed(String),
 
+    #[error("invalid option: {0}")]
+    InvalidOption(String),
+
     #[error("value error encountered: {0}")]
     ValueError(String),
 }
