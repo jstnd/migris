@@ -23,28 +23,28 @@ type BirbResult<T> = Result<T, BirbError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BirbError {
-    #[error("failed to connect to database: {0}")]
+    #[error("Failed to connect to database: {0}")]
     DatabaseConnectFailed(String),
 
-    #[error("failed to read from database: {0}")]
+    #[error("Failed to read from database: {0}")]
     DatabaseReadFailed(String),
 
-    #[error("failed to write to database: {0}")]
+    #[error("Failed to write to database: {0}")]
     DatabaseWriteFailed(String),
 
-    #[error("failed to open file: {0}")]
+    #[error("Failed to open file: {0}")]
     FileOpenFailed(String),
 
-    #[error("failed to read from file: {0}")]
+    #[error("Failed to read from file: {0}")]
     FileReadFailed(String),
 
-    #[error("failed to write to file: {0}")]
+    #[error("Failed to write to file: {0}")]
     FileWriteFailed(String),
 
-    #[error("invalid option: {0}")]
+    #[error("Invalid option: {0}")]
     InvalidOption(String),
 
-    #[error("value error encountered: {0}")]
+    #[error("Value error encountered: {0}")]
     ValueError(String),
 }
 
