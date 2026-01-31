@@ -10,13 +10,13 @@ use crate::commands::migrate::{MigrateArguments, MigrateEngine};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
-pub struct Cli {
+struct Cli {
     #[command(subcommand)]
-    pub command: Command,
+    command: Command,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum Command {
+enum Command {
     Migrate(MigrateArguments),
 }
 
