@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use futures_util::StreamExt;
 
 use crate::{
@@ -49,7 +51,15 @@ impl Connector for CsvConnector {
         data: ConnectorData<'a>,
         _options: WriteOptions,
     ) -> BirbResult<()> {
-        let mut writer = csv::Writer::from_path(&self.path)
+        let path = Path::new(&self.path);
+
+        // Create any missing parent directories in the given path.
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|err| BirbError::FileOpenFailed(err.to_string()))?;
+        }
+
+        let mut writer = csv::Writer::from_path(path)
             .map_err(|err| BirbError::FileOpenFailed(err.to_string()))?;
 
         //
