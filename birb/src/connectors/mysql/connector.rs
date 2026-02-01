@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use futures_util::StreamExt;
-use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow};
+use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Transaction};
 
 use crate::{
     BirbError, BirbResult, Column, Connector, ConnectorData, ReadOptions, Row, WriteOptions,
@@ -32,6 +32,45 @@ impl MySqlConnector {
         }
 
         Ok(self.pool.as_ref().unwrap())
+    }
+
+    async fn create_table(
+        &self,
+        table_schema: &str,
+        table_name: &str,
+        columns: &[Column],
+        txn: &mut Transaction<'_, MySql>,
+    ) -> BirbResult<()> {
+        let query = format!("CREATE SCHEMA IF NOT EXISTS {}", table_schema);
+        sqlx::query(&query)
+            .execute(txn.as_mut())
+            .await
+            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+
+        let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
+            "CREATE TABLE IF NOT EXISTS {0}.{1} (",
+            table_schema, table_name
+        ));
+
+        let mut separated = builder.separated(", ");
+        for column in columns {
+            let mut definition = format!("`{}` {}", column.name, column.column_type.as_mysql());
+
+            if column.is_unsigned() {
+                definition.push_str(" UNSIGNED");
+            }
+
+            separated.push(definition);
+        }
+
+        builder.push(")");
+        builder
+            .build()
+            .execute(txn.as_mut())
+            .await
+            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+
+        Ok(())
     }
 }
 
@@ -81,6 +120,15 @@ impl Connector for MySqlConnector {
             .begin()
             .await
             .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+
+        // Create the table if it doesn't already exist.
+        self.create_table(
+            options.table_schema.as_ref().unwrap(),
+            options.table_name.as_ref().unwrap(),
+            &data.columns,
+            &mut txn,
+        )
+        .await?;
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(

@@ -64,6 +64,53 @@ pub enum MySqlColumnType {
     YEAR,
 }
 
+impl std::fmt::Display for MySqlColumnType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display = match self {
+            Self::BIGINT => "BIGINT",
+            Self::BINARY => "BINARY(50)",
+            Self::BIT => "BIT(1)",
+            Self::BLOB => "BLOB",
+            Self::CHAR => "CHAR(500)",
+            Self::DATE => "DATE",
+            Self::DATETIME => "DATETIME",
+            Self::DECIMAL => "DECIMAL(20,6)",
+            Self::DOUBLE => "DOUBLE",
+            Self::ENUM => "ENUM",
+            Self::FLOAT => "FLOAT",
+            Self::GEOMETRY => "GEOMETRY",
+            Self::GEOMETRYCOLLECTION => "GEOMCOLLECTION",
+            Self::INT => "INT",
+            Self::JSON => "JSON",
+            Self::LINESTRING => "LINESTRING",
+            Self::LONGBLOB => "LONGBLOB",
+            Self::LONGTEXT => "LONGTEXT",
+            Self::MEDIUMBLOB => "MEDIUMBLOB",
+            Self::MEDIUMINT => "MEDIUMINT",
+            Self::MEDIUMTEXT => "MEDIUMTEXT",
+            Self::MULTILINESTRING => "MULTILINESTRING",
+            Self::MULTIPOINT => "MULTIPOINT",
+            Self::MULTIPOLYGON => "MULTIPOLYGON",
+            Self::POINT => "POINT",
+            Self::POLYGON => "POLYGON",
+            Self::SET => "SET",
+            Self::SMALLINT => "SMALLINT",
+            Self::TEXT => "TEXT",
+            Self::TIME => "TIME",
+            Self::TIMESTAMP => "TIMESTAMP",
+            Self::TINYBLOB => "TINYBLOB",
+            Self::TINYINT => "TINYINT",
+            Self::TINYTEXT => "TINYTEXT",
+            Self::UNKNOWN => "UNKNOWN",
+            Self::VARBINARY => "VARBINARY(50)",
+            Self::VARCHAR => "VARCHAR(500)",
+            Self::YEAR => "YEAR",
+        };
+
+        write!(f, "{}", display)
+    }
+}
+
 impl From<&str> for MySqlColumnType {
     fn from(value: &str) -> Self {
         match value.to_uppercase().as_str() {
