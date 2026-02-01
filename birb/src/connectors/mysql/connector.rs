@@ -2,8 +2,7 @@ use std::pin::Pin;
 
 use futures_util::StreamExt;
 use sqlx::{
-    MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Transaction, mysql::MySqlArguments,
-    query::Query,
+    Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, mysql::MySqlArguments, query::Query,
 };
 
 use crate::{
@@ -36,51 +35,6 @@ impl MySqlConnector {
         }
 
         Ok(self.pool.as_ref().unwrap())
-    }
-
-    async fn execute_query(
-        &self,
-        query: Query<'_, MySql, MySqlArguments>,
-        txn: &mut Transaction<'_, MySql>,
-    ) -> BirbResult<()> {
-        query
-            .execute(txn.as_mut())
-            .await
-            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
-
-        Ok(())
-    }
-
-    async fn create_table(
-        &self,
-        table_schema: &str,
-        table_name: &str,
-        columns: &[Column],
-        txn: &mut Transaction<'_, MySql>,
-    ) -> BirbResult<()> {
-        let query = format!("CREATE SCHEMA IF NOT EXISTS {}", table_schema);
-        self.execute_query(sqlx::query(&query), txn).await?;
-
-        let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
-            "CREATE TABLE IF NOT EXISTS {0}.{1} (",
-            table_schema, table_name
-        ));
-
-        let mut separated = builder.separated(", ");
-        for column in columns {
-            let mut definition = format!("`{}` {}", column.name, column.column_type.as_mysql());
-
-            if column.is_unsigned() {
-                definition.push_str(" UNSIGNED");
-            }
-
-            separated.push(definition);
-        }
-
-        builder.push(")");
-        self.execute_query(builder.build(), txn).await?;
-
-        Ok(())
     }
 }
 
@@ -133,8 +87,7 @@ impl Connector for MySqlConnector {
         let table_name = options.table_name.unwrap_or_else(util::generate_table_name);
 
         // Create the table if it doesn't already exist.
-        self.create_table(table_schema, &table_name, &data.columns, &mut txn)
-            .await?;
+        create_table(table_schema, &table_name, &data.columns, pool).await?;
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
@@ -169,14 +122,14 @@ impl Connector for MySqlConnector {
             current_rows_in_txn += 1;
 
             if current_rows_in_txn == rows_per_txn {
-                self.execute_query(builder.build(), &mut txn).await?;
+                execute_query(builder.build(), &mut *txn).await?;
                 builder.reset();
                 current_rows_in_txn = 0;
             }
         }
 
         if current_rows_in_txn > 0 {
-            self.execute_query(builder.build(), &mut txn).await?;
+            execute_query(builder.build(), &mut *txn).await?;
         }
 
         txn.commit()
@@ -185,6 +138,52 @@ impl Connector for MySqlConnector {
 
         Ok(())
     }
+}
+
+async fn create_table(
+    table_schema: &str,
+    table_name: &str,
+    columns: &[Column],
+    pool: &MySqlPool,
+) -> BirbResult<()> {
+    let query = format!("CREATE SCHEMA IF NOT EXISTS {}", table_schema);
+    execute_query(sqlx::query(&query), pool).await?;
+
+    let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
+        "CREATE TABLE IF NOT EXISTS {0}.{1} (",
+        table_schema, table_name
+    ));
+
+    let mut separated = builder.separated(", ");
+    for column in columns {
+        let mut definition = format!("`{}` {}", column.name, column.column_type.as_mysql());
+
+        if column.is_unsigned() {
+            definition.push_str(" UNSIGNED");
+        }
+
+        separated.push(definition);
+    }
+
+    builder.push(")");
+    execute_query(builder.build(), pool).await?;
+
+    Ok(())
+}
+
+async fn execute_query<'e, E>(
+    query: Query<'_, MySql, MySqlArguments>,
+    executor: E,
+) -> BirbResult<()>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    query
+        .execute(executor)
+        .await
+        .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+
+    Ok(())
 }
 
 fn validate_read_options(options: &ReadOptions) -> BirbResult<()> {
