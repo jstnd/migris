@@ -5,7 +5,7 @@ use crate::{BirbResult, Column, ColumnType, Row, Value};
 impl Column {
     pub fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
         Self {
-            column_type: ColumnType::Csv(CsvColumnType::String),
+            column_type: ColumnType::Csv(CsvDataType::String),
             flags: Vec::new(),
             name: name.into(),
             ordinal,
@@ -14,7 +14,7 @@ impl Column {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum CsvColumnType {
+pub enum CsvDataType {
     String,
 }
 

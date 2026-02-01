@@ -1,4 +1,4 @@
-use crate::{Value, csv::CsvColumnType, mysql::MySqlColumnType};
+use crate::{Value, csv::CsvDataType, mysql::MySqlDataType};
 
 #[derive(Clone, Debug)]
 pub struct Column {
@@ -21,12 +21,12 @@ pub enum ColumnFlag {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ColumnType {
-    Csv(CsvColumnType),
-    MySql(MySqlColumnType),
+    Csv(CsvDataType),
+    MySql(MySqlDataType),
 }
 
 impl ColumnType {
-    pub fn as_mysql(&self) -> MySqlColumnType {
+    pub fn as_mysql(&self) -> MySqlDataType {
         match self {
             ColumnType::Csv(_) => unimplemented!(),
             ColumnType::MySql(column_type) => *column_type,

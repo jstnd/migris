@@ -12,7 +12,7 @@ impl Column {
         }
 
         Self {
-            column_type: ColumnType::MySql(MySqlColumnType::from(type_parts[0])),
+            column_type: ColumnType::MySql(MySqlDataType::from(type_parts[0])),
             flags,
             name: column.name().to_string(),
             ordinal: column.ordinal(),
@@ -23,7 +23,7 @@ impl Column {
 /// https://dev.mysql.com/doc/refman/8.4/en/data-types.html
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug)]
-pub enum MySqlColumnType {
+pub enum MySqlDataType {
     BIGINT,
     BINARY,
     BIT,
@@ -64,7 +64,7 @@ pub enum MySqlColumnType {
     YEAR,
 }
 
-impl std::fmt::Display for MySqlColumnType {
+impl std::fmt::Display for MySqlDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let display = match self {
             Self::BIGINT => "BIGINT",
@@ -111,7 +111,7 @@ impl std::fmt::Display for MySqlColumnType {
     }
 }
 
-impl From<&str> for MySqlColumnType {
+impl From<&str> for MySqlDataType {
     fn from(value: &str) -> Self {
         match value.to_uppercase().as_str() {
             "BIGINT" => Self::BIGINT,

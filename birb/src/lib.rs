@@ -11,12 +11,12 @@ pub use value::Value;
 
 pub mod csv {
     pub use crate::connectors::csv::connector::CsvConnector;
-    pub use crate::connectors::csv::schema::CsvColumnType;
+    pub use crate::connectors::csv::schema::CsvDataType;
 }
 
 pub mod mysql {
     pub use crate::connectors::mysql::connector::MySqlConnector;
-    pub use crate::connectors::mysql::schema::MySqlColumnType;
+    pub use crate::connectors::mysql::schema::MySqlDataType;
 }
 
 type BirbResult<T> = Result<T, BirbError>;

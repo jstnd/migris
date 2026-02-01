@@ -2,7 +2,7 @@ use chrono::TimeZone;
 use rust_decimal::Decimal;
 use sqlx::{Encode, MySql, Type, ValueRef, mysql::MySqlValueRef};
 
-use crate::{BirbError, BirbResult, Column, Value, mysql::MySqlColumnType, util::decode_sqlx};
+use crate::{BirbError, BirbResult, Column, Value, mysql::MySqlDataType, util::decode_sqlx};
 
 impl Value {
     pub fn from_mysql(value: MySqlValueRef, column: &Column) -> BirbResult<Self> {
@@ -12,28 +12,28 @@ impl Value {
         }
 
         match column.column_type.as_mysql() {
-            MySqlColumnType::BIGINT => {
+            MySqlDataType::BIGINT => {
                 if column.is_unsigned() {
                     Ok(Value::U64(decode_sqlx(value)?))
                 } else {
                     Ok(Value::I64(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlColumnType::BINARY
-            | MySqlColumnType::BLOB
-            | MySqlColumnType::LONGBLOB
-            | MySqlColumnType::MEDIUMBLOB
-            | MySqlColumnType::TINYBLOB
-            | MySqlColumnType::VARBINARY => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::BIT => Ok(Value::U64(decode_sqlx(value)?)),
-            MySqlColumnType::CHAR
-            | MySqlColumnType::JSON
-            | MySqlColumnType::LONGTEXT
-            | MySqlColumnType::MEDIUMTEXT
-            | MySqlColumnType::TEXT
-            | MySqlColumnType::TINYTEXT
-            | MySqlColumnType::VARCHAR => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::DATE => {
+            MySqlDataType::BINARY
+            | MySqlDataType::BLOB
+            | MySqlDataType::LONGBLOB
+            | MySqlDataType::MEDIUMBLOB
+            | MySqlDataType::TINYBLOB
+            | MySqlDataType::VARBINARY => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::BIT => Ok(Value::U64(decode_sqlx(value)?)),
+            MySqlDataType::CHAR
+            | MySqlDataType::JSON
+            | MySqlDataType::LONGTEXT
+            | MySqlDataType::MEDIUMTEXT
+            | MySqlDataType::TEXT
+            | MySqlDataType::TINYTEXT
+            | MySqlDataType::VARCHAR => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::DATE => {
                 let date: chrono::NaiveDate = decode_sqlx(value)?;
                 let date: chrono::NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
                     BirbError::ValueError("failed to convert date to datetime".into()),
@@ -41,48 +41,48 @@ impl Value {
 
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))
             }
-            MySqlColumnType::DATETIME => {
+            MySqlDataType::DATETIME => {
                 let date: chrono::NaiveDateTime = decode_sqlx(value)?;
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))
             }
-            MySqlColumnType::DECIMAL => Ok(Value::Decimal(decode_sqlx(value)?)),
-            MySqlColumnType::DOUBLE => Ok(Value::F64(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::ENUM => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::FLOAT => Ok(Value::F32(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::GEOMETRY
-            | MySqlColumnType::GEOMETRYCOLLECTION
-            | MySqlColumnType::LINESTRING
-            | MySqlColumnType::MULTILINESTRING
-            | MySqlColumnType::MULTIPOINT
-            | MySqlColumnType::MULTIPOLYGON
-            | MySqlColumnType::POINT
-            | MySqlColumnType::POLYGON => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::INT | MySqlColumnType::MEDIUMINT => {
+            MySqlDataType::DECIMAL => Ok(Value::Decimal(decode_sqlx(value)?)),
+            MySqlDataType::DOUBLE => Ok(Value::F64(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::ENUM => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::FLOAT => Ok(Value::F32(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::GEOMETRY
+            | MySqlDataType::GEOMETRYCOLLECTION
+            | MySqlDataType::LINESTRING
+            | MySqlDataType::MULTILINESTRING
+            | MySqlDataType::MULTIPOINT
+            | MySqlDataType::MULTIPOLYGON
+            | MySqlDataType::POINT
+            | MySqlDataType::POLYGON => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::INT | MySqlDataType::MEDIUMINT => {
                 if column.is_unsigned() {
                     Ok(Value::U32(decode_sqlx(value)?))
                 } else {
                     Ok(Value::I32(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlColumnType::SET => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::SMALLINT => {
+            MySqlDataType::SET => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::SMALLINT => {
                 if column.is_unsigned() {
                     Ok(Value::U16(decode_sqlx(value)?))
                 } else {
                     Ok(Value::I16(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlColumnType::TIME => Ok(Value::Time(decode_sqlx(value)?)),
-            MySqlColumnType::TIMESTAMP => Ok(Value::Date(decode_sqlx(value)?)),
-            MySqlColumnType::TINYINT => {
+            MySqlDataType::TIME => Ok(Value::Time(decode_sqlx(value)?)),
+            MySqlDataType::TIMESTAMP => Ok(Value::Date(decode_sqlx(value)?)),
+            MySqlDataType::TINYINT => {
                 if column.is_unsigned() {
                     Ok(Value::U8(decode_sqlx(value)?))
                 } else {
                     Ok(Value::I8(decode_sqlx(value)?))
                 }
             }
-            MySqlColumnType::UNKNOWN => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlColumnType::YEAR => Ok(Value::U16(decode_sqlx(value)?)),
+            MySqlDataType::UNKNOWN => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::YEAR => Ok(Value::U16(decode_sqlx(value)?)),
         }
     }
 }
