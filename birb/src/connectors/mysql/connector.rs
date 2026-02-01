@@ -5,6 +5,7 @@ use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Transaction};
 
 use crate::{
     BirbError, BirbResult, Column, Connector, ConnectorData, ReadOptions, Row, WriteOptions,
+    util::{self, DEFAULT_SCHEMA},
 };
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
@@ -112,29 +113,24 @@ impl Connector for MySqlConnector {
         data: ConnectorData<'a>,
         options: WriteOptions,
     ) -> BirbResult<()> {
-        // Validate the given write options for fields that are required.
-        validate_write_options(&options)?;
-
         let pool = self.connect().await?;
         let mut txn = pool
             .begin()
             .await
             .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
+        // Determine table schema and name, using defaults if needed.
+        let table_schema = options.table_schema.as_deref().unwrap_or(DEFAULT_SCHEMA);
+        let table_name = options.table_name.unwrap_or_else(util::generate_table_name);
+
         // Create the table if it doesn't already exist.
-        self.create_table(
-            options.table_schema.as_ref().unwrap(),
-            options.table_name.as_ref().unwrap(),
-            &data.columns,
-            &mut txn,
-        )
-        .await?;
+        self.create_table(table_schema, &table_name, &data.columns, &mut txn)
+            .await?;
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "INSERT INTO {}.{} VALUES ",
-            options.table_schema.unwrap(),
-            options.table_name.unwrap()
+            table_schema, table_name
         ));
 
         let mut rows_per_txn = 0;
@@ -195,16 +191,6 @@ fn validate_read_options(options: &ReadOptions) -> BirbResult<()> {
     if options.query.is_none() {
         return Err(BirbError::InvalidOption(
             "query is required when reading from database".into(),
-        ));
-    }
-
-    Ok(())
-}
-
-fn validate_write_options(options: &WriteOptions) -> BirbResult<()> {
-    if options.table_name.is_none() || options.table_schema.is_none() {
-        return Err(BirbError::InvalidOption(
-            "table schema and name are required when writing to database".into(),
         ));
     }
 
