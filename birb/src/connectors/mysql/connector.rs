@@ -1,7 +1,10 @@
 use std::pin::Pin;
 
 use futures_util::StreamExt;
-use sqlx::{MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Transaction};
+use sqlx::{
+    MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Transaction, mysql::MySqlArguments,
+    query::Query,
+};
 
 use crate::{
     BirbError, BirbResult, Column, Connector, ConnectorData, ReadOptions, Row, WriteOptions,
@@ -35,6 +38,19 @@ impl MySqlConnector {
         Ok(self.pool.as_ref().unwrap())
     }
 
+    async fn execute_query(
+        &self,
+        query: Query<'_, MySql, MySqlArguments>,
+        txn: &mut Transaction<'_, MySql>,
+    ) -> BirbResult<()> {
+        query
+            .execute(txn.as_mut())
+            .await
+            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+
+        Ok(())
+    }
+
     async fn create_table(
         &self,
         table_schema: &str,
@@ -43,10 +59,7 @@ impl MySqlConnector {
         txn: &mut Transaction<'_, MySql>,
     ) -> BirbResult<()> {
         let query = format!("CREATE SCHEMA IF NOT EXISTS {}", table_schema);
-        sqlx::query(&query)
-            .execute(txn.as_mut())
-            .await
-            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+        self.execute_query(sqlx::query(&query), txn).await?;
 
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "CREATE TABLE IF NOT EXISTS {0}.{1} (",
@@ -65,11 +78,7 @@ impl MySqlConnector {
         }
 
         builder.push(")");
-        builder
-            .build()
-            .execute(txn.as_mut())
-            .await
-            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+        self.execute_query(builder.build(), txn).await?;
 
         Ok(())
     }
@@ -160,23 +169,14 @@ impl Connector for MySqlConnector {
             current_rows_in_txn += 1;
 
             if current_rows_in_txn == rows_per_txn {
-                let query = builder.build();
-                query
-                    .execute(&mut *txn)
-                    .await
-                    .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
-
+                self.execute_query(builder.build(), &mut txn).await?;
                 builder.reset();
                 current_rows_in_txn = 0;
             }
         }
 
         if current_rows_in_txn > 0 {
-            let query = builder.build();
-            query
-                .execute(&mut *txn)
-                .await
-                .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+            self.execute_query(builder.build(), &mut txn).await?;
         }
 
         txn.commit()
