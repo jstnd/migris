@@ -22,16 +22,7 @@ impl MySqlConnector {
         }
     }
 
-    fn pool(&self) -> &MySqlPool {
-        // This function should only be called after a connection
-        // is already established, so we use unwrap here.
-        self.pool.as_ref().unwrap()
-    }
-}
-
-#[async_trait::async_trait]
-impl Connector for MySqlConnector {
-    async fn connect(&mut self) -> BirbResult<()> {
+    async fn connect(&mut self) -> BirbResult<&MySqlPool> {
         if self.pool.is_none() {
             self.pool = Some(
                 sqlx::MySqlPool::connect(&self.identifier)
@@ -40,18 +31,19 @@ impl Connector for MySqlConnector {
             );
         }
 
-        Ok(())
+        Ok(self.pool.as_ref().unwrap())
     }
+}
 
+#[async_trait::async_trait]
+impl Connector for MySqlConnector {
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
         // Validate the given read options for fields that are required.
         validate_read_options(options)?;
 
-        // Ensure a connection exists before performing operations.
-        self.connect().await?;
-
+        let pool = self.connect().await?;
         let mut stream = sqlx::query(options.query.as_ref().unwrap())
-            .fetch(self.pool())
+            .fetch(pool)
             .peekable();
 
         let mut columns = Vec::new();
@@ -84,11 +76,8 @@ impl Connector for MySqlConnector {
         // Validate the given write options for fields that are required.
         validate_write_options(&options)?;
 
-        // Ensure a connection exists before performing operations.
-        self.connect().await?;
-
-        let mut txn = self
-            .pool()
+        let pool = self.connect().await?;
+        let mut txn = pool
             .begin()
             .await
             .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
