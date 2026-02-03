@@ -28,8 +28,10 @@ pub enum ColumnType {
 impl ColumnType {
     pub fn as_mysql(&self) -> MySqlDataType {
         match self {
-            ColumnType::Csv(_) => unimplemented!(),
-            ColumnType::MySql(column_type) => *column_type,
+            ColumnType::Csv(data_type) => match data_type {
+                CsvDataType::String => MySqlDataType::VARCHAR,
+            },
+            ColumnType::MySql(data_type) => *data_type,
         }
     }
 }

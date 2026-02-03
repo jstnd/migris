@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use clap::Args;
 
 #[derive(Args, Debug)]
@@ -38,7 +40,6 @@ impl MigrateEngine {
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
-        let mut source = crate::create_connector(&self.args.source)?;
         let mut target = crate::create_connector(&self.args.target)?;
         let mut read_options = birb::ReadOptions::new();
         let mut write_options = birb::WriteOptions::new();
@@ -57,9 +58,35 @@ impl MigrateEngine {
             write_options = write_options.with_table_name(table);
         }
 
-        let data = source.read(&read_options).await?;
-        target.write(data, write_options).await?;
+        for source in self.sources()? {
+            let mut source = crate::create_connector(&source)?;
+
+            let data = source.read(&read_options).await?;
+            target.write(data, &write_options).await?;
+        }
 
         Ok(())
+    }
+
+    fn sources(&self) -> anyhow::Result<Vec<String>> {
+        if Path::new(&self.args.source).is_dir() {
+            let supported = birb::util::get_supported_extensions();
+            let mut sources = Vec::new();
+
+            for entry in walkdir::WalkDir::new(&self.args.source) {
+                let entry = entry?;
+                let path = entry.path();
+
+                if let Some(extension) = birb::util::get_extension(&path)
+                    && supported.contains(&extension)
+                {
+                    sources.push(path.display().to_string());
+                }
+            }
+
+            Ok(sources)
+        } else {
+            Ok(vec![self.args.source.clone()])
+        }
     }
 }

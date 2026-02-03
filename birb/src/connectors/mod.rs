@@ -32,6 +32,6 @@ impl<'a> ConnectorData<'a> {
 pub trait Connector {
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>>;
 
-    async fn write<'a>(&mut self, data: ConnectorData<'a>, options: WriteOptions)
+    async fn write<'a>(&mut self, data: ConnectorData<'a>, options: &WriteOptions)
     -> BirbResult<()>;
 }

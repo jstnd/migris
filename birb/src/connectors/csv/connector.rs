@@ -44,7 +44,7 @@ impl Connector for CsvConnector {
     async fn write<'a>(
         &mut self,
         data: ConnectorData<'a>,
-        _options: WriteOptions,
+        _options: &WriteOptions,
     ) -> BirbResult<()> {
         let path = Path::new(&self.path);
 

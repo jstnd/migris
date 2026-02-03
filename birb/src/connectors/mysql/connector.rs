@@ -74,7 +74,7 @@ impl Connector for MySqlConnector {
     async fn write<'a>(
         &mut self,
         data: ConnectorData<'a>,
-        options: WriteOptions,
+        options: &WriteOptions,
     ) -> BirbResult<()> {
         let pool = self.connect().await?;
         let mut txn = pool
@@ -83,11 +83,12 @@ impl Connector for MySqlConnector {
             .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
         // Determine table schema and name, using defaults if needed.
+        let generated = util::generate_table_name();
         let table_schema = options.table_schema.as_deref().unwrap_or(DEFAULT_SCHEMA);
-        let table_name = options.table_name.unwrap_or_else(util::generate_table_name);
+        let table_name = options.table_name.as_deref().unwrap_or(&generated);
 
         // Create the table if it doesn't already exist.
-        create_table(table_schema, &table_name, &data.columns, pool).await?;
+        create_table(table_schema, table_name, &data.columns, pool).await?;
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
