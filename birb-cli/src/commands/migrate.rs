@@ -70,7 +70,7 @@ impl MigrateEngine {
 
     fn sources(&self) -> anyhow::Result<Vec<String>> {
         if Path::new(&self.args.source).is_dir() {
-            let supported = birb::util::get_supported_extensions();
+            let supported = birb::util::supported_extensions();
             let mut sources = Vec::new();
 
             for entry in walkdir::WalkDir::new(&self.args.source) {

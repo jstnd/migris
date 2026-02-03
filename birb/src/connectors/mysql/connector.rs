@@ -83,7 +83,7 @@ impl Connector for MySqlConnector {
             .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
         // Determine table schema and name, using defaults if needed.
-        let generated = util::generate_table_name();
+        let generated = util::generate_name();
         let table_schema = options.table_schema.as_deref().unwrap_or(DEFAULT_SCHEMA);
         let table_name = options.table_name.as_deref().unwrap_or(&generated);
 

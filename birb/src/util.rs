@@ -17,7 +17,7 @@ where
     T::decode(value).map_err(|err| BirbError::ValueError(err.to_string()))
 }
 
-pub(crate) fn generate_table_name() -> String {
+pub(crate) fn generate_name() -> String {
     format!("birb_{}", chrono::Local::now().format("%m%d%Y_%H%M%S%f"))
 }
 
@@ -25,6 +25,6 @@ pub fn get_extension<P: AsRef<Path>>(path: &P) -> Option<&str> {
     path.as_ref().extension().and_then(OsStr::to_str)
 }
 
-pub fn get_supported_extensions() -> &'static [&'static str] {
+pub fn supported_extensions() -> &'static [&'static str] {
     &SUPPORTED_FILE_EXT
 }
