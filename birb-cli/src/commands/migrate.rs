@@ -59,8 +59,17 @@ impl MigrateEngine {
         }
 
         for source in self.sources()? {
-            let mut source = crate::create_connector(&source)?;
+            // Use file name (as applicable) if a target table name was not given.
+            let path = Path::new(&source);
+            if self.args.target_table.is_none()
+                && path.is_file()
+                && let Some(stem) = birb::util::get_stem(&path)
+            {
+                let safe_name = birb::util::get_safe_name(stem);
+                write_options = write_options.with_table_name(safe_name);
+            }
 
+            let mut source = crate::create_connector(&source)?;
             let data = source.read(&read_options).await?;
             target.write(data, &write_options).await?;
         }
