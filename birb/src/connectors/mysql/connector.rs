@@ -58,7 +58,7 @@ impl Connector for MySqlConnector {
                 .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
 
             for column in row.columns() {
-                columns.push(Column::from_mysql(column));
+                columns.push(Column::from_mysql(column)?);
             }
         }
 

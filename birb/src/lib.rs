@@ -44,6 +44,9 @@ pub enum BirbError {
     #[error("Invalid option: {0}")]
     InvalidOption(String),
 
+    #[error("Unsupported action performed: {0}")]
+    UnsupportedAction(String),
+
     #[error("Value error encountered: {0}")]
     ValueError(String),
 }

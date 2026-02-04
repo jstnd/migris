@@ -81,7 +81,6 @@ impl Value {
                     Ok(Value::I8(decode_sqlx(value)?))
                 }
             }
-            MySqlDataType::UNKNOWN => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::YEAR => Ok(Value::U16(decode_sqlx(value)?)),
         }
     }
