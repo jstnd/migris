@@ -22,10 +22,26 @@ pub(crate) fn generate_name() -> String {
 }
 
 pub fn get_safe_name(str: &str) -> String {
+    // Track if the previous character seen was an underscore.
+    let mut prev_underscore = false;
+
     str.chars()
         .filter_map(|c| match c {
-            ' ' | '-' | '—' => Some('_'),
-            c if c.is_alphanumeric() => Some(c),
+            ' ' | '-' | '—' | '_' => {
+                if prev_underscore {
+                    // Do not use an underscore if the previous
+                    // character seen was already an underscore.
+                    None
+                } else {
+                    // Otherwise, use an underscore as the next character.
+                    prev_underscore = true;
+                    Some('_')
+                }
+            }
+            c if c.is_alphanumeric() => {
+                prev_underscore = false;
+                Some(c)
+            }
             _ => None,
         })
         .collect()
