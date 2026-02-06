@@ -9,10 +9,6 @@ pub struct MigrateArguments {
     #[arg(long)]
     source: String,
 
-    /// The schema to migrate data from.
-    #[arg(long)]
-    source_schema: Option<String>,
-
     /// The table to migrate data from.
     #[arg(long)]
     source_table: Option<String>,
@@ -20,10 +16,6 @@ pub struct MigrateArguments {
     /// The target to migrate data to.
     #[arg(long)]
     target: String,
-
-    /// The schema to migrate data to.
-    #[arg(long)]
-    target_schema: Option<String>,
 
     /// The table to migrate data to.
     #[arg(long)]
@@ -45,16 +37,6 @@ impl MigrateEngine {
         let mut read_options = birb::ReadOptions::new();
         let mut write_options = birb::WriteOptions::new();
 
-        if let Some(schema) = &self.args.source_schema
-            && let Some(table) = &self.args.source_table
-        {
-            read_options = read_options.with_query(format!("SELECT * FROM {}.{}", schema, table));
-        }
-
-        if let Some(schema) = &self.args.target_schema {
-            write_options = write_options.with_table_schema(schema);
-        }
-
         if let Some(table) = &self.args.target_table {
             write_options = write_options.with_table_name(table);
         }
@@ -64,22 +46,25 @@ impl MigrateEngine {
 
             match source.kind() {
                 ConnectorKind::Database => {
-                    if let Some(schema) = &self.args.source_schema
-                        && self.args.source_table.is_none()
-                    {
-                        let tables = source.tables(schema).await?;
+                    if let Some(table) = &self.args.source_table {
+                        read_options = read_options.with_query(format!("SELECT * FROM {}", table));
+                        let data = source.read(&read_options).await?;
+                        target.write(data, &write_options).await?;
+                    } else {
+                        // TODO: show info message if no tables were found
+                        let tables = source.tables().await?;
 
                         for table in tables {
-                            read_options = read_options
-                                .with_query(format!("SELECT * FROM {}.{}", schema, table.name));
+                            read_options = read_options.with_query(format!(
+                                "SELECT * FROM {}.{}",
+                                table.schema, table.name
+                            ));
+
                             write_options = write_options.with_table_name(table.name);
 
                             let data = source.read(&read_options).await?;
                             target.write(data, &write_options).await?;
                         }
-                    } else {
-                        let data = source.read(&read_options).await?;
-                        target.write(data, &write_options).await?;
                     }
                 }
                 ConnectorKind::File => {

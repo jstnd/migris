@@ -1,8 +1,10 @@
-use std::pin::Pin;
+use std::{pin::Pin, str::FromStr};
 
 use futures_util::StreamExt;
 use sqlx::{
-    Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, mysql::MySqlArguments, query::Query,
+    Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow,
+    mysql::{MySqlArguments, MySqlConnectOptions},
+    query::Query,
 };
 
 use crate::{
@@ -45,22 +47,26 @@ impl Connector for MySqlConnector {
         ConnectorKind::Database
     }
 
-    async fn tables(&mut self, schema: &str) -> BirbResult<Vec<Table>> {
-        let pool = self.connect().await?;
-        let query = r#"
-            SELECT
-                TABLE_SCHEMA AS `schema`, TABLE_NAME AS `name`
-            FROM information_schema.TABLES
-            WHERE TABLE_SCHEMA = ?
-        "#;
+    async fn tables(&mut self) -> BirbResult<Vec<Table>> {
+        if let Some(schema) = schema_from_identifier(&self.identifier) {
+            let pool = self.connect().await?;
+            let query = r#"
+                SELECT
+                    TABLE_SCHEMA AS `schema`, TABLE_NAME AS `name`
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ?
+            "#;
 
-        let tables = sqlx::query_as::<_, Table>(query)
-            .bind(schema)
-            .fetch_all(pool)
-            .await
-            .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
+            let tables = sqlx::query_as::<_, Table>(query)
+                .bind(schema)
+                .fetch_all(pool)
+                .await
+                .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
 
-        Ok(tables)
+            Ok(tables)
+        } else {
+            Ok(vec![])
+        }
     }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
@@ -99,19 +105,20 @@ impl Connector for MySqlConnector {
         data: ConnectorData<'a>,
         options: &WriteOptions,
     ) -> BirbResult<()> {
+        // Determine table schema and name, using defaults if needed.
+        let generated = util::generate_name();
+        let table_schema =
+            schema_from_identifier(&self.identifier).unwrap_or(DEFAULT_SCHEMA.to_string());
+        let table_name = options.table_name.as_deref().unwrap_or(&generated);
+
         let pool = self.connect().await?;
         let mut txn = pool
             .begin()
             .await
             .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
-        // Determine table schema and name, using defaults if needed.
-        let generated = util::generate_name();
-        let table_schema = options.table_schema.as_deref().unwrap_or(DEFAULT_SCHEMA);
-        let table_name = options.table_name.as_deref().unwrap_or(&generated);
-
         // Create the table if it doesn't already exist.
-        create_table(table_schema, table_name, &data.columns, pool).await?;
+        create_table(&table_schema, table_name, &data.columns, pool).await?;
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
@@ -208,6 +215,14 @@ where
         .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
 
     Ok(())
+}
+
+fn schema_from_identifier(identifier: &str) -> Option<String> {
+    if let Ok(options) = MySqlConnectOptions::from_str(identifier) {
+        return Some(options.get_database().unwrap_or("").to_string());
+    }
+
+    None
 }
 
 fn validate_read_options(options: &ReadOptions) -> BirbResult<()> {

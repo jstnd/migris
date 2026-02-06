@@ -19,7 +19,7 @@ pub(crate) mod mysql {
 pub trait Connector: Send {
     fn kind(&self) -> ConnectorKind;
 
-    async fn tables(&mut self, _schema: &str) -> BirbResult<Vec<Table>> {
+    async fn tables(&mut self) -> BirbResult<Vec<Table>> {
         Ok(vec![])
     }
 
