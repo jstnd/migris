@@ -36,7 +36,7 @@ impl ColumnType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Row {
     pub values: Vec<Value>,
 }
@@ -47,8 +47,8 @@ impl Row {
     }
 }
 
-impl Default for Row {
-    fn default() -> Self {
-        Self::new()
-    }
+#[derive(Debug, sqlx::FromRow)]
+pub struct Table {
+    pub schema: String,
+    pub name: String,
 }

@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use birb::ConnectorKind;
 use clap::Args;
 
 #[derive(Args, Debug)]
@@ -58,20 +59,42 @@ impl MigrateEngine {
             write_options = write_options.with_table_name(table);
         }
 
-        for source in self.sources()? {
-            // Use file name (as applicable) if a target table name was not given.
-            let path = Path::new(&source);
-            if self.args.target_table.is_none()
-                && path.is_file()
-                && let Some(stem) = birb::util::get_stem(&path)
-            {
-                let safe_name = birb::util::get_safe_name(stem);
-                write_options = write_options.with_table_name(safe_name);
-            }
+        for source_identifier in self.sources()? {
+            let mut source = crate::create_connector(&source_identifier)?;
 
-            let mut source = crate::create_connector(&source)?;
-            let data = source.read(&read_options).await?;
-            target.write(data, &write_options).await?;
+            match source.kind() {
+                ConnectorKind::Database => {
+                    if let Some(schema) = &self.args.source_schema
+                        && self.args.source_table.is_none()
+                    {
+                        let tables = source.tables(schema).await?;
+
+                        for table in tables {
+                            read_options = read_options
+                                .with_query(format!("SELECT * FROM {}.{}", schema, table.name));
+                            write_options = write_options.with_table_name(table.name);
+
+                            let data = source.read(&read_options).await?;
+                            target.write(data, &write_options).await?;
+                        }
+                    } else {
+                        let data = source.read(&read_options).await?;
+                        target.write(data, &write_options).await?;
+                    }
+                }
+                ConnectorKind::File => {
+                    // Use file name if a target table name was not given.
+                    if self.args.target_table.is_none()
+                        && let Some(stem) = birb::util::get_stem(&source_identifier)
+                    {
+                        let safe_name = birb::util::get_safe_name(stem);
+                        write_options = write_options.with_table_name(safe_name);
+                    }
+
+                    let data = source.read(&read_options).await?;
+                    target.write(data, &write_options).await?;
+                }
+            }
         }
 
         Ok(())

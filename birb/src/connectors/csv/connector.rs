@@ -3,7 +3,8 @@ use std::path::Path;
 use futures_util::StreamExt;
 
 use crate::{
-    BirbError, BirbResult, Column, Connector, ConnectorData, ReadOptions, Row, WriteOptions,
+    BirbError, BirbResult, Column, Connector, ConnectorData, ConnectorKind, ReadOptions, Row,
+    WriteOptions,
 };
 
 #[derive(Debug)]
@@ -19,6 +20,10 @@ impl CsvConnector {
 
 #[async_trait::async_trait]
 impl Connector for CsvConnector {
+    fn kind(&self) -> ConnectorKind {
+        ConnectorKind::File
+    }
+
     async fn read<'a>(&mut self, _options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
         let mut reader = csv::Reader::from_path(&self.path)
             .map_err(|err| BirbError::FileOpenFailed(err.to_string()))?;
