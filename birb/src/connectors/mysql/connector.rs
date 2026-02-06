@@ -6,7 +6,8 @@ use sqlx::{
 };
 
 use crate::{
-    BirbError, BirbResult, Column, Connector, ConnectorData, ReadOptions, Row, WriteOptions,
+    BirbError, BirbResult, Column, Connector, ConnectorData, ConnectorKind, ReadOptions, Row,
+    WriteOptions,
     util::{self, DEFAULT_SCHEMA},
 };
 
@@ -40,6 +41,10 @@ impl MySqlConnector {
 
 #[async_trait::async_trait]
 impl Connector for MySqlConnector {
+    fn kind(&self) -> ConnectorKind {
+        ConnectorKind::Database
+    }
+
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
         // Validate the given read options for fields that are required.
         validate_read_options(options)?;

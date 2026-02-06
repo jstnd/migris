@@ -4,7 +4,7 @@ mod schema;
 pub mod util;
 mod value;
 
-pub use connectors::{Connector, ConnectorData};
+pub use connectors::{Connector, ConnectorData, ConnectorKind};
 pub use options::{ReadOptions, WriteOptions};
 pub use schema::{Column, ColumnFlag, ColumnType, Row};
 pub use value::Value;
