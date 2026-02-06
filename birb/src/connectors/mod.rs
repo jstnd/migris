@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use futures_util::Stream;
 
-use crate::{BirbResult, Column, ReadOptions, Row, WriteOptions};
+use crate::{BirbResult, Column, ReadOptions, Row, Table, WriteOptions};
 
 pub(crate) mod csv {
     pub(crate) mod connector;
@@ -16,8 +16,12 @@ pub(crate) mod mysql {
 }
 
 #[async_trait::async_trait]
-pub trait Connector {
+pub trait Connector: Send {
     fn kind(&self) -> ConnectorKind;
+
+    async fn tables(&mut self, _schema: &str) -> BirbResult<Vec<Table>> {
+        Ok(vec![])
+    }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>>;
 

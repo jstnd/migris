@@ -7,7 +7,7 @@ use sqlx::{
 
 use crate::{
     BirbError, BirbResult, Column, Connector, ConnectorData, ConnectorKind, ReadOptions, Row,
-    WriteOptions,
+    Table, WriteOptions,
     util::{self, DEFAULT_SCHEMA},
 };
 
@@ -43,6 +43,24 @@ impl MySqlConnector {
 impl Connector for MySqlConnector {
     fn kind(&self) -> ConnectorKind {
         ConnectorKind::Database
+    }
+
+    async fn tables(&mut self, schema: &str) -> BirbResult<Vec<Table>> {
+        let pool = self.connect().await?;
+        let query = r#"
+            SELECT
+                TABLE_SCHEMA AS `schema`, TABLE_NAME AS `name`
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = ?
+        "#;
+
+        let tables = sqlx::query_as::<_, Table>(query)
+            .bind(schema)
+            .fetch_all(pool)
+            .await
+            .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
+
+        Ok(tables)
     }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
