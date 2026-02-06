@@ -72,6 +72,7 @@ impl MigrateEngine {
                         for table in tables {
                             read_options = read_options
                                 .with_query(format!("SELECT * FROM {}.{}", schema, table.name));
+                            write_options = write_options.with_table_name(table.name);
 
                             let data = source.read(&read_options).await?;
                             target.write(data, &write_options).await?;
