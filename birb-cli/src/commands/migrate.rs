@@ -6,7 +6,7 @@ use clap::Args;
 #[derive(Args, Debug)]
 pub struct MigrateArguments {
     /// The source to migrate data from.
-    #[arg(long)]
+    #[arg(short, long, index = 1)]
     source: String,
 
     /// The table to migrate data from.
@@ -14,7 +14,7 @@ pub struct MigrateArguments {
     source_table: Option<String>,
 
     /// The target to migrate data to.
-    #[arg(long)]
+    #[arg(short, long, index = 2)]
     target: String,
 
     /// The table to migrate data to.
