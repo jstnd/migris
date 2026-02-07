@@ -107,9 +107,14 @@ impl Connector for MySqlConnector {
     ) -> BirbResult<()> {
         // Determine table schema and name, using defaults if needed.
         let generated = util::generate_name();
-        let table_schema =
-            schema_from_identifier(&self.identifier).unwrap_or(DEFAULT_SCHEMA.to_string());
         let table_name = options.table_name.as_deref().unwrap_or(&generated);
+        let table_schema = if let Some(schema) = schema_from_identifier(&self.identifier) {
+            schema
+        } else if let Some(schema) = &options.table_schema {
+            schema.clone()
+        } else {
+            DEFAULT_SCHEMA.to_string()
+        };
 
         let pool = self.connect().await?;
         let mut txn = pool
@@ -218,8 +223,10 @@ where
 }
 
 fn schema_from_identifier(identifier: &str) -> Option<String> {
-    if let Ok(options) = MySqlConnectOptions::from_str(identifier) {
-        return Some(options.get_database().unwrap_or("").to_string());
+    if let Ok(options) = MySqlConnectOptions::from_str(identifier)
+        && let Some(schema) = options.get_database()
+    {
+        return Some(schema.to_string());
     }
 
     None
