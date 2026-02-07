@@ -48,6 +48,12 @@ impl MigrateEngine {
                 ConnectorKind::Database => {
                     if let Some(table) = &self.args.source_table {
                         read_options = read_options.with_query(format!("SELECT * FROM {}", table));
+
+                        // Use source table name if a target table name was not given.
+                        if self.args.target_table.is_none() {
+                            write_options = write_options.with_table_name(table);
+                        }
+
                         let data = source.read(&read_options).await?;
                         target.write(data, &write_options).await?;
                     } else {
@@ -60,7 +66,13 @@ impl MigrateEngine {
                                 table.schema, table.name
                             ));
 
-                            write_options = write_options.with_table_name(table.name);
+                            // Pass schema from source table as fallback option.
+                            write_options = write_options.with_table_schema(table.schema);
+
+                            // Use source table name if a target table name was not given.
+                            if self.args.target_table.is_none() {
+                                write_options = write_options.with_table_name(table.name);
+                            }
 
                             let data = source.read(&read_options).await?;
                             target.write(data, &write_options).await?;
@@ -68,7 +80,7 @@ impl MigrateEngine {
                     }
                 }
                 ConnectorKind::File => {
-                    // Use file name if a target table name was not given.
+                    // Use source file name if a target table name was not given.
                     if self.args.target_table.is_none()
                         && let Some(stem) = birb::util::get_stem(&source_identifier)
                     {
