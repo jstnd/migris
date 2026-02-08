@@ -1,7 +1,7 @@
+pub mod common;
 mod connectors;
 mod options;
 mod schema;
-pub mod util;
 mod value;
 
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
@@ -54,7 +54,7 @@ pub enum BirbError {
 pub fn connector_from_str(str: &str) -> Option<Box<dyn Connector>> {
     if str.starts_with("mysql://") {
         Some(Box::new(mysql::MySqlConnector::new(str)))
-    } else if let Some(extension) = util::get_extension(&str) {
+    } else if let Some(extension) = common::get_extension(&str) {
         match extension {
             "csv" => Some(Box::new(csv::CsvConnector::new(str))),
             _ => None,

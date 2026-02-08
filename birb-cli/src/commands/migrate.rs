@@ -82,9 +82,9 @@ impl MigrateEngine {
                 ConnectorKind::File => {
                     // Use source file name if a target table name was not given.
                     if self.args.target_table.is_none()
-                        && let Some(stem) = birb::util::get_stem(&source_identifier)
+                        && let Some(stem) = birb::common::get_stem(&source_identifier)
                     {
-                        let safe_name = birb::util::get_safe_name(stem);
+                        let safe_name = birb::common::get_safe_name(stem);
                         write_options = write_options.with_table_name(safe_name);
                     }
 
@@ -99,14 +99,14 @@ impl MigrateEngine {
 
     fn sources(&self) -> anyhow::Result<Vec<String>> {
         if Path::new(&self.args.source).is_dir() {
-            let supported = birb::util::supported_extensions();
+            let supported = birb::common::supported_extensions();
             let mut sources = Vec::new();
 
             for entry in walkdir::WalkDir::new(&self.args.source) {
                 let entry = entry?;
                 let path = entry.path();
 
-                if let Some(extension) = birb::util::get_extension(&path)
+                if let Some(extension) = birb::common::get_extension(&path)
                     && supported.contains(&extension)
                 {
                     sources.push(path.display().to_string());

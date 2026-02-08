@@ -10,7 +10,7 @@ use sqlx::{
 use crate::{
     BirbError, BirbResult, Column, Connector, ConnectorData, ConnectorKind, ReadOptions, Row,
     Table, WriteOptions,
-    util::{self, DEFAULT_SCHEMA},
+    common::{self, DEFAULT_SCHEMA},
 };
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
@@ -106,7 +106,7 @@ impl Connector for MySqlConnector {
         options: &WriteOptions,
     ) -> BirbResult<()> {
         // Determine table schema and name, using defaults if needed.
-        let generated = util::generate_name();
+        let generated = common::generate_name();
         let table_name = options.table_name.as_deref().unwrap_or(&generated);
         let table_schema = if let Some(schema) = schema_from_identifier(&self.identifier) {
             schema

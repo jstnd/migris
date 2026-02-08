@@ -2,7 +2,7 @@ use chrono::TimeZone;
 use rust_decimal::Decimal;
 use sqlx::{Encode, MySql, Type, ValueRef, mysql::MySqlValueRef};
 
-use crate::{BirbError, BirbResult, Column, Value, mysql::MySqlDataType, util::decode_sqlx};
+use crate::{BirbError, BirbResult, Column, Value, common::decode_sqlx, mysql::MySqlDataType};
 
 impl Value {
     pub fn from_mysql(value: MySqlValueRef, column: &Column) -> BirbResult<Self> {
