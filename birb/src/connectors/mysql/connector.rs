@@ -127,7 +127,7 @@ impl Connector for MySqlConnector {
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
-            "INSERT INTO {}.{} VALUES ",
+            "INSERT INTO `{}`.`{}` VALUES ",
             table_schema, table_name
         ));
 
@@ -182,11 +182,11 @@ async fn create_table(
     columns: &[Column],
     pool: &MySqlPool,
 ) -> BirbResult<()> {
-    let query = format!("CREATE SCHEMA IF NOT EXISTS {}", table_schema);
+    let query = format!("CREATE SCHEMA IF NOT EXISTS `{}`", table_schema);
     execute_query(sqlx::query(&query), pool).await?;
 
     let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
-        "CREATE TABLE IF NOT EXISTS {0}.{1} (",
+        "CREATE TABLE IF NOT EXISTS `{0}`.`{1}` (",
         table_schema, table_name
     ));
 
