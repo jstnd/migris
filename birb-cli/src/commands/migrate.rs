@@ -4,6 +4,8 @@ use anyhow::anyhow;
 use birb::{Connector, ConnectorKind};
 use clap::Args;
 
+use crate::FileType;
+
 #[derive(Args, Debug)]
 pub struct MigrateArguments {
     /// The source to migrate data from.
@@ -14,6 +16,10 @@ pub struct MigrateArguments {
     #[arg(long)]
     source_table: Option<String>,
 
+    /// The source file type (used when passing a directory as source).
+    #[arg(long)]
+    source_type: Option<FileType>,
+
     /// The target to migrate data to.
     #[arg(short, long, index = 2)]
     target: String,
@@ -21,6 +27,10 @@ pub struct MigrateArguments {
     /// The table to migrate data to.
     #[arg(long)]
     target_table: Option<String>,
+
+    /// The target file type (used when passing a directory as target).
+    #[arg(long, default_value_t = FileType::Csv)]
+    target_type: FileType,
 }
 
 #[derive(Debug)]
@@ -112,9 +122,14 @@ impl MigrateEngine {
                 let entry = entry?;
                 let path = entry.path();
 
-                if let Some(file_type) = birb::common::get_file_type(&path)
-                    && file_type.is_supported()
-                {
+                if let Some(file_type) = birb::common::get_file_type(&path) {
+                    // Skip this entry if the entry's file type does not match the given source type.
+                    if let Some(source_type) = self.args.source_type
+                        && source_type != FileType::from(file_type)
+                    {
+                        continue;
+                    }
+
                     sources.push(path.display().to_string());
                 }
             }
@@ -136,7 +151,8 @@ impl MigrateEngine {
             let _ = std::fs::create_dir_all(target_path);
 
             if target_path.is_dir() {
-                let target_path = target_path.join(format!("{}.csv", file_name));
+                let target_path =
+                    target_path.join(format!("{}.{}", file_name, self.args.target_type));
                 crate::create_connector(&target_path.display().to_string())
             } else {
                 Err(anyhow!(
