@@ -51,13 +51,17 @@ pub enum BirbError {
     ValueError(String),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileType {
+    Csv,
+}
+
 pub fn connector_from_str(str: &str) -> Option<Box<dyn Connector>> {
     if str.starts_with("mysql://") {
         Some(Box::new(mysql::MySqlConnector::new(str)))
-    } else if let Some(extension) = common::get_extension(&str) {
-        match extension {
-            "csv" => Some(Box::new(csv::CsvConnector::new(str))),
-            _ => None,
+    } else if let Some(file_type) = common::get_file_type(&str) {
+        match file_type {
+            FileType::Csv => Some(Box::new(csv::CsvConnector::new(str))),
         }
     } else {
         None

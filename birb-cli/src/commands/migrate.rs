@@ -83,9 +83,10 @@ impl MigrateEngine {
                     }
                 }
                 ConnectorKind::File => {
-                    let stem = birb::common::get_stem(&source_identifier).ok_or_else(|| {
-                        anyhow!("Failed to get stem for file: {}", source_identifier)
-                    })?;
+                    let stem =
+                        birb::common::get_file_stem(&source_identifier).ok_or_else(|| {
+                            anyhow!("Failed to get stem for file: {}", source_identifier)
+                        })?;
 
                     // Use source file name if a target table name was not given.
                     if self.args.target_table.is_none() {
@@ -105,15 +106,14 @@ impl MigrateEngine {
 
     fn sources(&self) -> anyhow::Result<Vec<String>> {
         if Path::new(&self.args.source).is_dir() {
-            let supported = birb::common::supported_extensions();
             let mut sources = Vec::new();
 
             for entry in walkdir::WalkDir::new(&self.args.source) {
                 let entry = entry?;
                 let path = entry.path();
 
-                if let Some(extension) = birb::common::get_extension(&path)
-                    && supported.contains(&extension)
+                if let Some(file_type) = birb::common::get_file_type(&path)
+                    && file_type.is_supported()
                 {
                     sources.push(path.display().to_string());
                 }

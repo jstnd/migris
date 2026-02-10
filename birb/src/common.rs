@@ -2,11 +2,9 @@ use std::{ffi::OsStr, path::Path};
 
 use sqlx::{Database, Decode, ValueRef};
 
-use crate::{BirbError, BirbResult};
+use crate::{BirbError, BirbResult, FileType};
 
 pub(crate) const DEFAULT_SCHEMA: &str = "birb";
-
-const SUPPORTED_FILE_EXT: [&str; 1] = ["csv"];
 
 pub(crate) fn decode_sqlx<'a, T, DB, V>(value: V) -> BirbResult<T>
 where
@@ -47,14 +45,13 @@ pub fn get_safe_name(str: &str) -> String {
         .collect()
 }
 
-pub fn get_extension<P: AsRef<Path>>(path: &P) -> Option<&str> {
-    path.as_ref().extension().and_then(OsStr::to_str)
-}
-
-pub fn get_stem<P: AsRef<Path>>(path: &P) -> Option<&str> {
+pub fn get_file_stem<P: AsRef<Path>>(path: &P) -> Option<&str> {
     path.as_ref().file_stem().and_then(OsStr::to_str)
 }
 
-pub fn supported_extensions() -> &'static [&'static str] {
-    &SUPPORTED_FILE_EXT
+pub fn get_file_type<P: AsRef<Path>>(path: &P) -> Option<FileType> {
+    match path.as_ref().extension().and_then(OsStr::to_str) {
+        Some("csv") => Some(FileType::Csv),
+        _ => None,
+    }
 }
