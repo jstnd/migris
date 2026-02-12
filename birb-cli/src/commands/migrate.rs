@@ -1,10 +1,8 @@
 use std::path::Path;
 
 use anyhow::anyhow;
-use birb::{Connector, ConnectorKind};
+use birb::{Connector, ConnectorKind, FileType};
 use clap::Args;
-
-use crate::FileType;
 
 #[derive(Args, Debug)]
 pub struct MigrateArguments {
@@ -125,7 +123,7 @@ impl MigrateEngine {
                 if let Some(file_type) = birb::common::get_file_type(&path) {
                     // Skip this entry if the entry's file type does not match the given source type.
                     if let Some(source_type) = self.args.source_type
-                        && source_type != FileType::from(file_type)
+                        && source_type != file_type
                     {
                         continue;
                     }

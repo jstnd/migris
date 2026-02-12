@@ -41,26 +41,3 @@ pub fn create_connector(str: &str) -> anyhow::Result<Box<dyn Connector>> {
     birb::connector_from_str(str)
         .ok_or_else(|| anyhow!("Failed to create connector for identifier: {}", str))
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum FileType {
-    Csv,
-}
-
-impl std::fmt::Display for FileType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display = match self {
-            Self::Csv => "csv",
-        };
-
-        write!(f, "{}", display)
-    }
-}
-
-impl From<birb::FileType> for FileType {
-    fn from(value: birb::FileType) -> Self {
-        match value {
-            birb::FileType::Csv => Self::Csv,
-        }
-    }
-}

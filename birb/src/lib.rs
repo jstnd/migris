@@ -51,9 +51,19 @@ pub enum BirbError {
     ValueError(String),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum FileType {
     Csv,
+}
+
+impl std::fmt::Display for FileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display = match self {
+            Self::Csv => "csv",
+        };
+
+        write!(f, "{}", display)
+    }
 }
 
 pub fn connector_from_str(str: &str) -> Option<Box<dyn Connector>> {
