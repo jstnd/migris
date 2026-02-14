@@ -1,6 +1,6 @@
 use csv::StringRecord;
 
-use crate::{BirbResult, Column, ColumnType, Row, Value};
+use crate::{Column, ColumnType, MigrisResult, Row, Value};
 
 impl Column {
     pub fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
@@ -29,7 +29,7 @@ impl Row {
         row
     }
 
-    pub fn into_csv(self) -> BirbResult<StringRecord> {
+    pub fn into_csv(self) -> MigrisResult<StringRecord> {
         let mut record = StringRecord::new();
 
         for value in self.values {

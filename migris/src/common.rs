@@ -2,21 +2,21 @@ use std::{ffi::OsStr, path::Path};
 
 use sqlx::{Database, Decode, ValueRef};
 
-use crate::{BirbError, BirbResult, FileType};
+use crate::{FileType, MigrisError, MigrisResult};
 
-pub(crate) const DEFAULT_SCHEMA: &str = "birb";
+pub(crate) const DEFAULT_SCHEMA: &str = "migris";
 
-pub(crate) fn decode_sqlx<'a, T, DB, V>(value: V) -> BirbResult<T>
+pub(crate) fn decode_sqlx<'a, T, DB, V>(value: V) -> MigrisResult<T>
 where
     T: Decode<'a, DB>,
     DB: Database<ValueRef<'a> = V>,
     V: ValueRef<'a>,
 {
-    T::decode(value).map_err(|err| BirbError::ValueError(err.to_string()))
+    T::decode(value).map_err(|err| MigrisError::ValueError(err.to_string()))
 }
 
 pub(crate) fn generate_name() -> String {
-    format!("birb_{}", chrono::Local::now().format("%m%d%Y_%H%M%S%f"))
+    format!("migris_{}", chrono::Local::now().format("%m%d%Y_%H%M%S%f"))
 }
 
 pub fn get_safe_name(str: &str) -> String {

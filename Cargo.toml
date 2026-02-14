@@ -1,9 +1,9 @@
 [workspace]
-members = ["birb", "birb-cli"]
+members = ["migris", "migris-cli"]
 resolver = "3"
 
 [workspace.dependencies]
-birb = { path = "birb" }
+migris = { path = "migris" }
 
 # external dependencies
 clap = { version = "4.5.54", features = ["derive"] }

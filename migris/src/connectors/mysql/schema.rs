@@ -1,9 +1,9 @@
 use sqlx::{Column as SqlxColumn, Row as SqlxRow, TypeInfo};
 
-use crate::{BirbError, BirbResult, Column, ColumnFlag, ColumnType, Row, Value};
+use crate::{Column, ColumnFlag, ColumnType, MigrisError, MigrisResult, Row, Value};
 
 impl Column {
-    pub fn from_mysql(column: &sqlx::mysql::MySqlColumn) -> BirbResult<Self> {
+    pub fn from_mysql(column: &sqlx::mysql::MySqlColumn) -> MigrisResult<Self> {
         let mut flags = Vec::new();
         let type_parts: Vec<&str> = column.type_info().name().split_whitespace().collect();
 
@@ -64,7 +64,7 @@ pub enum MySqlDataType {
 }
 
 impl MySqlDataType {
-    fn from_str(str: &str) -> BirbResult<Self> {
+    fn from_str(str: &str) -> MigrisResult<Self> {
         Ok(match str.to_uppercase().as_str() {
             "BIGINT" => Self::BIGINT,
             "BINARY" => Self::BINARY,
@@ -104,7 +104,7 @@ impl MySqlDataType {
             "VARCHAR" => Self::VARCHAR,
             "YEAR" => Self::YEAR,
             _ => {
-                return Err(BirbError::UnsupportedAction(format!(
+                return Err(MigrisError::UnsupportedAction(format!(
                     "attempted to convert '{}' to mysql data type",
                     str
                 )));
@@ -160,13 +160,13 @@ impl std::fmt::Display for MySqlDataType {
 }
 
 impl Row {
-    pub fn from_mysql(sqlx_row: sqlx::mysql::MySqlRow, columns: &[Column]) -> BirbResult<Self> {
+    pub fn from_mysql(sqlx_row: sqlx::mysql::MySqlRow, columns: &[Column]) -> MigrisResult<Self> {
         let mut row = Self::new();
 
         for column in columns {
             let value = sqlx_row
                 .try_get_raw(column.ordinal)
-                .map_err(|err| BirbError::ValueError(err.to_string()))?;
+                .map_err(|err| MigrisError::ValueError(err.to_string()))?;
 
             row.values.push(Value::from_mysql(value, column)?);
         }

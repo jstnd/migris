@@ -3,7 +3,7 @@ use std::path::Path;
 use futures_util::StreamExt;
 
 use crate::{
-    BirbError, BirbResult, Column, Connector, ConnectorData, ConnectorKind, ReadOptions, Row,
+    Column, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions, Row,
     WriteOptions,
 };
 
@@ -24,13 +24,13 @@ impl Connector for CsvConnector {
         ConnectorKind::File
     }
 
-    async fn read<'a>(&mut self, _options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
+    async fn read<'a>(&mut self, _options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
         let mut reader = csv::Reader::from_path(&self.path)
-            .map_err(|err| BirbError::FileOpenFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
         let headers = reader
             .headers()
-            .map_err(|err| BirbError::FileReadFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::FileReadFailed(err.to_string()))?;
 
         let mut columns = Vec::new();
         for (ordinal, name) in headers.iter().enumerate() {
@@ -39,7 +39,7 @@ impl Connector for CsvConnector {
 
         let stream = futures_util::stream::iter(reader.into_records().map(|result| {
             result
-                .map_err(|err| BirbError::FileReadFailed(err.to_string()))
+                .map_err(|err| MigrisError::FileReadFailed(err.to_string()))
                 .map(Row::from_csv)
         }));
 
@@ -50,23 +50,23 @@ impl Connector for CsvConnector {
         &mut self,
         data: ConnectorData<'a>,
         _options: &WriteOptions,
-    ) -> BirbResult<()> {
+    ) -> MigrisResult<()> {
         let path = Path::new(&self.path);
 
         // Create any missing parent directories in the given path.
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|err| BirbError::FileOpenFailed(err.to_string()))?;
+                .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
         }
 
         let mut writer = csv::Writer::from_path(path)
-            .map_err(|err| BirbError::FileOpenFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
         //
         let headers = data.columns.iter().map(|c| &c.name);
         writer
             .write_record(headers)
-            .map_err(|err| BirbError::FileWriteFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
 
         //
         let mut stream = data.stream;
@@ -74,12 +74,12 @@ impl Connector for CsvConnector {
             let record = row?.into_csv()?;
             writer
                 .write_record(&record)
-                .map_err(|err| BirbError::FileWriteFailed(err.to_string()))?;
+                .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
         }
 
         writer
             .flush()
-            .map_err(|err| BirbError::FileWriteFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
 
         Ok(())
     }

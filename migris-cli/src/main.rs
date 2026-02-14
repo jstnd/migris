@@ -3,8 +3,8 @@ mod commands {
 }
 
 use anyhow::anyhow;
-use birb::Connector;
 use clap::{Parser, Subcommand};
+use migris::Connector;
 
 use crate::commands::migrate::{MigrateArguments, MigrateEngine};
 
@@ -38,6 +38,6 @@ async fn main() {
 }
 
 pub fn create_connector(str: &str) -> anyhow::Result<Box<dyn Connector>> {
-    birb::connector_from_str(str)
+    migris::connector_from_str(str)
         .ok_or_else(|| anyhow!("Failed to create connector for identifier: {}", str))
 }

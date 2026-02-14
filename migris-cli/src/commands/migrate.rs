@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use anyhow::anyhow;
-use birb::{Connector, ConnectorKind, FileType};
 use clap::Args;
+use migris::{Connector, ConnectorKind, FileType};
 
 #[derive(Args, Debug)]
 pub struct MigrateArguments {
@@ -42,8 +42,8 @@ impl MigrateEngine {
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
-        let mut read_options = birb::ReadOptions::new();
-        let mut write_options = birb::WriteOptions::new();
+        let mut read_options = migris::ReadOptions::new();
+        let mut write_options = migris::WriteOptions::new();
 
         if let Some(table) = &self.args.target_table {
             write_options = write_options.with_table_name(table);
@@ -92,13 +92,13 @@ impl MigrateEngine {
                 }
                 ConnectorKind::File => {
                     let stem =
-                        birb::common::get_file_stem(&source_identifier).ok_or_else(|| {
+                        migris::common::get_file_stem(&source_identifier).ok_or_else(|| {
                             anyhow!("Failed to get stem for file: {}", source_identifier)
                         })?;
 
                     // Use source file name if a target table name was not given.
                     if self.args.target_table.is_none() {
-                        let safe_name = birb::common::get_safe_name(stem);
+                        let safe_name = migris::common::get_safe_name(stem);
                         write_options = write_options.with_table_name(safe_name);
                     }
 
@@ -120,7 +120,7 @@ impl MigrateEngine {
                 let entry = entry?;
                 let path = entry.path();
 
-                if let Some(file_type) = birb::common::get_file_type(&path) {
+                if let Some(file_type) = migris::common::get_file_type(&path) {
                     // Skip this entry if the entry's file type does not match the given source type.
                     if let Some(source_type) = self.args.source_type
                         && source_type != file_type

@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use futures_util::Stream;
 
-use crate::{BirbResult, Column, ReadOptions, Row, Table, WriteOptions};
+use crate::{Column, MigrisResult, ReadOptions, Row, Table, WriteOptions};
 
 pub(crate) mod csv {
     pub(crate) mod connector;
@@ -19,20 +19,20 @@ pub(crate) mod mysql {
 pub trait Connector: Send {
     fn kind(&self) -> ConnectorKind;
 
-    async fn tables(&mut self) -> BirbResult<Vec<Table>> {
+    async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
         Ok(vec![])
     }
 
-    async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>>;
+    async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>>;
 
     async fn write<'a>(
         &mut self,
         data: ConnectorData<'a>,
         options: &WriteOptions,
-    ) -> BirbResult<()>;
+    ) -> MigrisResult<()>;
 }
 
-type RowStream<'a> = Pin<Box<dyn Stream<Item = BirbResult<Row>> + Send + 'a>>;
+type RowStream<'a> = Pin<Box<dyn Stream<Item = MigrisResult<Row>> + Send + 'a>>;
 
 pub struct ConnectorData<'a> {
     pub columns: Vec<Column>,

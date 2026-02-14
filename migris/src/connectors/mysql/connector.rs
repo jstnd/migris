@@ -8,7 +8,7 @@ use sqlx::{
 };
 
 use crate::{
-    BirbError, BirbResult, Column, Connector, ConnectorData, ConnectorKind, ReadOptions, Row,
+    Column, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions, Row,
     Table, WriteOptions,
     common::{self, DEFAULT_SCHEMA},
 };
@@ -28,12 +28,12 @@ impl MySqlConnector {
         }
     }
 
-    async fn connect(&mut self) -> BirbResult<&MySqlPool> {
+    async fn connect(&mut self) -> MigrisResult<&MySqlPool> {
         if self.pool.is_none() {
             self.pool = Some(
                 sqlx::MySqlPool::connect(&self.identifier)
                     .await
-                    .map_err(|err| BirbError::DatabaseConnectFailed(err.to_string()))?,
+                    .map_err(|err| MigrisError::DatabaseConnectFailed(err.to_string()))?,
             );
         }
 
@@ -47,7 +47,7 @@ impl Connector for MySqlConnector {
         ConnectorKind::Database
     }
 
-    async fn tables(&mut self) -> BirbResult<Vec<Table>> {
+    async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
         if let Some(schema) = schema_from_identifier(&self.identifier) {
             let pool = self.connect().await?;
             let query = r#"
@@ -61,7 +61,7 @@ impl Connector for MySqlConnector {
                 .bind(schema)
                 .fetch_all(pool)
                 .await
-                .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
+                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
 
             Ok(tables)
         } else {
@@ -69,7 +69,7 @@ impl Connector for MySqlConnector {
         }
     }
 
-    async fn read<'a>(&mut self, options: &'a ReadOptions) -> BirbResult<ConnectorData<'a>> {
+    async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
         // Validate the given read options for fields that are required.
         validate_read_options(options)?;
 
@@ -84,7 +84,7 @@ impl Connector for MySqlConnector {
         if let Some(row) = peekable.peek().await {
             let row = row
                 .as_ref()
-                .map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))?;
+                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
 
             for column in row.columns() {
                 columns.push(Column::from_mysql(column)?);
@@ -93,7 +93,7 @@ impl Connector for MySqlConnector {
 
         let stream_columns = columns.clone();
         let stream = stream.map(move |row| {
-            row.map_err(|err| BirbError::DatabaseReadFailed(err.to_string()))
+            row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
                 .and_then(|row| Row::from_mysql(row, &stream_columns))
         });
 
@@ -104,7 +104,7 @@ impl Connector for MySqlConnector {
         &mut self,
         data: ConnectorData<'a>,
         options: &WriteOptions,
-    ) -> BirbResult<()> {
+    ) -> MigrisResult<()> {
         // Determine table schema and name, using defaults if needed.
         let generated = common::generate_name();
         let table_name = options.table_name.as_deref().unwrap_or(&generated);
@@ -120,7 +120,7 @@ impl Connector for MySqlConnector {
         let mut txn = pool
             .begin()
             .await
-            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::DatabaseWriteFailed(err.to_string()))?;
 
         // Create the table if it doesn't already exist.
         create_table(&table_schema, table_name, &data.columns, pool).await?;
@@ -170,7 +170,7 @@ impl Connector for MySqlConnector {
 
         txn.commit()
             .await
-            .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+            .map_err(|err| MigrisError::DatabaseWriteFailed(err.to_string()))?;
 
         Ok(())
     }
@@ -181,7 +181,7 @@ async fn create_table(
     table_name: &str,
     columns: &[Column],
     pool: &MySqlPool,
-) -> BirbResult<()> {
+) -> MigrisResult<()> {
     let query = format!("CREATE SCHEMA IF NOT EXISTS `{}`", table_schema);
     execute_query(sqlx::query(&query), pool).await?;
 
@@ -210,14 +210,14 @@ async fn create_table(
 async fn execute_query<'e, E>(
     query: Query<'_, MySql, MySqlArguments>,
     executor: E,
-) -> BirbResult<()>
+) -> MigrisResult<()>
 where
     E: Executor<'e, Database = MySql>,
 {
     query
         .execute(executor)
         .await
-        .map_err(|err| BirbError::DatabaseWriteFailed(err.to_string()))?;
+        .map_err(|err| MigrisError::DatabaseWriteFailed(err.to_string()))?;
 
     Ok(())
 }
@@ -232,9 +232,9 @@ fn schema_from_identifier(identifier: &str) -> Option<String> {
     None
 }
 
-fn validate_read_options(options: &ReadOptions) -> BirbResult<()> {
+fn validate_read_options(options: &ReadOptions) -> MigrisResult<()> {
     if options.query.is_none() {
-        return Err(BirbError::InvalidOption(
+        return Err(MigrisError::InvalidOption(
             "query is required when reading from database".into(),
         ));
     }

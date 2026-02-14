@@ -19,10 +19,10 @@ pub mod mysql {
     pub use crate::connectors::mysql::schema::MySqlDataType;
 }
 
-type BirbResult<T> = Result<T, BirbError>;
+type MigrisResult<T> = Result<T, MigrisError>;
 
 #[derive(thiserror::Error, Debug)]
-pub enum BirbError {
+pub enum MigrisError {
     #[error("Failed to connect to database: {0}")]
     DatabaseConnectFailed(String),
 

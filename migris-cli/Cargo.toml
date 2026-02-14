@@ -1,15 +1,15 @@
 [package]
-name = "birb-cli"
+name = "migris-cli"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-birb = { workspace = true }
 clap = { workspace = true }
+migris = { workspace = true }
 tokio = { version = "1.49.0", features = ["full"] }
 walkdir = "2.5.0"
 
 [[bin]]
-name = "birb"
+name = "migris"
 path = "src/main.rs"

@@ -2,10 +2,10 @@ use chrono::TimeZone;
 use rust_decimal::Decimal;
 use sqlx::{Encode, MySql, Type, ValueRef, mysql::MySqlValueRef};
 
-use crate::{BirbError, BirbResult, Column, Value, common::decode_sqlx, mysql::MySqlDataType};
+use crate::{MigrisError, MigrisResult, Column, Value, common::decode_sqlx, mysql::MySqlDataType};
 
 impl Value {
-    pub fn from_mysql(value: MySqlValueRef, column: &Column) -> BirbResult<Self> {
+    pub fn from_mysql(value: MySqlValueRef, column: &Column) -> MigrisResult<Self> {
         // Check if the value is null first.
         if value.is_null() {
             return Ok(Value::Null);
@@ -36,7 +36,7 @@ impl Value {
             MySqlDataType::DATE => {
                 let date: chrono::NaiveDate = decode_sqlx(value)?;
                 let date: chrono::NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
-                    BirbError::ValueError("failed to convert date to datetime".into()),
+                    MigrisError::ValueError("failed to convert date to datetime".into()),
                 )?;
 
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))

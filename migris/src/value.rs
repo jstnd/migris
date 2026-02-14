@@ -1,4 +1,4 @@
-use crate::{BirbError, BirbResult};
+use crate::{MigrisError, MigrisResult};
 
 #[derive(Debug)]
 pub enum Value {
@@ -21,11 +21,11 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn to_string(self) -> BirbResult<String> {
+    pub fn to_string(self) -> MigrisResult<String> {
         Ok(match self {
             Value::Null => "".into(),
             Value::Bytes(value) => {
-                String::from_utf8(value).map_err(|err| BirbError::ValueError(err.to_string()))?
+                String::from_utf8(value).map_err(|err| MigrisError::ValueError(err.to_string()))?
             }
             Value::Date(value) => value.to_string(),
             Value::Decimal(value) => value.to_string(),
