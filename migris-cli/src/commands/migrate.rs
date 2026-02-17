@@ -55,8 +55,9 @@ impl MigrateEngine {
             match source.kind() {
                 ConnectorKind::Database => {
                     if let Some(table) = &self.args.source_table {
-                        read_options =
-                            read_options.with_query(format!("SELECT * FROM `{}`", table));
+                        read_options = read_options
+                            .with_query(format!("SELECT * FROM `{}`", table))
+                            .with_table_name(table);
 
                         // Use source table name if a target table name was not given.
                         if self.args.target_table.is_none() {
@@ -71,10 +72,13 @@ impl MigrateEngine {
                         let tables = source.tables().await?;
 
                         for table in tables {
-                            read_options = read_options.with_query(format!(
-                                "SELECT * FROM `{}`.`{}`",
-                                table.schema, table.name
-                            ));
+                            read_options = read_options
+                                .with_query(format!(
+                                    "SELECT * FROM `{}`.`{}`",
+                                    table.schema, table.name
+                                ))
+                                .with_table_schema(&table.schema)
+                                .with_table_name(&table.name);
 
                             // Pass schema from source table as fallback option.
                             write_options = write_options.with_table_schema(table.schema);
