@@ -47,7 +47,7 @@ pub enum MySqlDataType {
 
 impl MySqlDataType {
     pub(crate) fn from_type(column_type: &str) -> MigrisResult<Self> {
-        let type_parts: Vec<&str> = column_type.trim_end_matches(')').split('(').collect();
+        let type_parts: Vec<&str> = column_type.trim_end_matches(')').splitn(2, '(').collect();
 
         Ok(match type_parts[0].to_uppercase().as_str() {
             "BIGINT" => Self::BIGINT,
@@ -100,19 +100,28 @@ impl MySqlDataType {
             "DATE" => Self::DATE,
             "DATETIME" => Self::DATETIME,
             "DECIMAL" => {
-                if type_parts.len() < 3 {
+                if type_parts.len() < 2 {
                     return Err(MigrisError::GeneralError(format!(
                         "missing precision or scale specifier in column type '{}'",
                         column_type
                     )));
                 }
 
-                Self::DECIMAL(type_parts[1].parse().map_err(|err| {
+                let (precision, scale) = type_parts[1]
+                    .split_once(',')
+                    .ok_or_else(|| {
+                        MigrisError::GeneralError(format!(
+                            "failed to split '{}' into precision and scale specifiers for column type '{}'",
+                            type_parts[1], column_type
+                        ))
+                    })?;
+
+                Self::DECIMAL(precision.parse().map_err(|err| {
                     MigrisError::GeneralError(format!(
                         "failed to parse '{}' into precision specifier for column type '{}': {}",
                         type_parts[1], column_type, err
                     ))
-                })?, type_parts[2].parse().map_err(|err| {
+                })?, scale.parse().map_err(|err| {
                     MigrisError::GeneralError(format!(
                         "failed to parse '{}' into scale specifier for column type '{}': {}",
                         type_parts[2], column_type, err
@@ -123,7 +132,7 @@ impl MySqlDataType {
             "ENUM" => {
                 if type_parts.len() < 2 {
                     return Err(MigrisError::GeneralError(format!(
-                        "missing values in column type '{}'",
+                        "missing enum values in column type '{}'",
                         column_type
                     )));
                 }
@@ -154,7 +163,7 @@ impl MySqlDataType {
             "SET" => {
                 if type_parts.len() < 2 {
                     return Err(MigrisError::GeneralError(format!(
-                        "missing values in column type '{}'",
+                        "missing set values in column type '{}'",
                         column_type
                     )));
                 }
