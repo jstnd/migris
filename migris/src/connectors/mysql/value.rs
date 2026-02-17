@@ -2,7 +2,7 @@ use chrono::TimeZone;
 use rust_decimal::Decimal;
 use sqlx::{Encode, MySql, Type, ValueRef, mysql::MySqlValueRef};
 
-use crate::{MigrisError, MigrisResult, Column, Value, common::decode_sqlx, mysql::MySqlDataType};
+use crate::{Column, MigrisError, MigrisResult, Value, common::decode_sqlx, mysql::MySqlDataType};
 
 impl Value {
     pub fn from_mysql(value: MySqlValueRef, column: &Column) -> MigrisResult<Self> {
@@ -19,20 +19,20 @@ impl Value {
                     Ok(Value::I64(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlDataType::BINARY
+            MySqlDataType::BINARY(_)
             | MySqlDataType::BLOB
             | MySqlDataType::LONGBLOB
             | MySqlDataType::MEDIUMBLOB
             | MySqlDataType::TINYBLOB
-            | MySqlDataType::VARBINARY => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlDataType::BIT => Ok(Value::U64(decode_sqlx(value)?)),
-            MySqlDataType::CHAR
+            | MySqlDataType::VARBINARY(_) => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::BIT(_) => Ok(Value::U64(decode_sqlx(value)?)),
+            MySqlDataType::CHAR(_)
             | MySqlDataType::JSON
             | MySqlDataType::LONGTEXT
             | MySqlDataType::MEDIUMTEXT
             | MySqlDataType::TEXT
             | MySqlDataType::TINYTEXT
-            | MySqlDataType::VARCHAR => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
+            | MySqlDataType::VARCHAR(_) => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::DATE => {
                 let date: chrono::NaiveDate = decode_sqlx(value)?;
                 let date: chrono::NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
@@ -45,9 +45,9 @@ impl Value {
                 let date: chrono::NaiveDateTime = decode_sqlx(value)?;
                 Ok(Value::Date(chrono::Utc.from_utc_datetime(&date)))
             }
-            MySqlDataType::DECIMAL => Ok(Value::Decimal(decode_sqlx(value)?)),
+            MySqlDataType::DECIMAL(_, _) => Ok(Value::Decimal(decode_sqlx(value)?)),
             MySqlDataType::DOUBLE => Ok(Value::F64(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlDataType::ENUM => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::ENUM(_) => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::FLOAT => Ok(Value::F32(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::GEOMETRY
             | MySqlDataType::GEOMETRYCOLLECTION
@@ -64,7 +64,7 @@ impl Value {
                     Ok(Value::I32(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlDataType::SET => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::SET(_) => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::SMALLINT => {
                 if column.is_unsigned() {
                     Ok(Value::U16(decode_sqlx(value)?))

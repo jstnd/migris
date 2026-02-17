@@ -23,6 +23,9 @@ type MigrisResult<T> = Result<T, MigrisError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum MigrisError {
+    #[error("Error encountered: {0}")]
+    GeneralError(String),
+
     #[error("Failed to connect to database: {0}")]
     DatabaseConnectFailed(String),
 
@@ -43,9 +46,6 @@ pub enum MigrisError {
 
     #[error("Invalid option: {0}")]
     InvalidOption(String),
-
-    #[error("Unsupported action performed: {0}")]
-    UnsupportedAction(String),
 
     #[error("Value error encountered: {0}")]
     ValueError(String),
