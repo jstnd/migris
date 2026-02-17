@@ -1,4 +1,4 @@
-use std::{pin::Pin, str::FromStr};
+use std::str::FromStr;
 
 use futures_util::StreamExt;
 use sqlx::{
@@ -8,9 +8,10 @@ use sqlx::{
 };
 
 use crate::{
-    Column, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions, Row,
-    Table, WriteOptions,
+    Column, ColumnFlag, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError,
+    MigrisResult, ReadOptions, Row, Table, WriteOptions,
     common::{self, DEFAULT_SCHEMA},
+    mysql::MySqlDataType,
 };
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
@@ -73,29 +74,23 @@ impl Connector for MySqlConnector {
         // Validate the given read options for fields that are required.
         validate_read_options(options)?;
 
+        let table_schema = if let Some(schema) = schema_from_identifier(&self.identifier) {
+            schema
+        } else if let Some(schema) = &options.table_schema {
+            schema.clone()
+        } else {
+            "".to_string()
+        };
+
         let pool = self.connect().await?;
-        let mut stream = sqlx::query(options.query.as_ref().unwrap())
-            .fetch(pool)
-            .peekable();
-
-        let mut columns = Vec::new();
-        let peekable = Pin::new(&mut stream);
-
-        if let Some(row) = peekable.peek().await {
-            let row = row
-                .as_ref()
-                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
-
-            for column in row.columns() {
-                columns.push(Column::from_mysql(column)?);
-            }
-        }
-
+        let columns = columns(&table_schema, options.table_name.as_ref().unwrap(), pool).await?;
         let stream_columns = columns.clone();
-        let stream = stream.map(move |row| {
-            row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
-                .and_then(|row| Row::from_mysql(row, &stream_columns))
-        });
+        let stream = sqlx::query(options.query.as_ref().unwrap())
+            .fetch(pool)
+            .map(move |row| {
+                row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+                    .and_then(|row| Row::from_mysql(row, &stream_columns))
+            });
 
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
@@ -176,6 +171,53 @@ impl Connector for MySqlConnector {
     }
 }
 
+async fn columns(
+    table_schema: &str,
+    table_name: &str,
+    pool: &MySqlPool,
+) -> MigrisResult<Vec<Column>> {
+    let query = r#"
+            SELECT
+                COLUMN_NAME,
+                ORDINAL_POSITION - 1 AS `ORDINAL_POSITION`,
+                CAST(COLUMN_TYPE AS CHAR) AS `COLUMN_TYPE`
+            FROM information_schema.COLUMNS
+            WHERE
+                TABLE_SCHEMA = ? AND
+                TABLE_NAME = ?
+            ORDER BY
+                ORDINAL_POSITION
+        "#;
+
+    let mut columns = Vec::new();
+    let rows = sqlx::query(query)
+        .bind(table_schema)
+        .bind(table_name)
+        .fetch_all(pool)
+        .await
+        .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
+    for row in rows {
+        let mut flags = Vec::new();
+        let column_type: String = row.get("COLUMN_TYPE");
+
+        if column_type.ends_with("unsigned") {
+            flags.push(ColumnFlag::Unsigned);
+        }
+
+        columns.push(Column {
+            column_type: ColumnType::MySql(MySqlDataType::from_type(
+                column_type.trim_end_matches(" unsigned"),
+            )?),
+            flags,
+            name: row.get("COLUMN_NAME"),
+            ordinal: row.get::<u32, _>("ORDINAL_POSITION") as usize,
+        });
+    }
+
+    Ok(columns)
+}
+
 async fn create_table(
     table_schema: &str,
     table_name: &str,
@@ -236,6 +278,12 @@ fn validate_read_options(options: &ReadOptions) -> MigrisResult<()> {
     if options.query.is_none() {
         return Err(MigrisError::InvalidOption(
             "query is required when reading from database".into(),
+        ));
+    }
+
+    if options.table_name.is_none() {
+        return Err(MigrisError::InvalidOption(
+            "table name is required when reading from database".into(),
         ));
     }
 

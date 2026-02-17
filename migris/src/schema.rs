@@ -19,7 +19,7 @@ pub enum ColumnFlag {
     Unsigned,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum ColumnType {
     Csv(CsvDataType),
     MySql(MySqlDataType),
@@ -29,9 +29,9 @@ impl ColumnType {
     pub fn as_mysql(&self) -> MySqlDataType {
         match self {
             ColumnType::Csv(data_type) => match data_type {
-                CsvDataType::String => MySqlDataType::VARCHAR,
+                CsvDataType::String => MySqlDataType::VARCHAR(u16::MAX),
             },
-            ColumnType::MySql(data_type) => *data_type,
+            ColumnType::MySql(data_type) => data_type.clone(),
         }
     }
 }
