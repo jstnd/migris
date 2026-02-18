@@ -9,6 +9,10 @@ pub struct Column {
 }
 
 impl Column {
+    pub fn is_nullable(&self) -> bool {
+        self.flags.contains(&ColumnFlag::Nullable)
+    }
+
     pub fn is_unsigned(&self) -> bool {
         self.flags.contains(&ColumnFlag::Unsigned)
     }
@@ -16,6 +20,7 @@ impl Column {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnFlag {
+    Nullable,
     Unsigned,
 }
 

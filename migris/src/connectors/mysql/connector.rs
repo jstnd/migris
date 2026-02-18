@@ -180,6 +180,7 @@ async fn columns(
             SELECT
                 COLUMN_NAME,
                 ORDINAL_POSITION - 1 AS `ORDINAL_POSITION`,
+                IF(IS_NULLABLE = 'YES', TRUE, FALSE) AS `IS_NULLABLE`,
                 CAST(COLUMN_TYPE AS CHAR) AS `COLUMN_TYPE`
             FROM information_schema.COLUMNS
             WHERE
@@ -200,6 +201,10 @@ async fn columns(
     for row in rows {
         let mut flags = Vec::new();
         let column_type: String = row.get("COLUMN_TYPE");
+
+        if row.get("IS_NULLABLE") {
+            flags.push(ColumnFlag::Nullable);
+        }
 
         if column_type.ends_with("unsigned") {
             flags.push(ColumnFlag::Unsigned);
@@ -238,6 +243,12 @@ async fn create_table(
 
         if column.is_unsigned() {
             definition.push_str(" UNSIGNED");
+        }
+
+        if column.is_nullable() {
+            definition.push_str(" NULL");
+        } else {
+            definition.push_str(" NOT NULL");
         }
 
         separated.push(definition);
