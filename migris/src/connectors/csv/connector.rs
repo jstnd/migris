@@ -1,10 +1,10 @@
-use std::path::Path;
+use std::{fs::OpenOptions, path::Path};
 
 use futures_util::StreamExt;
 
 use crate::{
     Column, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions, Row,
-    WriteOptions,
+    WriteOptions, common,
 };
 
 #[derive(Debug)]
@@ -52,6 +52,11 @@ impl Connector for CsvConnector {
         _options: &WriteOptions,
     ) -> MigrisResult<()> {
         let path = Path::new(&self.path);
+        let file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
         // Create any missing parent directories in the given path.
         if let Some(parent) = path.parent() {
@@ -59,14 +64,15 @@ impl Connector for CsvConnector {
                 .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
         }
 
-        let mut writer = csv::Writer::from_path(path)
-            .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
+        let mut writer = csv::Writer::from_writer(file);
 
-        //
-        let headers = data.columns.iter().map(|c| &c.name);
-        writer
-            .write_record(headers)
-            .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
+        // Only write headers if the file is empty.
+        if common::is_file_empty(&path) {
+            let headers = data.columns.iter().map(|c| &c.name);
+            writer
+                .write_record(headers)
+                .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
+        }
 
         //
         let mut stream = data.stream;

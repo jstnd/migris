@@ -55,3 +55,7 @@ pub fn get_file_type<P: AsRef<Path>>(path: &P) -> Option<FileType> {
         _ => None,
     }
 }
+
+pub fn is_file_empty<P: AsRef<Path>>(path: &P) -> bool {
+    path.as_ref().metadata().is_ok_and(|m| m.len() == 0)
+}
