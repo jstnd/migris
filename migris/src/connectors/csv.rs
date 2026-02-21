@@ -1,10 +1,11 @@
 use std::{fs::OpenOptions, path::Path};
 
+use csv::StringRecord;
 use futures_util::StreamExt;
 
 use crate::{
-    Column, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions, Row,
-    WriteOptions, common,
+    Column, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult,
+    ReadOptions, Row, Value, WriteOptions, common,
 };
 
 #[derive(Debug)]
@@ -88,5 +89,43 @@ impl Connector for CsvConnector {
             .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CsvDataType {
+    String,
+}
+
+impl Column {
+    pub fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
+        Self {
+            column_type: ColumnType::Csv(CsvDataType::String),
+            flags: Vec::new(),
+            name: name.into(),
+            ordinal,
+        }
+    }
+}
+
+impl Row {
+    pub fn from_csv(record: StringRecord) -> Self {
+        let mut row = Self::new();
+
+        for value in record.iter() {
+            row.values.push(Value::String(value.to_string()));
+        }
+
+        row
+    }
+
+    pub fn into_csv(self) -> MigrisResult<StringRecord> {
+        let mut record = StringRecord::new();
+
+        for value in self.values {
+            record.push_field(&value.to_string()?);
+        }
+
+        Ok(record)
     }
 }

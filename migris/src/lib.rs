@@ -10,13 +10,11 @@ pub use schema::{Column, ColumnFlag, ColumnType, Row, Table};
 pub use value::Value;
 
 pub mod csv {
-    pub use crate::connectors::csv::connector::CsvConnector;
-    pub use crate::connectors::csv::schema::CsvDataType;
+    pub use crate::connectors::csv::{CsvConnector, CsvDataType};
 }
 
 pub mod mysql {
-    pub use crate::connectors::mysql::connector::MySqlConnector;
-    pub use crate::connectors::mysql::schema::MySqlDataType;
+    pub use crate::connectors::mysql::{MySqlConnector, MySqlDataType};
 }
 
 type MigrisResult<T> = Result<T, MigrisError>;
