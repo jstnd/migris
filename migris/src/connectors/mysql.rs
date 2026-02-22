@@ -18,14 +18,14 @@ use crate::{
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
 pub struct MySqlConnector {
-    identifier: String,
+    url: String,
     pool: Option<MySqlPool>,
 }
 
 impl MySqlConnector {
-    pub fn new(identifier: impl Into<String>) -> Self {
+    pub fn new(url: impl Into<String>) -> Self {
         Self {
-            identifier: identifier.into(),
+            url: url.into(),
             pool: None,
         }
     }
@@ -33,7 +33,7 @@ impl MySqlConnector {
     async fn connect(&mut self) -> MigrisResult<&MySqlPool> {
         if self.pool.is_none() {
             self.pool = Some(
-                sqlx::MySqlPool::connect(&self.identifier)
+                sqlx::MySqlPool::connect(&self.url)
                     .await
                     .map_err(|err| MigrisError::DatabaseConnectFailed(err.to_string()))?,
             );
@@ -50,7 +50,7 @@ impl Connector for MySqlConnector {
     }
 
     async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
-        if let Some(schema) = schema_from_identifier(&self.identifier) {
+        if let Some(schema) = schema_from_url(&self.url) {
             let pool = self.connect().await?;
             let query = r#"
                 SELECT
@@ -72,7 +72,7 @@ impl Connector for MySqlConnector {
     }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
-        let table_schema = if let Some(schema) = schema_from_identifier(&self.identifier) {
+        let table_schema = if let Some(schema) = schema_from_url(&self.url) {
             schema
         } else if let Some(schema) = &options.table_schema {
             schema.clone()
@@ -111,7 +111,7 @@ impl Connector for MySqlConnector {
         // Determine table schema and name, using defaults if needed.
         let generated = common::generate_name();
         let table_name = options.table_name.as_deref().unwrap_or(&generated);
-        let table_schema = if let Some(schema) = schema_from_identifier(&self.identifier) {
+        let table_schema = if let Some(schema) = schema_from_url(&self.url) {
             schema
         } else if let Some(schema) = &options.table_schema {
             schema.clone()
@@ -283,8 +283,8 @@ where
     Ok(())
 }
 
-fn schema_from_identifier(identifier: &str) -> Option<String> {
-    if let Ok(options) = MySqlConnectOptions::from_str(identifier)
+fn schema_from_url(url: &str) -> Option<String> {
+    if let Ok(options) = MySqlConnectOptions::from_str(url)
         && let Some(schema) = options.get_database()
     {
         return Some(schema.to_string());
