@@ -72,26 +72,33 @@ impl Connector for MySqlConnector {
     }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
-        // Validate the given read options for fields that are required.
-        validate_read_options(options)?;
-
         let table_schema = if let Some(schema) = schema_from_identifier(&self.identifier) {
             schema
         } else if let Some(schema) = &options.table_schema {
             schema.clone()
         } else {
-            "".to_string()
+            "".into()
         };
 
+        let table_name = options
+            .table_name
+            .as_ref()
+            .ok_or(MigrisError::DatabaseReadFailed(
+                "no table name given".into(),
+            ))?;
+
         let pool = self.connect().await?;
-        let columns = columns(&table_schema, options.table_name.as_ref().unwrap(), pool).await?;
+        let columns = columns(&table_schema, table_name, pool).await?;
         let stream_columns = columns.clone();
-        let stream = sqlx::query(options.query.as_ref().unwrap())
-            .fetch(pool)
-            .map(move |row| {
-                row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
-                    .and_then(|row| Row::from_mysql(row, &stream_columns))
-            });
+        let query = options
+            .query
+            .as_ref()
+            .ok_or(MigrisError::DatabaseReadFailed("no query given".into()))?;
+
+        let stream = sqlx::query(query).fetch(pool).map(move |row| {
+            row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+                .and_then(|row| Row::from_mysql(row, &stream_columns))
+        });
 
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
@@ -284,22 +291,6 @@ fn schema_from_identifier(identifier: &str) -> Option<String> {
     }
 
     None
-}
-
-fn validate_read_options(options: &ReadOptions) -> MigrisResult<()> {
-    if options.query.is_none() {
-        return Err(MigrisError::InvalidOption(
-            "query is required when reading from database".into(),
-        ));
-    }
-
-    if options.table_name.is_none() {
-        return Err(MigrisError::InvalidOption(
-            "table name is required when reading from database".into(),
-        ));
-    }
-
-    Ok(())
 }
 
 /// https://dev.mysql.com/doc/refman/8.4/en/data-types.html

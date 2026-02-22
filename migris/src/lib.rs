@@ -42,9 +42,6 @@ pub enum MigrisError {
     #[error("Failed to write to file: {0}")]
     FileWriteFailed(String),
 
-    #[error("Invalid option: {0}")]
-    InvalidOption(String),
-
     #[error("Value error encountered: {0}")]
     ValueError(String),
 }
