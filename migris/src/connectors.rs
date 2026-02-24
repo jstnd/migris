@@ -31,6 +31,7 @@ pub trait Connector: Send {
     fn kind(&self) -> ConnectorKind;
 
     async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
+        // Default implementation (connector kinds such as files will not use this function)
         Ok(vec![])
     }
 

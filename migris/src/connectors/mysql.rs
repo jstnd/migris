@@ -185,18 +185,18 @@ async fn columns(
     pool: &MySqlPool,
 ) -> MigrisResult<Vec<Column>> {
     let query = r#"
-            SELECT
-                COLUMN_NAME,
-                ORDINAL_POSITION - 1 AS `ORDINAL_POSITION`,
-                IF(IS_NULLABLE = 'YES', TRUE, FALSE) AS `IS_NULLABLE`,
-                CAST(COLUMN_TYPE AS CHAR) AS `COLUMN_TYPE`
-            FROM information_schema.COLUMNS
-            WHERE
-                TABLE_SCHEMA = ? AND
-                TABLE_NAME = ?
-            ORDER BY
-                ORDINAL_POSITION
-        "#;
+        SELECT
+            COLUMN_NAME,
+            ORDINAL_POSITION - 1 AS `ORDINAL_POSITION`,
+            IF(IS_NULLABLE = 'YES', TRUE, FALSE) AS `IS_NULLABLE`,
+            CAST(COLUMN_TYPE AS CHAR) AS `COLUMN_TYPE`
+        FROM information_schema.COLUMNS
+        WHERE
+            TABLE_SCHEMA = ? AND
+            TABLE_NAME = ?
+        ORDER BY
+            ORDINAL_POSITION
+    "#;
 
     let mut columns = Vec::new();
     let rows = sqlx::query(query)

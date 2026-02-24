@@ -2,10 +2,10 @@ use crate::{Value, csv::CsvDataType, mysql::MySqlDataType};
 
 #[derive(Clone, Debug)]
 pub struct Column {
-    pub(crate) column_type: ColumnType,
-    pub(crate) flags: Vec<ColumnFlag>,
     pub(crate) name: String,
     pub(crate) ordinal: usize,
+    pub(crate) column_type: ColumnType,
+    pub(crate) flags: Vec<ColumnFlag>,
 }
 
 impl Column {
