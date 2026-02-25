@@ -50,12 +50,14 @@ impl Connector for CsvConnector {
     async fn write<'a>(
         &mut self,
         data: ConnectorData<'a>,
-        _options: &WriteOptions,
+        options: &WriteOptions,
     ) -> MigrisResult<()> {
         let path = Path::new(&self.path);
         let file = OpenOptions::new()
-            .append(true)
+            .write(true)
             .create(true)
+            .append(!options.overwrite)
+            .truncate(options.overwrite)
             .open(path)
             .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
@@ -67,8 +69,8 @@ impl Connector for CsvConnector {
 
         let mut writer = csv::Writer::from_writer(file);
 
-        // Only write headers if the file is empty.
-        if common::is_file_empty(&path) {
+        // Only write headers if we're overwriting or the file is empty.
+        if options.overwrite || common::is_file_empty(&path) {
             let headers = data.columns.iter().map(|c| &c.name);
             writer
                 .write_record(headers)

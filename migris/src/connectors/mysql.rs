@@ -128,6 +128,10 @@ impl Connector for MySqlConnector {
         // Create the table if it doesn't already exist.
         create_table(&table_schema, table_name, &data.columns, pool).await?;
 
+        if options.overwrite {
+            truncate_table(&table_schema, table_name, pool).await?;
+        }
+
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "INSERT INTO `{}`.`{}` VALUES ",
@@ -241,7 +245,7 @@ async fn create_table(
     execute_query(sqlx::query(&query), pool).await?;
 
     let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
-        "CREATE TABLE IF NOT EXISTS `{0}`.`{1}` (",
+        "CREATE TABLE IF NOT EXISTS `{}`.`{}` (",
         table_schema, table_name
     ));
 
@@ -264,6 +268,17 @@ async fn create_table(
 
     builder.push(")");
     execute_query(builder.build(), pool).await?;
+
+    Ok(())
+}
+
+async fn truncate_table(
+    table_schema: &str,
+    table_name: &str,
+    pool: &MySqlPool,
+) -> MigrisResult<()> {
+    let query = format!("TRUNCATE `{}`.`{}`", table_schema, table_name);
+    execute_query(sqlx::query(&query), pool).await?;
 
     Ok(())
 }
