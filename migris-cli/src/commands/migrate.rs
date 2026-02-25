@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::anyhow;
 use clap::Args;
-use migris::{Connector, ConnectorKind, FileType};
+use migris::{Connector, ConnectorKind, FileType, ReadOptions, WriteOptions};
 
 #[derive(Args, Debug)]
 pub struct MigrateArguments {
@@ -29,6 +29,10 @@ pub struct MigrateArguments {
     /// The target file type (used when passing a directory as target).
     #[arg(long, default_value_t = FileType::Csv)]
     target_type: FileType,
+
+    /// Whether any existing data at the target should be overwritten.
+    #[arg(long)]
+    overwrite: bool,
 }
 
 #[derive(Debug)]
@@ -42,8 +46,8 @@ impl MigrateEngine {
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
-        let mut read_options = migris::ReadOptions::new();
-        let mut write_options = migris::WriteOptions::new();
+        let mut read_options = ReadOptions::new();
+        let mut write_options = WriteOptions::new().with_overwrite(self.args.overwrite);
 
         if let Some(table) = &self.args.target_table {
             write_options = write_options.with_table_name(table);
