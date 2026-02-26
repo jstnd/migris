@@ -54,7 +54,8 @@ impl Connector for MySqlConnector {
             let pool = self.connect().await?;
             let query = r#"
                 SELECT
-                    TABLE_SCHEMA AS `schema`, TABLE_NAME AS `name`
+                    TABLE_SCHEMA AS `schema`,
+                    TABLE_NAME AS `name`
                 FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA = ?
             "#;
@@ -67,7 +68,25 @@ impl Connector for MySqlConnector {
 
             Ok(tables)
         } else {
-            Ok(vec![])
+            let pool = self.connect().await?;
+            let query = r#"
+                SELECT
+                    TABLE_SCHEMA AS `schema`,
+                    TABLE_NAME AS `name`
+                FROM information_schema.TABLES
+                WHERE
+                    TABLE_SCHEMA NOT IN (
+                        'information_schema', 'mysql',
+                        'performance_schema', 'sys'
+                    )
+            "#;
+
+            let tables = sqlx::query_as::<_, Table>(query)
+                .fetch_all(pool)
+                .await
+                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
+            Ok(tables)
         }
     }
 
