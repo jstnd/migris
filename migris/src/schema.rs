@@ -34,7 +34,24 @@ impl ColumnType {
     pub fn as_mysql(&self) -> MySqlDataType {
         match self {
             ColumnType::Csv(data_type) => match data_type {
-                CsvDataType::String => MySqlDataType::VARCHAR(500),
+                CsvDataType::Integer { min, max } => match (*min, *max) {
+                    (-128.., ..=127) => MySqlDataType::TINYINT,
+                    (-32_768.., ..=32_767) => MySqlDataType::SMALLINT,
+                    (-8_388_608.., ..=8_388_607) => MySqlDataType::MEDIUMINT,
+                    (-2_147_483_648.., ..=2_147_483_647) => MySqlDataType::INT,
+                    _ => MySqlDataType::BIGINT,
+                },
+                CsvDataType::String(len) => {
+                    // Round the length up to the next 10.
+                    let len = ((len + 9) / 10) * 10;
+
+                    match len {
+                        0..=255 => MySqlDataType::VARCHAR(len as u16),
+                        256..=65_535 => MySqlDataType::TEXT,
+                        65_536..=16_777_215 => MySqlDataType::MEDIUMTEXT,
+                        _ => MySqlDataType::LONGTEXT,
+                    }
+                }
             },
             ColumnType::MySql(data_type) => data_type.clone(),
         }

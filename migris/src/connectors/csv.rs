@@ -1,7 +1,4 @@
-use std::{
-    fs::{File, OpenOptions},
-    path::Path,
-};
+use std::{fs::OpenOptions, path::Path};
 
 use csv::{Reader, StringRecord, Writer};
 use futures_util::StreamExt;
@@ -28,11 +25,11 @@ impl Connector for CsvConnector {
         ConnectorKind::File
     }
 
-    async fn read<'a>(&mut self, _options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
-        let mut reader = Reader::from_path(&self.path)
+    async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
+        let reader = Reader::from_path(&self.path)
             .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
-        let columns = Schema::from_csv(&mut reader)?.columns;
+        let columns = Schema::from_csv(&self.path, options.infer_schema)?.columns;
         let stream = futures_util::stream::iter(reader.into_records().map(|result| {
             result
                 .map_err(|err| MigrisError::FileReadFailed(err.to_string()))
@@ -94,16 +91,17 @@ impl Connector for CsvConnector {
 
 #[derive(Clone, Copy, Debug)]
 pub enum CsvDataType {
-    String,
+    Integer { min: i64, max: i64 },
+    String(usize),
 }
 
 impl Column {
     fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
         Self {
-            column_type: ColumnType::Csv(CsvDataType::String),
-            flags: Vec::new(),
             name: name.into(),
             ordinal,
+            column_type: ColumnType::Csv(CsvDataType::String(0)),
+            flags: Vec::new(),
         }
     }
 }
@@ -131,14 +129,66 @@ impl Row {
 }
 
 impl Schema {
-    fn from_csv(reader: &mut Reader<File>) -> MigrisResult<Self> {
-        let mut columns = Vec::new();
-        let headers = reader
-            .headers()
-            .map_err(|err| MigrisError::FileReadFailed(err.to_string()))?;
+    fn from_csv(path: &str, infer: bool) -> MigrisResult<Self> {
+        let mut reader =
+            Reader::from_path(path).map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
-        for (ordinal, name) in headers.iter().enumerate() {
-            columns.push(Column::from_csv(name, ordinal));
+        let mut columns: Vec<Column> = reader
+            .headers()
+            .map_err(|err| MigrisError::FileReadFailed(err.to_string()))?
+            .iter()
+            .enumerate()
+            .map(|(ordinal, name)| Column::from_csv(name, ordinal))
+            .collect();
+
+        if infer {
+            let mut column_types = vec![CsvDataType::Integer { min: 0, max: 0 }; columns.len()];
+
+            for result in reader.records() {
+                let record = result.map_err(|err| MigrisError::FileReadFailed(err.to_string()))?;
+
+                for (idx, value) in record.iter().enumerate() {
+                    match column_types.get_mut(idx) {
+                        Some(column_type) => match column_type {
+                            CsvDataType::Integer { min, max } => {
+                                // Check if the next value in the column is still an integer.
+                                if let Ok(int) = value.parse::<i64>() {
+                                    if int < *min {
+                                        *min = int;
+                                    }
+
+                                    if int > *max {
+                                        *max = int;
+                                    }
+                                } else {
+                                    // Otherwise, set the column type to a string instead.
+                                    let lengths = vec![
+                                        min.to_string().len(),
+                                        max.to_string().len(),
+                                        value.len(),
+                                    ];
+
+                                    let len = lengths.iter().max().unwrap_or(&0);
+                                    *column_type = CsvDataType::String(*len);
+                                }
+                            }
+                            CsvDataType::String(len) => {
+                                let length = value.len();
+
+                                if length > *len {
+                                    *len = length;
+                                }
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+            }
+
+            // Set the inferred column types back on the original columns.
+            for column in columns.iter_mut() {
+                column.column_type = ColumnType::Csv(column_types[column.ordinal]);
+            }
         }
 
         Ok(Self { columns })

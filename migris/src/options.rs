@@ -3,6 +3,11 @@ pub struct ReadOptions {
     pub(crate) query: Option<String>,
     pub(crate) table_schema: Option<String>,
     pub(crate) table_name: Option<String>,
+
+    /// Whether to infer the schema from the source.
+    ///
+    /// Used when an in-depth schema is not easily available, such as with csv files.
+    pub(crate) infer_schema: bool,
 }
 
 impl ReadOptions {
@@ -22,6 +27,11 @@ impl ReadOptions {
 
     pub fn with_table_name(mut self, table_name: impl Into<String>) -> Self {
         self.table_name = Some(table_name.into());
+        self
+    }
+
+    pub fn infer_schema(mut self, infer_schema: bool) -> Self {
+        self.infer_schema = infer_schema;
         self
     }
 }
@@ -50,7 +60,7 @@ impl WriteOptions {
         self
     }
 
-    pub fn with_overwrite(mut self, overwrite: bool) -> Self {
+    pub fn overwrite(mut self, overwrite: bool) -> Self {
         self.overwrite = overwrite;
         self
     }

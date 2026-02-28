@@ -47,7 +47,7 @@ impl MigrateEngine {
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
         let mut read_options = ReadOptions::new();
-        let mut write_options = WriteOptions::new().with_overwrite(self.args.overwrite);
+        let mut write_options = WriteOptions::new().overwrite(self.args.overwrite);
 
         if let Some(table) = &self.args.target_table {
             write_options = write_options.with_table_name(table);
@@ -111,6 +111,14 @@ impl MigrateEngine {
                     }
 
                     let mut target = self.target(stem)?;
+
+                    // Infer schema from the file if the target database table does not exist.
+                    if target.kind() == ConnectorKind::Database
+                        && !target.exists(&write_options).await
+                    {
+                        read_options = read_options.infer_schema(true);
+                    }
+
                     let data = source.read(&read_options).await?;
                     target.write(data, &write_options).await?;
                 }
