@@ -30,11 +30,6 @@ pub enum ConnectorKind {
 pub trait Connector: Send {
     fn kind(&self) -> ConnectorKind;
 
-    async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
-        // Default implementation (connector kinds such as files will not use this function)
-        Ok(vec![])
-    }
-
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>>;
 
     async fn write<'a>(
@@ -42,4 +37,9 @@ pub trait Connector: Send {
         data: ConnectorData<'a>,
         options: &WriteOptions,
     ) -> MigrisResult<()>;
+
+    async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
+        // Default implementation (connector kinds such as files will not use this function)
+        Ok(vec![])
+    }
 }

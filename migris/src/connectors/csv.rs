@@ -100,7 +100,7 @@ pub enum CsvDataType {
 }
 
 impl Column {
-    pub fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
+    fn from_csv(name: impl Into<String>, ordinal: usize) -> Self {
         Self {
             column_type: ColumnType::Csv(CsvDataType::String),
             flags: Vec::new(),
@@ -111,7 +111,7 @@ impl Column {
 }
 
 impl Row {
-    pub fn from_csv(record: StringRecord) -> Self {
+    fn from_csv(record: StringRecord) -> Self {
         let mut row = Self::new();
 
         for value in record.iter() {
@@ -121,7 +121,7 @@ impl Row {
         row
     }
 
-    pub fn into_csv(self) -> MigrisResult<StringRecord> {
+    fn into_csv(self) -> MigrisResult<StringRecord> {
         let mut record = StringRecord::new();
 
         for value in self.values {

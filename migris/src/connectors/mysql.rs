@@ -49,47 +49,6 @@ impl Connector for MySqlConnector {
         ConnectorKind::Database
     }
 
-    async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
-        if let Some(schema) = schema_from_url(&self.url) {
-            let pool = self.connect().await?;
-            let query = r#"
-                SELECT
-                    TABLE_SCHEMA AS `schema`,
-                    TABLE_NAME AS `name`
-                FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = ?
-            "#;
-
-            let tables = sqlx::query_as::<_, Table>(query)
-                .bind(schema)
-                .fetch_all(pool)
-                .await
-                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
-
-            Ok(tables)
-        } else {
-            let pool = self.connect().await?;
-            let query = r#"
-                SELECT
-                    TABLE_SCHEMA AS `schema`,
-                    TABLE_NAME AS `name`
-                FROM information_schema.TABLES
-                WHERE
-                    TABLE_SCHEMA NOT IN (
-                        'information_schema', 'mysql',
-                        'performance_schema', 'sys'
-                    )
-            "#;
-
-            let tables = sqlx::query_as::<_, Table>(query)
-                .fetch_all(pool)
-                .await
-                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
-
-            Ok(tables)
-        }
-    }
-
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
         let table_schema = if let Some(schema) = schema_from_url(&self.url) {
             schema
@@ -199,6 +158,47 @@ impl Connector for MySqlConnector {
             .map_err(|err| MigrisError::DatabaseWriteFailed(err.to_string()))?;
 
         Ok(())
+    }
+
+    async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
+        if let Some(schema) = schema_from_url(&self.url) {
+            let pool = self.connect().await?;
+            let query = r#"
+                SELECT
+                    TABLE_SCHEMA AS `schema`,
+                    TABLE_NAME AS `name`
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ?
+            "#;
+
+            let tables = sqlx::query_as::<_, Table>(query)
+                .bind(schema)
+                .fetch_all(pool)
+                .await
+                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
+            Ok(tables)
+        } else {
+            let pool = self.connect().await?;
+            let query = r#"
+                SELECT
+                    TABLE_SCHEMA AS `schema`,
+                    TABLE_NAME AS `name`
+                FROM information_schema.TABLES
+                WHERE
+                    TABLE_SCHEMA NOT IN (
+                        'information_schema', 'mysql',
+                        'performance_schema', 'sys'
+                    )
+            "#;
+
+            let tables = sqlx::query_as::<_, Table>(query)
+                .fetch_all(pool)
+                .await
+                .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
+            Ok(tables)
+        }
     }
 }
 
@@ -371,7 +371,7 @@ pub enum MySqlDataType {
 }
 
 impl MySqlDataType {
-    pub(crate) fn from_type(column_type: &str) -> MigrisResult<Self> {
+    fn from_type(column_type: &str) -> MigrisResult<Self> {
         let type_parts: Vec<&str> = column_type.trim_end_matches(')').splitn(2, '(').collect();
 
         Ok(match type_parts[0].to_uppercase().as_str() {
@@ -595,7 +595,7 @@ impl std::fmt::Display for MySqlDataType {
 }
 
 impl Row {
-    pub fn from_mysql(sqlx_row: sqlx::mysql::MySqlRow, columns: &[Column]) -> MigrisResult<Self> {
+    fn from_mysql(sqlx_row: sqlx::mysql::MySqlRow, columns: &[Column]) -> MigrisResult<Self> {
         let mut row = Self::new();
 
         for column in columns {
@@ -611,7 +611,7 @@ impl Row {
 }
 
 impl Value {
-    pub fn from_mysql(value: MySqlValueRef, column: &Column) -> MigrisResult<Self> {
+    fn from_mysql(value: MySqlValueRef, column: &Column) -> MigrisResult<Self> {
         // Check if the value is null first.
         if value.is_null() {
             return Ok(Value::Null);
