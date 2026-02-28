@@ -92,6 +92,10 @@ impl Connector for CsvConnector {
 
         Ok(())
     }
+
+    async fn exists(&mut self, _options: &WriteOptions) -> bool {
+        Path::new(&self.path).exists()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

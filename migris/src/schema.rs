@@ -34,7 +34,7 @@ impl ColumnType {
     pub fn as_mysql(&self) -> MySqlDataType {
         match self {
             ColumnType::Csv(data_type) => match data_type {
-                CsvDataType::String => MySqlDataType::VARCHAR(u16::MAX),
+                CsvDataType::String => MySqlDataType::VARCHAR(500),
             },
             ColumnType::MySql(data_type) => data_type.clone(),
         }
@@ -56,4 +56,13 @@ impl Row {
 pub struct Table {
     pub schema: String,
     pub name: String,
+}
+
+impl Table {
+    pub fn new(schema: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            schema: schema.into(),
+            name: name.into(),
+        }
+    }
 }

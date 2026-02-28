@@ -86,17 +86,7 @@ impl Connector for MySqlConnector {
         data: ConnectorData<'a>,
         options: &WriteOptions,
     ) -> MigrisResult<()> {
-        // Determine table schema and name, using defaults if needed.
-        let generated = common::generate_name();
-        let table_name = options.table_name.as_deref().unwrap_or(&generated);
-        let table_schema = if let Some(schema) = schema_from_url(&self.url) {
-            schema
-        } else if let Some(schema) = &options.table_schema {
-            schema.clone()
-        } else {
-            DEFAULT_SCHEMA.to_string()
-        };
-
+        let table = get_write_table(&self.url, options);
         let pool = self.connect().await?;
         let mut txn = pool
             .begin()
@@ -104,16 +94,16 @@ impl Connector for MySqlConnector {
             .map_err(|err| MigrisError::DatabaseWriteFailed(err.to_string()))?;
 
         // Create the table if it doesn't already exist.
-        create_table(&table_schema, table_name, &data.columns, pool).await?;
+        create_table(&table, &data.columns, pool).await?;
 
         if options.overwrite {
-            truncate_table(&table_schema, table_name, pool).await?;
+            truncate_table(&table, pool).await?;
         }
 
         let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "INSERT INTO `{}`.`{}` VALUES ",
-            table_schema, table_name
+            table.schema, table.name
         ));
 
         let mut rows_per_txn = 0;
@@ -158,6 +148,30 @@ impl Connector for MySqlConnector {
             .map_err(|err| MigrisError::DatabaseWriteFailed(err.to_string()))?;
 
         Ok(())
+    }
+
+    async fn exists(&mut self, options: &WriteOptions) -> bool {
+        let table = get_write_table(&self.url, options);
+        let Ok(pool) = self.connect().await else {
+            return false;
+        };
+
+        let query = r#"
+            SELECT EXISTS (
+                SELECT *
+                FROM information_schema.TABLES
+                WHERE
+                    TABLE_SCHEMA = ? AND
+                    TABLE_NAME = ?
+            )
+        "#;
+
+        sqlx::query_scalar(query)
+            .bind(table.schema)
+            .bind(table.name)
+            .fetch_one(pool)
+            .await
+            .unwrap_or_default()
     }
 
     async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
@@ -254,18 +268,13 @@ async fn columns(
     Ok(columns)
 }
 
-async fn create_table(
-    table_schema: &str,
-    table_name: &str,
-    columns: &[Column],
-    pool: &MySqlPool,
-) -> MigrisResult<()> {
-    let query = format!("CREATE SCHEMA IF NOT EXISTS `{}`", table_schema);
+async fn create_table(table: &Table, columns: &[Column], pool: &MySqlPool) -> MigrisResult<()> {
+    let query = format!("CREATE SCHEMA IF NOT EXISTS `{}`", table.schema);
     execute_query(sqlx::query(&query), pool).await?;
 
     let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
         "CREATE TABLE IF NOT EXISTS `{}`.`{}` (",
-        table_schema, table_name
+        table.schema, table.name
     ));
 
     let mut separated = builder.separated(", ");
@@ -291,12 +300,8 @@ async fn create_table(
     Ok(())
 }
 
-async fn truncate_table(
-    table_schema: &str,
-    table_name: &str,
-    pool: &MySqlPool,
-) -> MigrisResult<()> {
-    let query = format!("TRUNCATE `{}`.`{}`", table_schema, table_name);
+async fn truncate_table(table: &Table, pool: &MySqlPool) -> MigrisResult<()> {
+    let query = format!("TRUNCATE `{}`.`{}`", table.schema, table.name);
     execute_query(sqlx::query(&query), pool).await?;
 
     Ok(())
@@ -325,6 +330,20 @@ fn schema_from_url(url: &str) -> Option<String> {
     }
 
     None
+}
+
+fn get_write_table(url: &str, options: &WriteOptions) -> Table {
+    let generated = common::generate_name();
+    let table_name = options.table_name.as_deref().unwrap_or(&generated);
+    let table_schema = if let Some(schema) = schema_from_url(url) {
+        schema
+    } else if let Some(schema) = &options.table_schema {
+        schema.clone()
+    } else {
+        DEFAULT_SCHEMA.to_string()
+    };
+
+    Table::new(table_schema, table_name)
 }
 
 /// https://dev.mysql.com/doc/refman/8.4/en/data-types.html

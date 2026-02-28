@@ -38,6 +38,8 @@ pub trait Connector: Send {
         options: &WriteOptions,
     ) -> MigrisResult<()>;
 
+    async fn exists(&mut self, options: &WriteOptions) -> bool;
+
     async fn tables(&mut self) -> MigrisResult<Vec<Table>> {
         // Default implementation (connector kinds such as files will not use this function)
         Ok(vec![])
