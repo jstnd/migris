@@ -11,7 +11,7 @@ use sqlx::{
 
 use crate::{
     Column, ColumnFlag, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError,
-    MigrisResult, ReadOptions, Row, Table, Value, WriteOptions,
+    MigrisResult, ReadOptions, Row, Schema, Table, Value, WriteOptions,
     common::{self, DEFAULT_SCHEMA, decode_sqlx},
 };
 
@@ -50,23 +50,9 @@ impl Connector for MySqlConnector {
     }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
-        let table_schema = if let Some(schema) = schema_from_url(&self.url) {
-            schema
-        } else if let Some(schema) = &options.table_schema {
-            schema.clone()
-        } else {
-            "".into()
-        };
-
-        let table_name = options
-            .table_name
-            .as_ref()
-            .ok_or(MigrisError::DatabaseReadFailed(
-                "no table name given".into(),
-            ))?;
-
+        let table = get_read_table(&self.url, options)?;
         let pool = self.connect().await?;
-        let columns = columns(&table_schema, table_name, pool).await?;
+        let columns = Schema::from_mysql(&table, pool).await?.columns;
         let stream_columns = columns.clone();
         let query = options
             .query
@@ -216,58 +202,6 @@ impl Connector for MySqlConnector {
     }
 }
 
-async fn columns(
-    table_schema: &str,
-    table_name: &str,
-    pool: &MySqlPool,
-) -> MigrisResult<Vec<Column>> {
-    let query = r#"
-        SELECT
-            COLUMN_NAME,
-            ORDINAL_POSITION - 1 AS `ORDINAL_POSITION`,
-            IF(IS_NULLABLE = 'YES', TRUE, FALSE) AS `IS_NULLABLE`,
-            CAST(COLUMN_TYPE AS CHAR) AS `COLUMN_TYPE`
-        FROM information_schema.COLUMNS
-        WHERE
-            TABLE_SCHEMA = ? AND
-            TABLE_NAME = ?
-        ORDER BY
-            ORDINAL_POSITION
-    "#;
-
-    let mut columns = Vec::new();
-    let rows = sqlx::query(query)
-        .bind(table_schema)
-        .bind(table_name)
-        .fetch_all(pool)
-        .await
-        .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
-
-    for row in rows {
-        let mut flags = Vec::new();
-        let column_type: String = row.get("COLUMN_TYPE");
-
-        if row.get("IS_NULLABLE") {
-            flags.push(ColumnFlag::Nullable);
-        }
-
-        if column_type.ends_with("unsigned") {
-            flags.push(ColumnFlag::Unsigned);
-        }
-
-        columns.push(Column {
-            column_type: ColumnType::MySql(MySqlDataType::from_type(
-                column_type.trim_end_matches(" unsigned"),
-            )?),
-            flags,
-            name: row.get("COLUMN_NAME"),
-            ordinal: row.get::<u32, _>("ORDINAL_POSITION") as usize,
-        });
-    }
-
-    Ok(columns)
-}
-
 async fn create_table(table: &Table, columns: &[Column], pool: &MySqlPool) -> MigrisResult<()> {
     let query = format!("CREATE SCHEMA IF NOT EXISTS `{}`", table.schema);
     execute_query(sqlx::query(&query), pool).await?;
@@ -330,6 +264,25 @@ fn schema_from_url(url: &str) -> Option<String> {
     }
 
     None
+}
+
+fn get_read_table(url: &str, options: &ReadOptions) -> MigrisResult<Table> {
+    let table_schema = if let Some(schema) = schema_from_url(url) {
+        schema
+    } else if let Some(schema) = &options.table_schema {
+        schema.clone()
+    } else {
+        "".into()
+    };
+
+    let table_name = options
+        .table_name
+        .as_ref()
+        .ok_or(MigrisError::DatabaseReadFailed(
+            "no table name given".into(),
+        ))?;
+
+    Ok(Table::new(table_schema, table_name))
 }
 
 fn get_write_table(url: &str, options: &WriteOptions) -> Table {
@@ -626,6 +579,55 @@ impl Row {
         }
 
         Ok(row)
+    }
+}
+
+impl Schema {
+    async fn from_mysql(table: &Table, pool: &MySqlPool) -> MigrisResult<Self> {
+        let query = r#"
+            SELECT
+                COLUMN_NAME,
+                ORDINAL_POSITION - 1 AS `ORDINAL_POSITION`,
+                IF(IS_NULLABLE = 'YES', TRUE, FALSE) AS `IS_NULLABLE`,
+                CAST(COLUMN_TYPE AS CHAR) AS `COLUMN_TYPE`
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = ?
+                AND TABLE_NAME = ?
+            ORDER BY
+                ORDINAL_POSITION
+        "#;
+
+        let mut columns = Vec::new();
+        let rows = sqlx::query(query)
+            .bind(&table.schema)
+            .bind(&table.name)
+            .fetch_all(pool)
+            .await
+            .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
+        for row in rows {
+            let mut flags = Vec::new();
+            let column_type: String = row.get("COLUMN_TYPE");
+
+            if row.get("IS_NULLABLE") {
+                flags.push(ColumnFlag::Nullable);
+            }
+
+            if column_type.ends_with("unsigned") {
+                flags.push(ColumnFlag::Unsigned);
+            }
+
+            columns.push(Column {
+                name: row.get("COLUMN_NAME"),
+                ordinal: row.get::<u32, _>("ORDINAL_POSITION") as usize,
+                column_type: ColumnType::MySql(MySqlDataType::from_type(
+                    column_type.trim_end_matches(" unsigned"),
+                )?),
+                flags,
+            });
+        }
+
+        Ok(Self { columns })
     }
 }
 

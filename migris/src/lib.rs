@@ -6,7 +6,7 @@ mod value;
 
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
 pub use options::{ReadOptions, WriteOptions};
-pub use schema::{Column, ColumnFlag, ColumnType, Row, Table};
+pub use schema::{Column, ColumnFlag, ColumnType, Row, Schema, Table};
 pub use value::Value;
 
 pub mod csv {

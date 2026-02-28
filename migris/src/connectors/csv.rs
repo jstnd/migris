@@ -1,11 +1,14 @@
-use std::{fs::OpenOptions, path::Path};
+use std::{
+    fs::{File, OpenOptions},
+    path::Path,
+};
 
-use csv::StringRecord;
+use csv::{Reader, StringRecord, Writer};
 use futures_util::StreamExt;
 
 use crate::{
     Column, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult,
-    ReadOptions, Row, Value, WriteOptions, common,
+    ReadOptions, Row, Schema, Value, WriteOptions, common,
 };
 
 #[derive(Debug)]
@@ -26,18 +29,10 @@ impl Connector for CsvConnector {
     }
 
     async fn read<'a>(&mut self, _options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
-        let mut reader = csv::Reader::from_path(&self.path)
+        let mut reader = Reader::from_path(&self.path)
             .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
-        let headers = reader
-            .headers()
-            .map_err(|err| MigrisError::FileReadFailed(err.to_string()))?;
-
-        let mut columns = Vec::new();
-        for (ordinal, name) in headers.iter().enumerate() {
-            columns.push(Column::from_csv(name, ordinal));
-        }
-
+        let columns = Schema::from_csv(&mut reader)?.columns;
         let stream = futures_util::stream::iter(reader.into_records().map(|result| {
             result
                 .map_err(|err| MigrisError::FileReadFailed(err.to_string()))
@@ -67,7 +62,7 @@ impl Connector for CsvConnector {
                 .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
         }
 
-        let mut writer = csv::Writer::from_writer(file);
+        let mut writer = Writer::from_writer(file);
 
         // Only write headers if we're overwriting or the file is empty.
         if options.overwrite || common::is_file_empty(&path) {
@@ -77,7 +72,6 @@ impl Connector for CsvConnector {
                 .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
         }
 
-        //
         let mut stream = data.stream;
         while let Some(row) = stream.next().await {
             let record = row?.into_csv()?;
@@ -133,5 +127,20 @@ impl Row {
         }
 
         Ok(record)
+    }
+}
+
+impl Schema {
+    fn from_csv(reader: &mut Reader<File>) -> MigrisResult<Self> {
+        let mut columns = Vec::new();
+        let headers = reader
+            .headers()
+            .map_err(|err| MigrisError::FileReadFailed(err.to_string()))?;
+
+        for (ordinal, name) in headers.iter().enumerate() {
+            columns.push(Column::from_csv(name, ordinal));
+        }
+
+        Ok(Self { columns })
     }
 }

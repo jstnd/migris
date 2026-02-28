@@ -52,6 +52,11 @@ impl Row {
     }
 }
 
+#[derive(Debug)]
+pub struct Schema {
+    pub(crate) columns: Vec<Column>,
+}
+
 #[derive(Debug, sqlx::FromRow)]
 pub struct Table {
     pub schema: String,
