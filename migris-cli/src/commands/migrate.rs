@@ -15,8 +15,8 @@ pub struct MigrateArguments {
     source_table: Option<String>,
 
     /// The source file type (used when passing a directory as source).
-    #[arg(long)]
-    source_type: Option<FileType>,
+    #[arg(long, value_delimiter = ',')]
+    source_type: Option<Vec<FileType>>,
 
     /// The target to migrate data to.
     #[arg(short, long, index = 2)]
@@ -138,8 +138,8 @@ impl MigrateEngine {
 
                 if let Some(file_type) = migris::common::get_file_type(&path) {
                     // Skip this entry if the entry's file type does not match the given source type.
-                    if let Some(source_type) = self.args.source_type
-                        && source_type != file_type
+                    if let Some(source_types) = &self.args.source_type
+                        && !source_types.contains(&file_type)
                     {
                         continue;
                     }
