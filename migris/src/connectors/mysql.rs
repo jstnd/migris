@@ -86,7 +86,6 @@ impl Connector for MySqlConnector {
             truncate_table(&table, pool).await?;
         }
 
-        let mut stream = data.stream.enumerate();
         let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
             "INSERT INTO `{}`.`{}` VALUES ",
             table.schema, table.name
@@ -95,6 +94,7 @@ impl Connector for MySqlConnector {
         let mut rows_per_txn = 0;
         let mut current_rows_in_txn = 0;
 
+        let mut stream = data.stream.enumerate();
         while let Some((idx, row)) = stream.next().await {
             let row = row?;
 
@@ -122,6 +122,10 @@ impl Connector for MySqlConnector {
                 execute_query(builder.build(), &mut *txn).await?;
                 builder.reset();
                 current_rows_in_txn = 0;
+            }
+
+            if options.limit != 0 && idx + 1 == options.limit {
+                break;
             }
         }
 

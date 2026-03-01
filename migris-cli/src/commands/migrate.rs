@@ -30,6 +30,10 @@ pub struct MigrateArguments {
     #[arg(long, default_value_t = FileType::Csv)]
     target_type: FileType,
 
+    /// The maximum number of rows to write to the target.
+    #[arg(long, default_value_t)]
+    limit: usize,
+
     /// Whether any existing data at the target should be overwritten.
     #[arg(long)]
     overwrite: bool,
@@ -47,7 +51,9 @@ impl MigrateEngine {
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
         let mut read_options = ReadOptions::new();
-        let mut write_options = WriteOptions::new().overwrite(self.args.overwrite);
+        let mut write_options = WriteOptions::new()
+            .limit(self.args.limit)
+            .overwrite(self.args.overwrite);
 
         if let Some(table) = &self.args.target_table {
             write_options = write_options.with_table_name(table);

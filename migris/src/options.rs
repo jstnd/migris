@@ -41,6 +41,9 @@ pub struct WriteOptions {
     pub(crate) table_schema: Option<String>,
     pub(crate) table_name: Option<String>,
 
+    /// The maximum number of rows to write to the target.
+    pub(crate) limit: usize,
+
     /// Whether any existing data at the target should be overwritten.
     pub(crate) overwrite: bool,
 }
@@ -57,6 +60,11 @@ impl WriteOptions {
 
     pub fn with_table_name(mut self, table_name: impl Into<String>) -> Self {
         self.table_name = Some(table_name.into());
+        self
+    }
+
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
         self
     }
 

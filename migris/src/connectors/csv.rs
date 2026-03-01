@@ -69,12 +69,16 @@ impl Connector for CsvConnector {
                 .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
         }
 
-        let mut stream = data.stream;
-        while let Some(row) = stream.next().await {
+        let mut stream = data.stream.enumerate();
+        while let Some((idx, row)) = stream.next().await {
             let record = row?.into_csv()?;
             writer
                 .write_record(&record)
                 .map_err(|err| MigrisError::FileWriteFailed(err.to_string()))?;
+
+            if options.limit != 0 && idx + 1 == options.limit {
+                break;
+            }
         }
 
         writer
