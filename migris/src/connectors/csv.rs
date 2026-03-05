@@ -152,8 +152,8 @@ impl Schema {
                 let record = result.map_err(|err| MigrisError::FileReadFailed(err.to_string()))?;
 
                 for (idx, value) in record.iter().enumerate() {
-                    match column_types.get_mut(idx) {
-                        Some(column_type) => match column_type {
+                    if let Some(column_type) = column_types.get_mut(idx) {
+                        match column_type {
                             CsvDataType::Integer { min, max } => {
                                 // Check if the next value in the column is still an integer.
                                 if let Ok(int) = value.parse::<i64>() {
@@ -166,11 +166,8 @@ impl Schema {
                                     }
                                 } else {
                                     // Otherwise, set the column type to a string instead.
-                                    let lengths = vec![
-                                        min.to_string().len(),
-                                        max.to_string().len(),
-                                        value.len(),
-                                    ];
+                                    let lengths =
+                                        [min.to_string().len(), max.to_string().len(), value.len()];
 
                                     let len = lengths.iter().max().unwrap_or(&0);
                                     *column_type = CsvDataType::String(*len);
@@ -183,8 +180,7 @@ impl Schema {
                                     *len = length;
                                 }
                             }
-                        },
-                        _ => {}
+                        }
                     }
                 }
             }

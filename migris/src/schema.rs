@@ -43,7 +43,7 @@ impl ColumnType {
                 },
                 CsvDataType::String(len) => {
                     // Round the length up to the next 10.
-                    let len = ((len + 9) / 10) * 10;
+                    let len = len.div_ceil(10) * 10;
 
                     match len {
                         0..=255 => MySqlDataType::VARCHAR(len as u16),
