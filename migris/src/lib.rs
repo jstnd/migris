@@ -1,5 +1,6 @@
 pub mod common;
 mod connectors;
+pub mod driver;
 mod options;
 mod schema;
 mod value;
