@@ -30,7 +30,7 @@ impl MySqlConnector {
         }
     }
 
-    async fn connect(&mut self) -> MigrisResult<&MySqlPool> {
+    pub async fn connect(&mut self) -> MigrisResult<&MySqlPool> {
         if self.pool.is_none() {
             self.pool = Some(
                 sqlx::MySqlPool::connect(&self.url)
