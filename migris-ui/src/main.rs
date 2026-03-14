@@ -4,9 +4,9 @@ mod widgets;
 
 use crate::app::Application;
 
-#[tokio::main]
-async fn main() -> iced::Result {
+fn main() -> iced::Result {
     iced::application(Application::new, Application::update, Application::view)
         .title("migris")
+        .font(include_bytes!("../assets/fonts/lucide.ttf"))
         .run()
 }
