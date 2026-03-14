@@ -1,7 +1,7 @@
 use iced::{
-    Border, Color, Element, Length,
+    Element, Length,
     widget::{
-        PaneGrid, container,
+        PaneGrid, column, container,
         pane_grid::{self, Configuration},
         text,
     },
@@ -10,7 +10,11 @@ use migris::driver::Entity;
 
 use crate::{
     message::Message,
-    widgets::{self, tree::Tree},
+    widgets::{
+        self,
+        icon::{Icon, icon},
+        tree::Tree,
+    },
 };
 
 #[derive(Clone, Copy)]
@@ -59,11 +63,12 @@ impl Application {
         let pane_grid = PaneGrid::new(&self.grid_state, |_, pane, _| {
             pane_grid::Content::new(
                 match pane {
-                    Panel::Connections => container(
+                    Panel::Connections => container(column![
+                        icon(Icon::Plus),
                         Tree::new(&self.tree_state, |item| text(&item.name).into())
                             .on_select(Message::TreeItemSelected)
-                            .on_toggle(Message::TreeItemToggled),
-                    ),
+                            .on_toggle(Message::TreeItemToggled)
+                    ]),
                     Panel::Tabs => container(
                         text("TAB VIEW")
                             .width(Length::Fill)
@@ -72,18 +77,7 @@ impl Application {
                     ),
                 }
                 .width(Length::Fill)
-                .height(Length::Fill)
-                .style(move |_| container::Style {
-                    border: match pane {
-                        Panel::Connections => Border::default(),
-                        Panel::Tabs => Border {
-                            color: Color::WHITE,
-                            width: 1.0,
-                            radius: 5.0.into(),
-                        },
-                    },
-                    ..Default::default()
-                }),
+                .height(Length::Fill),
             )
         })
         .width(Length::Fill)
