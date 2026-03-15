@@ -11,7 +11,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub fn unicode(self) -> &'static str {
+    fn unicode(self) -> &'static str {
         match self {
             Self::Plus => "\u{E13D}",
         }
