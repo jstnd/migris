@@ -3,17 +3,19 @@ use iced::{
     widget::{Text, text},
 };
 
-const FONT_LUCIDE: Font = Font::with_name("lucide");
+pub const FONT_LUCIDE: Font = Font::with_name("lucide");
 
 #[derive(Debug, Clone, Copy)]
 pub enum Icon {
     Plus,
+    Search,
 }
 
 impl Icon {
-    fn unicode(self) -> &'static str {
+    pub fn unicode(self) -> char {
         match self {
-            Self::Plus => "\u{E13D}",
+            Self::Plus => '\u{E13D}',
+            Self::Search => '\u{E151}',
         }
     }
 }

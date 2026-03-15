@@ -29,9 +29,11 @@ pub enum Panel {
 }
 
 pub struct Application {
-    grid_state: pane_grid::State<Panel>,
-    tree_state: widgets::tree::TreeState<Entity>,
-    driver: Option<Arc<dyn Driver>>,
+    pub driver: Option<Arc<dyn Driver>>,
+    pub grid_state: pane_grid::State<Panel>,
+
+    pub connection_filter: String,
+    pub tree_state: widgets::tree::TreeState<Entity>,
 }
 
 impl Application {
@@ -46,9 +48,10 @@ impl Application {
         let tree_state = widgets::tree::TreeState::new(vec![]);
 
         Self {
-            grid_state,
-            tree_state,
             driver: None,
+            grid_state,
+            connection_filter: String::from(""),
+            tree_state,
         }
     }
 
@@ -76,6 +79,10 @@ impl Application {
                 let items = entities_to_tree(entities);
                 self.tree_state = TreeState::new(items);
             }
+            Message::ConnectionFilterChanged(filter) => {
+                // TODO: filter out entities in tree
+                self.connection_filter = filter;
+            }
             Message::PanelResized(pane_grid::ResizeEvent { split, ratio }) => {
                 self.grid_state.resize(split, ratio);
             }
@@ -96,7 +103,7 @@ impl Application {
     pub fn view(&self) -> Element<'_, Message> {
         let pane_grid = PaneGrid::new(&self.grid_state, |_, pane, _| {
             pane_grid::Content::new(match pane {
-                Panel::Connections => connection_panel(&self.tree_state),
+                Panel::Connections => connection_panel(self),
                 Panel::Tabs => container(
                     text("TAB VIEW")
                         .width(Length::Fill)

@@ -187,6 +187,7 @@ where
         Column::with_children(elements)
             .width(self.width)
             .height(self.height)
+            .clip(true)
             .into()
     }
 
