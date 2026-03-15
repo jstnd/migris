@@ -95,19 +95,18 @@ impl Application {
 
     pub fn view(&self) -> Element<'_, Message> {
         let pane_grid = PaneGrid::new(&self.grid_state, |_, pane, _| {
-            pane_grid::Content::new(
-                match pane {
-                    Panel::Connections => connection_panel(&self.tree_state),
-                    Panel::Tabs => container(
-                        text("TAB VIEW")
-                            .width(Length::Fill)
-                            .height(Length::Fill)
-                            .center(),
-                    ),
-                }
+            pane_grid::Content::new(match pane {
+                Panel::Connections => connection_panel(&self.tree_state),
+                Panel::Tabs => container(
+                    text("TAB VIEW")
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center(),
+                )
                 .width(Length::Fill)
-                .height(Length::Fill),
-            )
+                .height(Length::Fill)
+                .into(),
+            })
         })
         .width(Length::Fill)
         .height(Length::Fill)
@@ -136,7 +135,7 @@ fn entities_to_tree(entities: Vec<Entity>) -> Vec<TreeItem<Entity>> {
         };
 
         let mut children: Vec<TreeItem<Entity>> = entities.into_iter().map(TreeItem::new).collect();
-        children.sort_unstable_by_key(|item| item.value().name.clone());
+        children.sort_unstable_by(|a, b| a.value().name.cmp(&b.value().name));
 
         let item = TreeItem::new(schema_entity).children(children);
         items.push(item);
