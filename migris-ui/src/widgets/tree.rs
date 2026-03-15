@@ -118,6 +118,10 @@ impl<T> TreeItem<T> {
         self.children.extend(children);
         self
     }
+
+    pub fn value(&self) -> &T {
+        &self.value
+    }
 }
 
 #[derive(Debug)]

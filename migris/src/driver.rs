@@ -1,19 +1,21 @@
 use crate::{MigrisError, MigrisResult, mysql::MySqlConnector};
 
 #[async_trait::async_trait]
-pub trait Driver {
-    async fn entities(&mut self) -> MigrisResult<Vec<Entity>>;
+pub trait Driver: std::fmt::Debug + Send + Sync {
+    async fn entities(&self) -> MigrisResult<Vec<Entity>>;
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Entity {
+    pub schema: String,
     pub name: String,
     pub kind: EntityKind,
 }
 
-#[derive(Debug, sqlx::Decode, sqlx::Encode)]
+#[derive(Debug, Clone, Copy, sqlx::Decode, sqlx::Encode)]
 #[sqlx(rename_all = "lowercase")]
 pub enum EntityKind {
+    Schema,
     Table,
     View,
 }
@@ -34,17 +36,17 @@ where
 
 #[async_trait::async_trait]
 impl Driver for MySqlConnector {
-    async fn entities(&mut self) -> MigrisResult<Vec<Entity>> {
-        let pool = self.connect().await?;
+    async fn entities(&self) -> MigrisResult<Vec<Entity>> {
         let query = r#"
             SELECT
+                TABLE_SCHEMA AS `schema`,
                 TABLE_NAME AS `name`,
                 IF(TABLE_TYPE = 'BASE TABLE', 'table', 'view') AS `kind`
             FROM information_schema.TABLES
         "#;
 
         let entities = sqlx::query_as::<sqlx::MySql, Entity>(query)
-            .fetch_all(pool)
+            .fetch_all(self.pool.as_ref().unwrap())
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
 

@@ -5,6 +5,6 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.102"
-iced = { version = "0.14.0", features = ["advanced"] }
+iced = { version = "0.14.0", features = ["advanced", "tokio"] }
 migris = { workspace = true }
 tokio = { version = "1.49.0", features = ["full"] }

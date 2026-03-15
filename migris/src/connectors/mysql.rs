@@ -17,9 +17,10 @@ use crate::{
 
 const MYSQL_MAX_PARAMETERS: usize = 65535;
 
+#[derive(Debug, Clone)]
 pub struct MySqlConnector {
     url: String,
-    pool: Option<MySqlPool>,
+    pub pool: Option<MySqlPool>,
 }
 
 impl MySqlConnector {
@@ -28,6 +29,12 @@ impl MySqlConnector {
             url: url.into(),
             pool: None,
         }
+    }
+
+    pub async fn new_with_pool(url: impl Into<String>) -> MigrisResult<Self> {
+        let mut connector = Self::new(url);
+        connector.connect().await?;
+        Ok(connector)
     }
 
     pub async fn connect(&mut self) -> MigrisResult<&MySqlPool> {
