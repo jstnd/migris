@@ -2,14 +2,14 @@ mod app;
 mod message;
 mod widgets;
 
-use iced::{Pixels, Settings};
+use iced::Settings;
 
 use crate::app::Application;
 
 fn main() -> iced::Result {
     let settings = Settings {
         fonts: vec![include_bytes!("../assets/fonts/lucide.ttf").into()],
-        default_text_size: Pixels(12.0),
+        default_text_size: 12.into(),
         ..Default::default()
     };
 

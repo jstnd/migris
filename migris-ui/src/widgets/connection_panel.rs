@@ -1,7 +1,8 @@
 use iced::{
     Alignment, Element, Length,
-    widget::{button, column, container, row, scrollable, text, text_input},
+    widget::{Row, button, column, container, row, scrollable, text, text_input},
 };
+use migris::driver::EntityKind;
 
 use crate::{
     app::Application,
@@ -33,9 +34,33 @@ pub fn connection_panel<'a>(app: &'a Application) -> Element<'a, Message> {
                 ]
                 .align_y(Alignment::Center)
                 .spacing(5),
-                Tree::new(&app.tree_state, |item| text(&item.name).into())
-                    .on_select(Message::TreeItemSelected)
-                    .on_toggle(Message::TreeItemToggled)
+                Tree::new(&app.tree_state, |item| {
+                    let mut row = Row::new();
+
+                    if item.has_children() {
+                        let chevron = if item.is_expanded() {
+                            Icon::ChevronDown
+                        } else {
+                            Icon::ChevronRight
+                        };
+
+                        row = row.push(icon(chevron));
+                    }
+
+                    let entity_icon = match item.value().kind {
+                        EntityKind::Schema => Icon::Database,
+                        EntityKind::Table => Icon::Table,
+                        EntityKind::View => Icon::Eye,
+                    };
+
+                    row.push(icon(entity_icon))
+                        .push(text(&item.value().name))
+                        .align_y(Alignment::Center)
+                        .spacing(5)
+                        .into()
+                })
+                .on_select(Message::TreeItemSelected)
+                .on_toggle(Message::TreeItemToggled)
             ]
             .spacing(5),
         )
