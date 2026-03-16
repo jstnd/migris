@@ -101,7 +101,7 @@ impl<T> TreeItem<T> {
     pub fn new(value: T) -> Self {
         Self {
             value,
-            expanded: true,
+            expanded: false,
             children: Vec::new(),
         }
     }
@@ -122,6 +122,14 @@ impl<T> TreeItem<T> {
     pub fn value(&self) -> &T {
         &self.value
     }
+
+    pub fn is_expanded(&self) -> bool {
+        self.expanded
+    }
+
+    pub fn has_children(&self) -> bool {
+        !self.children.is_empty()
+    }
 }
 
 #[derive(Debug)]
@@ -135,7 +143,7 @@ pub struct Tree<'a, T, Message> {
     state: &'a TreeState<T>,
     width: Length,
     height: Length,
-    on_view: Box<dyn Fn(&T) -> Element<'_, Message>>,
+    on_view: Box<dyn Fn(&TreeItem<T>) -> Element<'_, Message>>,
     on_select: Option<Box<dyn Fn(TreeItemId) -> Message>>,
     on_toggle: Option<Box<dyn Fn(TreeItemId) -> Message>>,
 }
@@ -144,11 +152,12 @@ impl<'a, T, Message> Tree<'a, T, Message>
 where
     Message: 'a + Clone,
 {
-    const DEFAULT_DEPTH_WIDTH: u32 = 16;
+    // TODO: calculate this depth width based on application-wide font size and element padding
+    const DEFAULT_DEPTH_WIDTH: u32 = 17;
 
     pub fn new<F>(state: &'a TreeState<T>, on_view: F) -> Self
     where
-        F: 'static + Fn(&T) -> Element<'_, Message>,
+        F: 'static + Fn(&TreeItem<T>) -> Element<'_, Message>,
     {
         Self {
             state,
@@ -194,7 +203,7 @@ where
     fn tree_element(&self, visible_item: &VisibleTreeItem) -> Element<'a, Message> {
         let item = self.state.item(&visible_item.id);
         let spacing = space::horizontal().width(visible_item.depth * Self::DEFAULT_DEPTH_WIDTH);
-        let content = (self.on_view)(&item.value);
+        let content = (self.on_view)(item);
         let message = if item.children.is_empty()
             && let Some(on_select) = &self.on_select
         {
@@ -210,6 +219,7 @@ where
         button(row![spacing, content])
             .style(button::text)
             .width(self.width)
+            .padding(2.5)
             .on_press_maybe(message)
             .into()
     }
