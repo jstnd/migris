@@ -3,11 +3,15 @@ use iced::{
     widget::{Column, button, row, space},
 };
 
-#[derive(Debug)]
 pub struct TreeState<T> {
     items: Vec<TreeItem<T>>,
     visible: Vec<VisibleTreeItem>,
+
+    filter: String,
+    on_filter: Option<FilterFn<T>>,
 }
+
+type FilterFn<T> = Box<dyn Fn(&TreeItem<T>, &str) -> bool>;
 
 impl<T> TreeState<T> {
     /// Creates a new [`TreeState`], initialized with the given items.
@@ -19,10 +23,38 @@ impl<T> TreeState<T> {
         let mut state = Self {
             items,
             visible: Vec::new(),
+            filter: String::from(""),
+            on_filter: None,
         };
 
         state.build_visible();
         state
+    }
+
+    /// Sets the function to be used when filtering the tree items.
+    pub fn on_filter(mut self, on_filter: FilterFn<T>) -> Self {
+        self.on_filter = Some(on_filter);
+        self
+    }
+
+    /// Returns the current filter within the state.
+    pub fn current_filter(&self) -> &str {
+        &self.filter
+    }
+
+    /// Filters the items in the state using the given filter string.
+    pub fn filter(&mut self, filter: String) {
+        self.filter = filter;
+        self.build_visible();
+    }
+
+    /// Loads the state with the given items.
+    pub fn load<I>(&mut self, items: I)
+    where
+        I: IntoIterator<Item = TreeItem<T>>,
+    {
+        self.items = items.into_iter().collect();
+        self.build_visible();
     }
 
     /// Toggles the expanded state of the item with the given [`TreeItemId`].
@@ -39,11 +71,20 @@ impl<T> TreeState<T> {
         self.visible.clear();
 
         fn inner<T>(
-            visible: &mut Vec<VisibleTreeItem>,
             items: &[TreeItem<T>],
+            visible: &mut Vec<VisibleTreeItem>,
             path: &mut Vec<usize>,
+            filter: &str,
+            on_filter: Option<&FilterFn<T>>,
         ) {
             for (idx, item) in items.iter().enumerate() {
+                if !filter.is_empty()
+                    && let Some(on_filter) = on_filter
+                    && !on_filter(item, filter)
+                {
+                    continue;
+                }
+
                 path.push(idx);
 
                 visible.push(VisibleTreeItem {
@@ -52,7 +93,7 @@ impl<T> TreeState<T> {
                 });
 
                 if item.expanded {
-                    inner(visible, &item.children, path);
+                    inner(&item.children, visible, path, filter, on_filter);
                 }
 
                 //
@@ -61,7 +102,13 @@ impl<T> TreeState<T> {
         }
 
         let mut path = Vec::new();
-        inner(&mut self.visible, &self.items, &mut path);
+        inner(
+            &self.items,
+            &mut self.visible,
+            &mut path,
+            &self.filter,
+            self.on_filter.as_ref(),
+        );
     }
 
     fn item(&self, id: &TreeItemId) -> &TreeItem<T> {
