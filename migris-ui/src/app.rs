@@ -31,8 +31,6 @@ pub enum Panel {
 pub struct Application {
     pub driver: Option<Arc<dyn Driver>>,
     pub grid_state: pane_grid::State<Panel>,
-
-    pub connection_filter: String,
     pub tree_state: widgets::tree::TreeState<Entity>,
 }
 
@@ -45,12 +43,11 @@ impl Application {
             b: Box::new(Configuration::Pane(Panel::Tabs)),
         });
 
-        let tree_state = widgets::tree::TreeState::new(vec![]);
+        let tree_state = TreeState::new(vec![]).on_filter(Box::new(Self::is_item_visible));
 
         Self {
             driver: None,
             grid_state,
-            connection_filter: String::from(""),
             tree_state,
         }
     }
@@ -77,11 +74,10 @@ impl Application {
                 self.driver = Some(driver);
 
                 let items = entities_to_tree(entities);
-                self.tree_state = TreeState::new(items);
+                self.tree_state.load(items);
             }
             Message::ConnectionFilterChanged(filter) => {
-                // TODO: filter out entities in tree
-                self.connection_filter = filter;
+                self.tree_state.filter(filter);
             }
             Message::PanelResized(pane_grid::ResizeEvent { split, ratio }) => {
                 self.grid_state.resize(split, ratio);
@@ -120,6 +116,14 @@ impl Application {
         .on_resize(10, Message::PanelResized);
 
         container(pane_grid).padding(0).into()
+    }
+
+    fn is_item_visible(item: &TreeItem<Entity>, filter: &str) -> bool {
+        if item.value().kind != EntityKind::Schema {
+            return item.value().name.contains(filter);
+        }
+
+        true
     }
 }
 

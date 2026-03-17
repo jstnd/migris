@@ -12,7 +12,7 @@ pub struct Entity {
     pub kind: EntityKind,
 }
 
-#[derive(Debug, Clone, Copy, sqlx::Decode, sqlx::Encode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Decode, sqlx::Encode)]
 #[sqlx(rename_all = "lowercase")]
 pub enum EntityKind {
     Schema,

@@ -18,7 +18,7 @@ pub fn connection_panel<'a>(app: &'a Application) -> Element<'a, Message> {
         container(
             column![
                 row![
-                    text_input("Filter...", &app.connection_filter)
+                    text_input("Filter...", app.tree_state.current_filter())
                         .icon(text_input::Icon {
                             font: icon::FONT_LUCIDE,
                             code_point: Icon::Search.unicode(),
