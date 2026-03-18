@@ -120,7 +120,9 @@ impl Application {
 
     fn is_item_visible(item: &TreeItem<Entity>, filter: &str) -> bool {
         if item.value().kind != EntityKind::Schema {
-            return item.value().name.contains(filter);
+            // TODO: maybe improve this to not make as many allocations?
+            let name = item.value().name.to_lowercase();
+            return name.contains(&filter.to_lowercase());
         }
 
         true
