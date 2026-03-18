@@ -14,26 +14,26 @@ use crate::{
 };
 
 pub fn connection_panel<'a>(app: &'a Application) -> Element<'a, Message> {
-    scrollable(
-        container(
-            column![
-                row![
-                    text_input("Filter...", app.tree_state.current_filter())
-                        .icon(text_input::Icon {
-                            font: icon::FONT_LUCIDE,
-                            code_point: Icon::Search.unicode(),
-                            size: None,
-                            spacing: 5.0,
-                            side: text_input::Side::Left,
-                        })
-                        .width(Length::Fill)
-                        .on_input(Message::ConnectionFilterChanged),
-                    button(icon(Icon::Plus))
-                        .style(button::background)
-                        .on_press(Message::ConnectionAdded)
-                ]
-                .align_y(Alignment::Center)
-                .spacing(5),
+    container(
+        column![
+            row![
+                text_input("Filter...", app.tree_state.current_filter())
+                    .icon(text_input::Icon {
+                        font: icon::FONT_LUCIDE,
+                        code_point: Icon::Search.unicode(),
+                        size: None,
+                        spacing: 5.0,
+                        side: text_input::Side::Left,
+                    })
+                    .width(Length::Fill)
+                    .on_input(Message::ConnectionFilterChanged),
+                button(icon(Icon::Plus))
+                    .style(button::background)
+                    .on_press(Message::ConnectionAdded)
+            ]
+            .align_y(Alignment::Center)
+            .spacing(5),
+            scrollable(
                 Tree::new(&app.tree_state, |item| {
                     let mut row = Row::new();
 
@@ -61,12 +61,12 @@ pub fn connection_panel<'a>(app: &'a Application) -> Element<'a, Message> {
                 })
                 .on_select(Message::TreeItemSelected)
                 .on_toggle(Message::TreeItemToggled)
-            ]
-            .spacing(5),
-        )
-        .clip(true)
-        .padding(5),
+            )
+            .spacing(5)
+        ]
+        .spacing(5),
     )
-    .spacing(0)
+    .clip(true)
+    .padding(5)
     .into()
 }
