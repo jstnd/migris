@@ -9,6 +9,7 @@ use crate::{
     message::Message,
     widgets::{
         icon::{self, Icon, icon},
+        tooltip,
         tree::Tree,
     },
 };
@@ -27,9 +28,12 @@ pub fn connection_panel<'a>(app: &'a Application) -> Element<'a, Message> {
                     })
                     .width(Length::Fill)
                     .on_input(Message::ConnectionFilterChanged),
-                button(icon(Icon::Plus))
-                    .style(button::background)
-                    .on_press(Message::ConnectionAdded)
+                tooltip(
+                    button(icon(Icon::Plus))
+                        .style(button::background)
+                        .on_press(Message::ConnectionAdded),
+                    "Add Connection"
+                )
             ]
             .align_y(Alignment::Center)
             .spacing(5),
