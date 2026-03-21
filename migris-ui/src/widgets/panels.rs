@@ -9,6 +9,7 @@ use crate::{
     message::Message,
     widgets::{
         icon::{self, Icon, icon},
+        tabs::Tabs,
         tooltip,
         tree::Tree,
     },
@@ -73,4 +74,8 @@ pub fn connection_panel<'a>(app: &'a Application) -> Element<'a, Message> {
     .clip(true)
     .padding(5)
     .into()
+}
+
+pub fn tabs_panel<'a>(app: &'a Application) -> Element<'a, Message> {
+    Tabs::new(&app.tabs_state).into()
 }

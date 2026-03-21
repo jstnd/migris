@@ -13,6 +13,7 @@ pub fn icon<'a>(icon: Icon) -> Text<'a> {
 pub enum Icon {
     ChevronDown,
     ChevronRight,
+    Code,
     Database,
     Eye,
     Plus,
@@ -25,6 +26,7 @@ impl Icon {
         match self {
             Self::ChevronDown => '\u{E06D}',
             Self::ChevronRight => '\u{E06F}',
+            Self::Code => '\u{E093}',
             Self::Database => '\u{E0AD}',
             Self::Eye => '\u{E0BA}',
             Self::Plus => '\u{E13D}',
