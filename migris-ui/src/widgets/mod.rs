@@ -5,9 +5,14 @@ use iced::{
     widget::{Tooltip, container},
 };
 
-pub mod connection_panel;
 pub mod icon;
+pub mod panels;
+pub mod tabs;
 pub mod tree;
+
+pub mod views {
+    pub mod query;
+}
 
 pub fn tooltip<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,

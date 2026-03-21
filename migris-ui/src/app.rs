@@ -5,7 +5,6 @@ use iced::{
     widget::{
         PaneGrid, container,
         pane_grid::{self, Configuration},
-        text,
     },
 };
 use migris::{
@@ -16,8 +15,8 @@ use migris::{
 use crate::{
     message::Message,
     widgets::{
-        self,
-        connection_panel::connection_panel,
+        panels,
+        tabs::TabsState,
         tree::{TreeItem, TreeState},
     },
 };
@@ -31,7 +30,8 @@ pub enum Panel {
 pub struct Application {
     pub driver: Option<Arc<dyn Driver>>,
     pub grid_state: pane_grid::State<Panel>,
-    pub tree_state: widgets::tree::TreeState<Entity>,
+    pub tree_state: TreeState<Entity>,
+    pub tabs_state: TabsState,
 }
 
 impl Application {
@@ -44,11 +44,13 @@ impl Application {
         });
 
         let tree_state = TreeState::new(vec![]).on_filter(Box::new(Self::is_item_visible));
+        let tabs_state = TabsState::new();
 
         Self {
             driver: None,
             grid_state,
             tree_state,
+            tabs_state,
         }
     }
 
@@ -99,16 +101,8 @@ impl Application {
     pub fn view(&self) -> Element<'_, Message> {
         let pane_grid = PaneGrid::new(&self.grid_state, |_, pane, _| {
             pane_grid::Content::new(match pane {
-                Panel::Connections => connection_panel(self),
-                Panel::Tabs => container(
-                    text("TAB VIEW")
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center(),
-                )
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
+                Panel::Connections => panels::connection_panel(self),
+                Panel::Tabs => panels::tabs_panel(self),
             })
         })
         .width(Length::Fill)
