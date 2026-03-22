@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 migris = { workspace = true }
 
+anyhow = "1.0.102"
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed" }
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
 gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+tokio = { version = "1.50.0", features = ["rt", "rt-multi-thread"] }
