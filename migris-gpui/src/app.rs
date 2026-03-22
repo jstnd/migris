@@ -25,9 +25,6 @@ impl Application {
             &connection_panel,
             |_, _, event: &ConnectionPanelEvent, cx| match event {
                 ConnectionPanelEvent::ConnectionAdded => Self::connection_added(cx),
-                ConnectionPanelEvent::FilterChanged(filter) => {
-                    println!("FILTER CHANGED: {}", filter)
-                }
             },
         )];
 
@@ -51,9 +48,8 @@ impl Application {
             Ok(data) => {
                 let result = this.update(cx, |this, cx| {
                     this.driver = Some(data.driver);
-
-                    this.connection_panel.update(cx, |connection_panel, cx| {
-                        connection_panel.load_entities(cx, data.entities);
+                    this.connection_panel.update(cx, |state, cx| {
+                        state.load_entities(cx, data.entities);
                         cx.notify();
                     });
 

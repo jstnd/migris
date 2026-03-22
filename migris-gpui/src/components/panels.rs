@@ -16,11 +16,10 @@ use migris::driver::Entity as MigrisEntity;
 
 pub enum ConnectionPanelEvent {
     ConnectionAdded,
-    FilterChanged(SharedString),
 }
 
 pub struct ConnectionPanelState {
-    filter_state: Entity<InputState>,
+    search_state: Entity<InputState>,
     tree_state: Entity<TreeState>,
 
     /// The underlying objects used to build the displayed tree.
@@ -31,21 +30,20 @@ pub struct ConnectionPanelState {
 
 impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let filter_state = cx.new(|cx| InputState::new(window, cx).placeholder("Filter..."));
+        let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
         let tree_state = cx.new(|cx| TreeState::new(cx));
 
         let _subscriptions =
             vec![
-                cx.subscribe(&filter_state, |_, state, event: &InputEvent, cx| {
+                cx.subscribe(&search_state, |this, _, event: &InputEvent, cx| {
                     if let InputEvent::Change = event {
-                        let filter = state.read(cx).value();
-                        cx.emit(ConnectionPanelEvent::FilterChanged(filter));
+                        this.load_tree(cx);
                     }
                 }),
             ];
 
         Self {
-            filter_state,
+            search_state,
             tree_state,
             entities: Vec::new(),
             _subscriptions,
@@ -53,31 +51,35 @@ impl ConnectionPanelState {
     }
 
     pub fn load_entities(&mut self, cx: &mut Context<Self>, entities: Vec<MigrisEntity>) {
-        self.entities = entities.clone();
+        self.entities = entities;
+        self.load_tree(cx);
+    }
 
-        self.tree_state.update(cx, |tree_state, cx| {
-            let items = Self::entities_to_items(entities);
-            tree_state.set_items(items, cx);
+    fn load_tree(&mut self, cx: &mut Context<Self>) {
+        self.tree_state.update(cx, |state, cx| {
+            let filter = self.search_state.read(cx).value();
+            let items = Self::entities_to_items(&self.entities, filter);
+            state.set_items(items, cx);
             cx.notify();
         });
     }
 
-    fn entities_to_items(entities: Vec<MigrisEntity>) -> Vec<TreeItem> {
+    fn entities_to_items(entities: &[MigrisEntity], filter: SharedString) -> Vec<TreeItem> {
         let mut items = Vec::new();
-        let entities_by_schema = entities
-            .into_iter()
-            .fold(BTreeMap::new(), |mut map, entity| {
-                map.entry(entity.schema.clone())
-                    .or_insert(Vec::new())
-                    .push(entity);
-                map
-            });
+        let filter = filter.to_lowercase();
+        let entities_by_schema = entities.iter().fold(BTreeMap::new(), |mut map, entity| {
+            map.entry(entity.schema.clone())
+                .or_insert(Vec::new())
+                .push(entity);
+            map
+        });
 
         for (schema, entities) in entities_by_schema {
             let mut children: Vec<TreeItem> = entities
                 .into_iter()
+                .filter(|entity| filter.is_empty() || entity.name.to_lowercase().contains(&filter))
                 .map(|entity| {
-                    TreeItem::new(format!("{}-{}", entity.schema, entity.name), entity.name)
+                    TreeItem::new(format!("{}-{}", entity.schema, entity.name), &entity.name)
                 })
                 .collect();
 
@@ -119,7 +121,7 @@ impl RenderOnce for ConnectionPanel {
                     .w_full()
                     .gap_1()
                     .child(
-                        Input::new(&self.state.read(cx).filter_state)
+                        Input::new(&self.state.read(cx).search_state)
                             .cleanable(true)
                             .prefix(Icon::new(IconName::Search)),
                     )
