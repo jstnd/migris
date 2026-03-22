@@ -4366,11 +4366,13 @@ dependencies = [
 name = "migris-gpui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "gpui",
  "gpui-component",
  "gpui-component-assets",
  "gpui_platform",
  "migris",
+ "tokio",
 ]
 
 [[package]]
