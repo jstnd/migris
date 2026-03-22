@@ -1,5 +1,5 @@
 [workspace]
-members = ["migris", "migris-cli", "migris-ui"]
+members = ["migris", "migris-cli", "migris-gpui", "migris-ui"]
 resolver = "3"
 
 [workspace.dependencies]
