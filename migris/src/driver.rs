@@ -12,6 +12,26 @@ pub struct Entity {
     pub kind: EntityKind,
 }
 
+impl Entity {
+    pub fn schema(schema: impl Into<String>) -> Self {
+        Self {
+            schema: schema.into(),
+            name: String::from(""),
+            kind: EntityKind::Schema,
+        }
+    }
+
+    pub fn id(&self) -> String {
+        let mut id = self.schema.clone();
+
+        if !self.name.is_empty() {
+            id.push_str(&self.name);
+        }
+
+        id
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Decode, sqlx::Encode)]
 #[sqlx(rename_all = "lowercase")]
 pub enum EntityKind {
@@ -38,6 +58,12 @@ where
 impl Driver for MySqlConnector {
     async fn entities(&self) -> MigrisResult<Vec<Entity>> {
         let query = r#"
+            SELECT
+                SCHEMA_NAME AS `schema`,
+                '' AS `name`,
+                'schema' AS `kind`
+            FROM information_schema.SCHEMATA
+            UNION
             SELECT
                 TABLE_SCHEMA AS `schema`,
                 TABLE_NAME AS `name`,

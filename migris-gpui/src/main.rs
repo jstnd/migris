@@ -1,4 +1,5 @@
 mod app;
+mod assets;
 mod components;
 mod models;
 
@@ -8,7 +9,7 @@ use gpui_component::{Root, ThemeMode};
 use crate::app::Application;
 
 fn main() -> anyhow::Result<()> {
-    let app = gpui_platform::application().with_assets(gpui_component_assets::Assets);
+    let app = gpui_platform::application().with_assets(assets::Assets);
 
     // Use tokio runtime (needed for sqlx operations)
     let runtime = tokio::runtime::Builder::new_multi_thread()
