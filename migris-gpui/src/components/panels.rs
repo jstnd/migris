@@ -1,18 +1,20 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui::{
     App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, RenderOnce,
     SharedString, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    Icon, IconName, StyledExt,
+    Icon, StyledExt,
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputEvent, InputState},
     list::ListItem,
     tree::{self, TreeItem, TreeState},
 };
-use migris::driver::Entity as MigrisEntity;
+use migris::driver::{Entity as MigrisEntity, EntityKind};
+
+use crate::components::icon::IconName;
 
 pub enum ConnectionPanelEvent {
     ConnectionAdded,
@@ -24,6 +26,13 @@ pub struct ConnectionPanelState {
 
     /// The underlying objects used to build the displayed tree.
     entities: Vec<MigrisEntity>,
+
+    /// A map of entity id's to the respective indexes in the entities list.
+    entity_id_map: HashMap<SharedString, usize>,
+
+    /// The id's of the expanded entity tree items; needed to
+    /// persist expanded items between actions such as searching.
+    expanded: HashSet<SharedString>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -46,49 +55,76 @@ impl ConnectionPanelState {
             search_state,
             tree_state,
             entities: Vec::new(),
+            entity_id_map: HashMap::new(),
+            expanded: HashSet::new(),
             _subscriptions,
         }
     }
 
     pub fn load_entities(&mut self, cx: &mut Context<Self>, entities: Vec<MigrisEntity>) {
         self.entities = entities;
+        self.build_id_map();
         self.load_tree(cx);
+    }
+
+    fn build_id_map(&mut self) {
+        self.entity_id_map.clear();
+
+        for (idx, entity) in self.entities.iter().enumerate() {
+            self.entity_id_map
+                .insert(SharedString::from(entity.id()), idx);
+        }
     }
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
         self.tree_state.update(cx, |state, cx| {
             let filter = self.search_state.read(cx).value();
-            let items = Self::entities_to_items(&self.entities, filter);
+            let items = self.entities_to_items(filter);
             state.set_items(items, cx);
             cx.notify();
         });
     }
 
-    fn entities_to_items(entities: &[MigrisEntity], filter: SharedString) -> Vec<TreeItem> {
+    fn entities_to_items(&self, filter: SharedString) -> Vec<TreeItem> {
         let mut items = Vec::new();
         let filter = filter.to_lowercase();
-        let entities_by_schema = entities.iter().fold(BTreeMap::new(), |mut map, entity| {
-            map.entry(entity.schema.clone())
-                .or_insert(Vec::new())
-                .push(entity);
-            map
-        });
+        let entities_by_schema = self
+            .entities
+            .iter()
+            .filter(|entity| entity.kind != EntityKind::Schema)
+            .fold(BTreeMap::new(), |mut map, entity| {
+                map.entry(entity.schema.clone())
+                    .or_insert(Vec::new())
+                    .push(entity);
+                map
+            });
 
         for (schema, entities) in entities_by_schema {
             let mut children: Vec<TreeItem> = entities
                 .into_iter()
                 .filter(|entity| filter.is_empty() || entity.name.to_lowercase().contains(&filter))
-                .map(|entity| {
-                    TreeItem::new(format!("{}-{}", entity.schema, entity.name), &entity.name)
-                })
+                .map(|entity| TreeItem::new(SharedString::from(entity.id()), &entity.name))
                 .collect();
 
             children.sort_unstable_by(|a, b| a.label.cmp(&b.label));
-            let item = TreeItem::new(&schema, &schema).children(children);
+            let schema_id = SharedString::from(MigrisEntity::schema(&schema).id());
+            let item = TreeItem::new(&schema_id, &schema)
+                .expanded(self.is_expanded(&schema_id))
+                .children(children);
+
             items.push(item);
         }
 
         items
+    }
+
+    fn entity(&self, id: &SharedString) -> &MigrisEntity {
+        let idx = self.entity_id_map[id];
+        &self.entities[idx]
+    }
+
+    fn is_expanded(&self, id: &SharedString) -> bool {
+        self.expanded.contains(id)
     }
 }
 
@@ -123,7 +159,7 @@ impl RenderOnce for ConnectionPanel {
                     .child(
                         Input::new(&self.state.read(cx).search_state)
                             .cleanable(true)
-                            .prefix(Icon::new(IconName::Search)),
+                            .prefix(Icon::from(IconName::Search)),
                     )
                     .child(
                         Button::new("button-add-connection")
@@ -138,20 +174,46 @@ impl RenderOnce for ConnectionPanel {
             )
             .child(tree::tree(
                 &self.state.read(cx).tree_state,
-                |idx, entry, _selected, _window, _cx| {
-                    ListItem::new(idx).p_0().child(
-                        h_flex()
-                            .gap_1()
-                            .pl(px(18.0) * entry.depth())
-                            .when(entry.is_folder(), |this| {
-                                this.child(Icon::new(if entry.is_expanded() {
-                                    IconName::ChevronDown
-                                } else {
-                                    IconName::ChevronRight
+                move |idx, entry, _, window, cx| {
+                    let entity = self.state.read(cx).entity(&entry.item().id);
+
+                    ListItem::new(idx)
+                        .p_0()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .pl(px(20.0) * entry.depth())
+                                .when(entity.kind == EntityKind::Schema, |this| {
+                                    this.child(Icon::from(
+                                        if self.state.read(cx).is_expanded(&entry.item().id) {
+                                            IconName::ChevronDown
+                                        } else {
+                                            IconName::ChevronRight
+                                        },
+                                    ))
+                                })
+                                .child(Icon::from(match entity.kind {
+                                    EntityKind::Schema => IconName::Database,
+                                    EntityKind::Table => IconName::Grid3x3,
+                                    EntityKind::View => IconName::Eye,
                                 }))
-                            })
-                            .child(entry.item().label.clone()),
-                    )
+                                .child(entry.item().label.clone()),
+                        )
+                        .on_click(window.listener_for(&self.state, {
+                            let entry = entry.clone();
+                            move |state, _, _, _| {
+                                let id = entry.item().id.clone();
+                                let entity = state.entity(&id);
+
+                                if entity.kind == EntityKind::Schema {
+                                    if state.is_expanded(&id) {
+                                        state.expanded.remove(&id);
+                                    } else {
+                                        state.expanded.insert(id);
+                                    }
+                                }
+                            }
+                        }))
                 },
             ))
     }
