@@ -8,6 +8,7 @@ pub enum IconName {
     Grid3x3,
     Plus,
     Search,
+    X,
 }
 
 impl IconNamed for IconName {
@@ -20,6 +21,7 @@ impl IconNamed for IconName {
             Self::Grid3x3 => "icons/grid-3x3.svg",
             Self::Plus => "icons/plus.svg",
             Self::Search => "icons/search.svg",
+            Self::X => "icons/x.svg",
         }
         .into()
     }
