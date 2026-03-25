@@ -5,7 +5,7 @@ use gpui::{
     SharedString, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    Icon, StyledExt,
+    ActiveTheme, Icon, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputEvent, InputState},
@@ -145,6 +145,8 @@ impl ConnectionPanel {
 
 impl RenderOnce for ConnectionPanel {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let search_state = &self.state.read(cx).search_state;
+
         div()
             .p_1()
             .v_flex()
@@ -157,9 +159,28 @@ impl RenderOnce for ConnectionPanel {
                     .w_full()
                     .gap_1()
                     .child(
-                        Input::new(&self.state.read(cx).search_state)
-                            .cleanable(true)
-                            .prefix(Icon::from(IconName::Search)),
+                        Input::new(search_state)
+                            .prefix(Icon::from(IconName::Search))
+                            .when(!search_state.read(cx).value().is_empty(), |this| {
+                                this.suffix(
+                                    Button::new("button-search-clear")
+                                        .icon(IconName::X)
+                                        .compact()
+                                        .ghost()
+                                        .xsmall()
+                                        .tab_stop(false)
+                                        .text_color(cx.theme().muted_foreground)
+                                        .on_click({
+                                            let state = search_state.clone();
+                                            move |_, window, cx| {
+                                                state.update(cx, |state, cx| {
+                                                    state.set_value("", window, cx);
+                                                    state.focus(window, cx);
+                                                });
+                                            }
+                                        }),
+                                )
+                            }),
                     )
                     .child(
                         Button::new("button-add-connection")
