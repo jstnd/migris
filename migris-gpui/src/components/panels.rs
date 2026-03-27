@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
+    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div,
+    prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Icon, Sizable, StyledExt,
@@ -10,11 +11,16 @@ use gpui_component::{
     h_flex,
     input::{Input, InputEvent, InputState},
     list::ListItem,
+    tab::{Tab, TabBar},
     tree::{self, TreeItem, TreeState},
+    v_flex,
 };
 use migris::driver::{Entity as MigrisEntity, EntityKind};
 
-use crate::components::icon::IconName;
+use crate::{
+    components::icon::IconName,
+    tabs::{TabView, query::QueryTab},
+};
 
 pub enum ConnectionPanelEvent {
     ConnectionAdded,
@@ -168,7 +174,6 @@ impl RenderOnce for ConnectionPanel {
                                         .compact()
                                         .ghost()
                                         .xsmall()
-                                        .tab_stop(false)
                                         .text_color(cx.theme().muted_foreground)
                                         .on_click({
                                             let state = search_state.clone();
@@ -237,5 +242,122 @@ impl RenderOnce for ConnectionPanel {
                         }))
                 },
             ))
+    }
+}
+
+pub struct TabPanelState {
+    tabs: Vec<Box<dyn TabView>>,
+    active_tab: usize,
+    hovered_tab: Option<usize>,
+}
+
+impl TabPanelState {
+    pub fn new() -> Self {
+        Self {
+            tabs: Vec::new(),
+            active_tab: 0,
+            hovered_tab: None,
+        }
+    }
+
+    #[allow(clippy::borrowed_box)]
+    fn active_tab(&self) -> &Box<dyn TabView> {
+        &self.tabs[self.active_tab]
+    }
+
+    fn add_tab(&mut self) {
+        self.tabs.push(Box::new(QueryTab));
+        self.active_tab = self.tabs.len() - 1;
+    }
+
+    fn close_tab(&mut self, idx: usize) {
+        self.tabs.remove(idx);
+
+        if self.active_tab >= idx && self.active_tab > 0 {
+            self.active_tab -= 1;
+        }
+    }
+}
+
+#[derive(IntoElement)]
+pub struct TabPanel {
+    state: Entity<TabPanelState>,
+}
+
+impl TabPanel {
+    pub fn new(state: &Entity<TabPanelState>) -> Self {
+        Self {
+            state: state.clone(),
+        }
+    }
+}
+
+impl RenderOnce for TabPanel {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let state = self.state.read(cx);
+
+        v_flex()
+            .size_full()
+            .child(
+                h_flex()
+                    .id("panel-tab-bar")
+                    .gap_1()
+                    .w_full()
+                    .pr_1()
+                    .bg(cx.theme().tab_bar)
+                    .h(px(32.0))
+                    .overflow_x_scroll()
+                    .child(
+                        TabBar::new("panel-tabs")
+                            .selected_index(state.active_tab)
+                            .on_click(window.listener_for(&self.state, |state, idx, _, _| {
+                                state.active_tab = *idx;
+                            }))
+                            .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
+                                Tab::new().child(
+                                    h_flex()
+                                        .id(format!("panel-tab-{}", idx))
+                                        .gap_1p5()
+                                        .items_center()
+                                        //.hover(|style| style.bg(cx.theme().secondary_hover))
+                                        .on_hover(window.listener_for(
+                                            &self.state,
+                                            move |state, is_hovered: &bool, _, cx| {
+                                                state.hovered_tab = is_hovered.then_some(idx);
+                                                cx.notify();
+                                            },
+                                        ))
+                                        .child(Icon::from(tab.icon()).xsmall())
+                                        .child(tab.label())
+                                        .child(
+                                            Button::new(format!("button-close-{}", idx))
+                                                .icon(IconName::X)
+                                                .ghost()
+                                                .xsmall()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .on_click(window.listener_for(
+                                                    &self.state,
+                                                    move |state, _, _, cx| {
+                                                        state.close_tab(idx);
+                                                        cx.stop_propagation();
+                                                    },
+                                                )),
+                                        ),
+                                )
+                            })),
+                    )
+                    .child(
+                        Button::new("button-add-tab")
+                            .icon(IconName::Plus)
+                            .ghost()
+                            .small()
+                            .on_click(window.listener_for(&self.state, |state, _, _, _| {
+                                state.add_tab();
+                            })),
+                    ),
+            )
+            .when(!state.tabs.is_empty(), |this| {
+                this.child(state.active_tab().content())
+            })
     }
 }

@@ -1,26 +1,29 @@
 use std::sync::Arc;
 
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, Task,
-    Window, div, px,
+    AppContext, Context, Entity, IntoElement, ParentElement, Render, Subscription, Task, Window, px,
 };
 use gpui_component::resizable::{h_resizable, resizable_panel};
 use migris::{driver::Driver, mysql::MySqlConnector};
 
 use crate::{
-    components::panels::{ConnectionPanel, ConnectionPanelEvent, ConnectionPanelState},
+    components::panels::{
+        ConnectionPanel, ConnectionPanelEvent, ConnectionPanelState, TabPanel, TabPanelState,
+    },
     models::ConnectionLoadData,
 };
 
 pub struct Application {
     driver: Option<Arc<dyn Driver>>,
     connection_panel: Entity<ConnectionPanelState>,
+    tab_panel: Entity<TabPanelState>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Application {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
+        let tab_panel = cx.new(|_| TabPanelState::new());
         let _subscriptions = vec![cx.subscribe(
             &connection_panel,
             |_, _, event: &ConnectionPanelEvent, cx| match event {
@@ -31,6 +34,7 @@ impl Application {
         Self {
             driver: None,
             connection_panel,
+            tab_panel,
             _subscriptions,
         }
     }
@@ -74,6 +78,6 @@ impl Render for Application {
                     .size(px(300.0))
                     .child(ConnectionPanel::new(&self.connection_panel)),
             )
-            .child(resizable_panel().child(div().size_full().child("TABS PANEL")))
+            .child(resizable_panel().child(TabPanel::new(&self.tab_panel)))
     }
 }

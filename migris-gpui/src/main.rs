@@ -2,6 +2,7 @@ mod app;
 mod assets;
 mod components;
 mod models;
+mod tabs;
 
 use gpui::{AppContext, WindowOptions};
 use gpui_component::{Root, ThemeMode};
