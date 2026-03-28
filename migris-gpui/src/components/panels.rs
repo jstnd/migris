@@ -15,7 +15,7 @@ use gpui_component::{
     tree::{self, TreeItem, TreeState},
     v_flex,
 };
-use migris::driver::{Entity as MigrisEntity, EntityKind};
+use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
     components::icon::IconName,

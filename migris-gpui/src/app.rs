@@ -4,7 +4,7 @@ use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, Subscription, Task, Window, px,
 };
 use gpui_component::resizable::{h_resizable, resizable_panel};
-use migris::{driver::Driver, mysql::MySqlConnector};
+use migris::{Driver, mysql::MySqlConnection};
 
 use crate::{
     components::panels::{
@@ -42,7 +42,7 @@ impl Application {
     fn connection_added(cx: &mut Context<Self>) {
         let task: Task<Result<ConnectionLoadData, anyhow::Error>> = cx.spawn(async |_, _| {
             let driver: Arc<dyn Driver> =
-                Arc::new(MySqlConnector::new_with_pool("mysql://root:root@localhost").await?);
+                Arc::new(MySqlConnection::new("mysql://root:root@localhost").await?);
 
             let entities = driver.entities().await?;
             Ok(ConnectionLoadData { driver, entities })

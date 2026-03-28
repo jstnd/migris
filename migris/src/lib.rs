@@ -1,11 +1,14 @@
 pub mod common;
 mod connectors;
-pub mod driver;
+mod drivers;
+mod entity;
 mod options;
 mod schema;
 mod value;
 
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
+pub use drivers::Driver;
+pub use entity::{Entity, EntityKind};
 pub use options::{ReadOptions, WriteOptions};
 pub use schema::{Column, ColumnFlag, ColumnType, Row, Schema, Table};
 pub use value::Value;
@@ -16,6 +19,7 @@ pub mod csv {
 
 pub mod mysql {
     pub use crate::connectors::mysql::{MySqlConnector, MySqlDataType};
+    pub use crate::drivers::mysql::MySqlConnection;
 }
 
 type MigrisResult<T> = Result<T, MigrisError>;
