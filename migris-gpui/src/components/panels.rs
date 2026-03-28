@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui::{
     App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    ActiveTheme, Icon, Sizable, StyledExt,
+    ActiveTheme, Icon, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputEvent, InputState},
@@ -153,39 +153,19 @@ impl RenderOnce for ConnectionPanel {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let search_state = &self.state.read(cx).search_state;
 
-        div()
+        v_flex()
             .p_1()
-            .v_flex()
             .size_full()
             .gap_1()
             .items_center()
             .child(
-                div()
-                    .h_flex()
+                h_flex()
                     .w_full()
                     .gap_1()
                     .child(
                         Input::new(search_state)
-                            .prefix(Icon::from(IconName::Search))
-                            .when(!search_state.read(cx).value().is_empty(), |this| {
-                                this.suffix(
-                                    Button::new("button-search-clear")
-                                        .icon(IconName::X)
-                                        .compact()
-                                        .ghost()
-                                        .xsmall()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .on_click({
-                                            let state = search_state.clone();
-                                            move |_, window, cx| {
-                                                state.update(cx, |state, cx| {
-                                                    state.set_value("", window, cx);
-                                                    state.focus(window, cx);
-                                                });
-                                            }
-                                        }),
-                                )
-                            }),
+                            .cleanable(true)
+                            .prefix(Icon::from(IconName::Search)),
                     )
                     .child(
                         Button::new("button-add-connection")
@@ -245,13 +225,20 @@ impl RenderOnce for ConnectionPanel {
     }
 }
 
+/// The state for use with a [`TabPanel`].
 pub struct TabPanelState {
+    /// The tabs shown in the panel.
     tabs: Vec<Box<dyn TabView>>,
+
+    /// The index of the active tab.
     active_tab: usize,
+
+    /// The index of the currently hovered tab, if any.
     hovered_tab: Option<usize>,
 }
 
 impl TabPanelState {
+    /// Creates a new [`TabPanelState`].
     pub fn new() -> Self {
         Self {
             tabs: Vec::new(),
@@ -260,22 +247,39 @@ impl TabPanelState {
         }
     }
 
+    /// Returns a reference to the active tab.
     #[allow(clippy::borrowed_box)]
     fn active_tab(&self) -> &Box<dyn TabView> {
         &self.tabs[self.active_tab]
     }
 
-    fn add_tab(&mut self) {
-        self.tabs.push(Box::new(QueryTab));
+    /// Adds a new tab to the panel.
+    fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let tab: Box<dyn TabView> = Box::new(QueryTab::new(window, cx, self.next_query_number()));
+        self.tabs.push(tab);
         self.active_tab = self.tabs.len() - 1;
     }
 
+    /// Closes the tab at the given index.
     fn close_tab(&mut self, idx: usize) {
         self.tabs.remove(idx);
 
         if self.active_tab >= idx && self.active_tab > 0 {
             self.active_tab -= 1;
         }
+    }
+
+    /// Calculates and returns what the next query tab number should be based on the current query tabs.
+    ///
+    /// The next query tab number should always be equal to the highest current query tab number plus one.
+    fn next_query_number(&self) -> usize {
+        self.tabs
+            .iter()
+            .filter_map(|tab| tab.as_any().downcast_ref::<QueryTab>())
+            .max_by_key(|tab| tab.number())
+            .map(|tab| tab.number())
+            .unwrap_or_default()
+            + 1
     }
 }
 
@@ -351,8 +355,8 @@ impl RenderOnce for TabPanel {
                             .icon(IconName::Plus)
                             .ghost()
                             .small()
-                            .on_click(window.listener_for(&self.state, |state, _, _, _| {
-                                state.add_tab();
+                            .on_click(window.listener_for(&self.state, |state, _, window, cx| {
+                                state.add_tab(window, cx);
                             })),
                     ),
             )
