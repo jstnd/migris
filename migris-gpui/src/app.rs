@@ -1,17 +1,22 @@
 use std::sync::Arc;
 
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, Subscription, Task, Window, px,
+    AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Subscription,
+    Task, Window, px,
 };
 use gpui_component::resizable::{h_resizable, resizable_panel};
 use migris::{Driver, mysql::MySqlConnection};
 
 use crate::{
-    components::panels::{
-        ConnectionPanel, ConnectionPanelEvent, ConnectionPanelState, TabPanel, TabPanelState,
-    },
+    components::panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
     models::ConnectionLoadData,
 };
+
+#[derive(Clone)]
+pub enum ApplicationEvent {
+    AddConnection,
+    RunQuery(SharedString),
+}
 
 pub struct Application {
     driver: Option<Arc<dyn Driver>>,
@@ -24,12 +29,18 @@ impl Application {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
         let tab_panel = cx.new(|_| TabPanelState::new());
-        let _subscriptions = vec![cx.subscribe(
-            &connection_panel,
-            |_, _, event: &ConnectionPanelEvent, cx| match event {
-                ConnectionPanelEvent::ConnectionAdded => Self::connection_added(cx),
-            },
-        )];
+        let _subscriptions = Vec::from([
+            cx.subscribe(&connection_panel, |_, _, event: &ApplicationEvent, cx| {
+                if let ApplicationEvent::AddConnection = event {
+                    Self::add_connection(cx)
+                }
+            }),
+            cx.subscribe(&tab_panel, |_, _, event: &ApplicationEvent, _| {
+                if let ApplicationEvent::RunQuery(query) = event {
+                    Self::run_query(query.clone());
+                }
+            }),
+        ]);
 
         Self {
             driver: None,
@@ -39,7 +50,7 @@ impl Application {
         }
     }
 
-    fn connection_added(cx: &mut Context<Self>) {
+    fn add_connection(cx: &mut Context<Self>) {
         let task: Task<Result<ConnectionLoadData, anyhow::Error>> = cx.spawn(async |_, _| {
             let driver: Arc<dyn Driver> =
                 Arc::new(MySqlConnection::new("mysql://root:root@localhost").await?);
@@ -67,6 +78,10 @@ impl Application {
             Err(e) => println!("ERROR LOADING: {}", e),
         })
         .detach();
+    }
+
+    fn run_query(query: SharedString) {
+        println!("{}", query);
     }
 }
 

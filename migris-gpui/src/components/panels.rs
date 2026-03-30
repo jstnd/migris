@@ -18,13 +18,10 @@ use gpui_component::{
 use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
+    app::ApplicationEvent,
     components::icon::IconName,
-    tabs::{TabView, query::QueryTab},
+    tabs::{TabKind, TabView},
 };
-
-pub enum ConnectionPanelEvent {
-    ConnectionAdded,
-}
 
 pub struct ConnectionPanelState {
     search_state: Entity<InputState>,
@@ -42,6 +39,8 @@ pub struct ConnectionPanelState {
 
     _subscriptions: Vec<Subscription>,
 }
+
+impl EventEmitter<ApplicationEvent> for ConnectionPanelState {}
 
 impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -134,8 +133,6 @@ impl ConnectionPanelState {
     }
 }
 
-impl EventEmitter<ConnectionPanelEvent> for ConnectionPanelState {}
-
 #[derive(IntoElement)]
 pub struct ConnectionPanel {
     state: Entity<ConnectionPanelState>,
@@ -174,7 +171,7 @@ impl RenderOnce for ConnectionPanel {
                             .compact()
                             .ghost()
                             .on_click(window.listener_for(&self.state, |_, _, _, cx| {
-                                cx.emit(ConnectionPanelEvent::ConnectionAdded);
+                                cx.emit(ApplicationEvent::AddConnection);
                             })),
                     ),
             )
@@ -228,14 +225,21 @@ impl RenderOnce for ConnectionPanel {
 /// The state for use with a [`TabPanel`].
 pub struct TabPanelState {
     /// The tabs shown in the panel.
-    tabs: Vec<Box<dyn TabView>>,
+    tabs: Vec<Entity<TabView>>,
 
     /// The index of the active tab.
     active_tab: usize,
 
     /// The index of the currently hovered tab, if any.
     hovered_tab: Option<usize>,
+
+    /// The subscriptions for the panel.
+    /// 
+    /// These will mainly be used for emitting events from tabs upwards to the main application.
+    subscriptions: Vec<Subscription>,
 }
+
+impl EventEmitter<ApplicationEvent> for TabPanelState {}
 
 impl TabPanelState {
     /// Creates a new [`TabPanelState`].
@@ -244,26 +248,40 @@ impl TabPanelState {
             tabs: Vec::new(),
             active_tab: 0,
             hovered_tab: None,
+            subscriptions: Vec::new(),
         }
     }
 
     /// Returns a reference to the active tab.
-    #[allow(clippy::borrowed_box)]
-    fn active_tab(&self) -> &Box<dyn TabView> {
+    fn active_tab(&self) -> &Entity<TabView> {
         &self.tabs[self.active_tab]
     }
 
     /// Adds a new tab to the panel.
     fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let tab: Box<dyn TabView> = Box::new(QueryTab::new(window, cx, self.next_query_number()));
+        let tab = cx.new(|cx| {
+            let kind = TabKind::Query(self.next_query_number(cx));
+            TabView::new(window, cx, kind)
+        });
+
+        let subscription = cx.subscribe(&tab, |_, _, event, cx| {
+            // Emit the event upwards.
+            cx.emit(event.clone());
+        });
+
         self.tabs.push(tab);
+        self.subscriptions.push(subscription);
+
+        // Set the active tab to be the newly added tab.
         self.active_tab = self.tabs.len() - 1;
     }
 
     /// Closes the tab at the given index.
     fn close_tab(&mut self, idx: usize) {
         self.tabs.remove(idx);
+        let _ = self.subscriptions.remove(idx);
 
+        // Move the active tab index if the active tab is after the tab that is being closed.
         if self.active_tab >= idx && self.active_tab > 0 {
             self.active_tab -= 1;
         }
@@ -272,12 +290,14 @@ impl TabPanelState {
     /// Calculates and returns what the next query tab number should be based on the current query tabs.
     ///
     /// The next query tab number should always be equal to the highest current query tab number plus one.
-    fn next_query_number(&self) -> usize {
+    fn next_query_number(&self, cx: &App) -> usize {
         self.tabs
             .iter()
-            .filter_map(|tab| tab.as_any().downcast_ref::<QueryTab>())
-            .max_by_key(|tab| tab.number())
-            .map(|tab| tab.number())
+            .map(|tab| {
+                let TabKind::Query(number) = tab.read(cx).kind();
+                *number
+            })
+            .max()
             .unwrap_or_default()
             + 1
     }
@@ -318,6 +338,8 @@ impl RenderOnce for TabPanel {
                                 state.active_tab = *idx;
                             }))
                             .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
+                                let tab = tab.read(cx);
+
                                 Tab::new().child(
                                     h_flex()
                                         .id(format!("panel-tab-{}", idx))
@@ -332,7 +354,7 @@ impl RenderOnce for TabPanel {
                                             },
                                         ))
                                         .child(Icon::from(tab.icon()).xsmall())
-                                        .child(tab.label())
+                                        .child(tab.label(cx))
                                         .child(
                                             Button::new(format!("button-close-{}", idx))
                                                 .icon(IconName::X)
@@ -361,7 +383,7 @@ impl RenderOnce for TabPanel {
                     ),
             )
             .when(!state.tabs.is_empty(), |this| {
-                this.child(state.active_tab().content())
+                this.child(state.active_tab().read(cx).content(window, cx))
             })
     }
 }

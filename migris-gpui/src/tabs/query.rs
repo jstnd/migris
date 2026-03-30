@@ -1,62 +1,97 @@
-use gpui::{App, AppContext, Element, Entity, ParentElement, SharedString, Styled, Window};
-use gpui_component::v_flex;
+use gpui::{
+    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, SharedString,
+    Styled, Subscription, Window,
+};
+use gpui_component::{ActiveTheme, Disableable, Icon, button::Button, h_flex, v_flex};
 
 use crate::{
+    app::ApplicationEvent,
     components::{
         editor::{Editor, EditorState},
         icon::IconName,
     },
-    tabs::TabView,
 };
 
-pub struct QueryTab {
+struct QueryTabState {
     /// The state for the editor.
     editor_state: Entity<EditorState>,
+}
+
+impl EventEmitter<ApplicationEvent> for QueryTabState {}
+
+impl QueryTabState {
+    /// Creates a new [`QueryTabState`].
+    fn new(window: &mut Window, cx: &mut App) -> Self {
+        let editor_state = cx.new(|cx| EditorState::new(window, cx));
+        Self { editor_state }
+    }
+
+    fn run_query(&self, cx: &mut Context<Self>) {
+        let query = self.editor_state.read(cx).value(cx);
+        cx.emit(ApplicationEvent::RunQuery(query));
+    }
+}
+
+pub struct QueryTab {
+    /// The state for the query tab.
+    state: Entity<QueryTabState>,
 
     /// The query tab label.
     label: SharedString,
 
-    /// The query tab number.
-    number: usize,
+    /// The subscription for the tab.
+    ///
+    /// This will mainly be used for emitting events from the tab upwards.
+    _subscription: Subscription,
 }
+
+impl EventEmitter<ApplicationEvent> for QueryTab {}
 
 impl QueryTab {
     /// Creates a new [`QueryTab`].
-    pub fn new(window: &mut Window, cx: &mut App, number: usize) -> Self {
-        let editor_state = cx.new(|cx| EditorState::new(window, cx));
+    pub fn new(window: &mut Window, cx: &mut Context<Self>, number: usize) -> Self {
+        let state = cx.new(|cx| QueryTabState::new(window, cx));
+        let _subscription = cx.subscribe(&state, |_, _, event, cx| {
+            // Emit the event upwards.
+            cx.emit(event.clone());
+        });
 
         Self {
-            editor_state,
+            state,
             label: SharedString::from(format!("Query #{}", number)),
-            number,
+            _subscription,
         }
     }
 
-    /// Returns the query tab's number.
-    pub fn number(&self) -> usize {
-        self.number
-    }
-}
+    /// Returns the content for the tab.
+    pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
+        let state = self.state.read(cx);
+        let is_editor_empty = state.editor_state.read(cx).is_empty(cx);
 
-impl TabView for QueryTab {
-    fn icon(&self) -> IconName {
-        IconName::Code
-    }
-
-    fn label(&self) -> SharedString {
-        self.label.clone()
-    }
-
-    fn content(&self) -> gpui::AnyElement {
         v_flex()
+            .pt_1()
+            .gap_1()
             .size_full()
-            .items_center()
-            .justify_center()
-            .child(Editor::new(&self.editor_state))
-            .into_any()
+            .child(
+                h_flex().pl_1().child(
+                    Button::new("button-run")
+                        .icon(Icon::from(IconName::Play).text_color({
+                            let opacity = if is_editor_empty { 0.25 } else { 1.0 };
+                            cx.theme().button_primary.opacity(opacity)
+                        }))
+                        .label("Run")
+                        .compact()
+                        .disabled(is_editor_empty)
+                        .on_click(window.listener_for(&self.state, |state, _, _, cx| {
+                            state.run_query(cx);
+                        })),
+                ),
+            )
+            .child(Editor::new(&state.editor_state))
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    /// Returns the label for the tab.
+    pub fn label(&self) -> SharedString {
+        self.label.clone()
     }
 }

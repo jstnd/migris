@@ -1,4 +1,4 @@
-use gpui::{App, AppContext, Context, Entity, IntoElement, RenderOnce, Styled, Window};
+use gpui::{App, AppContext, Context, Entity, IntoElement, RenderOnce, SharedString, Styled, Window};
 use gpui_component::input::{Input, InputState, TabSize};
 
 /// The state for use with an [`Editor`].
@@ -20,6 +20,16 @@ impl EditorState {
         });
 
         Self { input_state }
+    }
+
+    /// Returns whether the editor is empty, excluding whitespace.
+    pub fn is_empty(&self, cx: &App) -> bool {
+        self.input_state.read(cx).value().trim().is_empty()
+    }
+
+    /// Returns the content within the editor.
+    pub fn value(&self, cx: &App) -> SharedString {
+        self.input_state.read(cx).value()
     }
 }
 
