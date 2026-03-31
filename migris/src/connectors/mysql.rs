@@ -5,7 +5,7 @@ use futures_util::StreamExt;
 use rust_decimal::Decimal;
 use sqlx::{
     Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type, ValueRef,
-    mysql::{MySqlArguments, MySqlConnectOptions, MySqlValueRef},
+    mysql::{MySqlArguments, MySqlConnectOptions, MySqlRow, MySqlValueRef},
     query::Query,
 };
 
@@ -68,7 +68,7 @@ impl Connector for MySqlConnector {
 
         let stream = sqlx::query(query).fetch(pool).map(move |row| {
             row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
-                .and_then(|row| Row::from_mysql(row, &stream_columns))
+                .and_then(|row| Row::from_mysql(&row, &stream_columns))
         });
 
         Ok(ConnectorData::new(columns, Box::pin(stream)))
@@ -578,7 +578,7 @@ impl std::fmt::Display for MySqlDataType {
 }
 
 impl Row {
-    fn from_mysql(sqlx_row: sqlx::mysql::MySqlRow, columns: &[Column]) -> MigrisResult<Self> {
+    pub fn from_mysql(sqlx_row: &MySqlRow, columns: &[Column]) -> MigrisResult<Self> {
         let mut row = Self::new();
 
         for column in columns {

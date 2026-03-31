@@ -9,6 +9,10 @@ pub struct Column {
 }
 
 impl Column {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn is_nullable(&self) -> bool {
         self.flags.contains(&ColumnFlag::Nullable)
     }

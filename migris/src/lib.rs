@@ -1,5 +1,6 @@
 pub mod common;
 mod connectors;
+mod data;
 mod drivers;
 mod entity;
 mod options;
@@ -7,6 +8,7 @@ mod schema;
 mod value;
 
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
+pub use data::{QueryData, QueryResult};
 pub use drivers::Driver;
 pub use entity::{Entity, EntityKind};
 pub use options::{ReadOptions, WriteOptions};

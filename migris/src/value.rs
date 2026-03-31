@@ -1,5 +1,3 @@
-use crate::{MigrisError, MigrisResult};
-
 #[derive(Debug)]
 pub enum Value {
     Null,
@@ -20,16 +18,14 @@ pub enum Value {
     U64(u64),
 }
 
-impl Value {
-    pub fn to_string(self) -> MigrisResult<String> {
-        Ok(match self {
-            Value::Null => "".into(),
-            Value::Bytes(value) => {
-                String::from_utf8(value).map_err(|err| MigrisError::ValueError(err.to_string()))?
-            }
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display = match self {
+            Value::Null => String::from(""),
+            Value::Bytes(value) => String::from_utf8(value.to_vec()).unwrap_or_default(),
             Value::Date(value) => value.to_string(),
             Value::Decimal(value) => value.to_string(),
-            Value::String(value) => value,
+            Value::String(value) => value.to_string(),
             Value::Time(value) => value.to_string(),
             Value::F32(value) => value.to_string(),
             Value::F64(value) => value.to_string(),
@@ -41,6 +37,8 @@ impl Value {
             Value::U16(value) => value.to_string(),
             Value::U32(value) => value.to_string(),
             Value::U64(value) => value.to_string(),
-        })
+        };
+
+        write!(f, "{}", display)
     }
 }

@@ -125,7 +125,7 @@ impl Row {
         let mut record = StringRecord::new();
 
         for value in self.values {
-            record.push_field(&value.to_string()?);
+            record.push_field(&value.to_string());
         }
 
         Ok(record)
