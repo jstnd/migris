@@ -1,22 +1,18 @@
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Subscription,
     Task, Window, px,
 };
 use gpui_component::resizable::{h_resizable, resizable_panel};
-use migris::{Driver, mysql::MySqlConnection};
+use migris::{Driver, QueryResult, mysql::MySqlConnection};
 
 use crate::{
     components::panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
+    event::{ApplicationEvent, EventSource},
     models::ConnectionLoadData,
 };
-
-#[derive(Clone)]
-pub enum ApplicationEvent {
-    AddConnection,
-    RunQuery(SharedString),
-}
 
 pub struct Application {
     driver: Option<Arc<dyn Driver>>,
@@ -30,14 +26,14 @@ impl Application {
         let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
         let tab_panel = cx.new(|_| TabPanelState::new());
         let _subscriptions = Vec::from([
-            cx.subscribe(&connection_panel, |_, _, event: &ApplicationEvent, cx| {
+            cx.subscribe(&connection_panel, |_, _, event, cx| {
                 if let ApplicationEvent::AddConnection = event {
                     Self::add_connection(cx)
                 }
             }),
-            cx.subscribe(&tab_panel, |_, _, event: &ApplicationEvent, _| {
-                if let ApplicationEvent::RunQuery(query) = event {
-                    Self::run_query(query.clone());
+            cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
+                if let ApplicationEvent::RunQuery(query, source) = event {
+                    this.run_query(window, cx, query.clone(), *source);
                 }
             }),
         ]);
@@ -80,8 +76,43 @@ impl Application {
         .detach();
     }
 
-    fn run_query(query: SharedString) {
-        println!("{}", query);
+    fn run_query(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        query: SharedString,
+        source: EventSource,
+    ) {
+        let task: Task<Result<QueryResult, anyhow::Error>> = cx.spawn(async move |this, cx| {
+            let driver = this.read_with(cx, |this, _| {
+                let Some(driver) = &this.driver else {
+                    // TODO: show error modal or remove need for this
+                    return Err(anyhow!("ERROR: NO CONNECTION LOADED"));
+                };
+
+                Ok(driver.clone())
+            })?;
+
+            Ok(driver?.query(&query).await?)
+        });
+
+        cx.spawn_in(window, async move |this, cx| match task.await {
+            Ok(result) => {
+                let result = this.update_in(cx, |this, window, cx| match source {
+                    EventSource::Tab(idx) => {
+                        this.tab_panel.update(cx, |state, cx| {
+                            state.load_result(window, cx, idx, result);
+                        });
+                    }
+                });
+
+                if let Err(e) = result {
+                    println!("ERROR UPDATING FROM QUERY: {}", e);
+                }
+            }
+            Err(e) => println!("QUERY ERROR: {}", e),
+        })
+        .detach();
     }
 }
 

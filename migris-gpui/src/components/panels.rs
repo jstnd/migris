@@ -15,11 +15,11 @@ use gpui_component::{
     tree::{self, TreeItem, TreeState},
     v_flex,
 };
-use migris::{Entity as MigrisEntity, EntityKind};
+use migris::{Entity as MigrisEntity, EntityKind, QueryResult};
 
 use crate::{
-    app::ApplicationEvent,
     components::icon::IconName,
+    event::{ApplicationEvent, EventSource, TabEvent},
     tabs::{TabKind, TabView},
 };
 
@@ -234,7 +234,7 @@ pub struct TabPanelState {
     hovered_tab: Option<usize>,
 
     /// The subscriptions for the panel.
-    /// 
+    ///
     /// These will mainly be used for emitting events from tabs upwards to the main application.
     subscriptions: Vec<Subscription>,
 }
@@ -252,6 +252,20 @@ impl TabPanelState {
         }
     }
 
+    /// Loads the given query result into the tab at the given tab index.
+    pub fn load_result(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        tab_idx: usize,
+        result: QueryResult,
+    ) {
+        let tab = &self.tabs[tab_idx];
+        tab.update(cx, |this, cx| {
+            this.load_result(window, cx, result);
+        });
+    }
+
     /// Returns a reference to the active tab.
     fn active_tab(&self) -> &Entity<TabView> {
         &self.tabs[self.active_tab]
@@ -264,9 +278,14 @@ impl TabPanelState {
             TabView::new(window, cx, kind)
         });
 
-        let subscription = cx.subscribe(&tab, |_, _, event, cx| {
-            // Emit the event upwards.
-            cx.emit(event.clone());
+        let subscription = cx.subscribe(&tab, |this, _, event, cx| {
+            let event = match event {
+                TabEvent::RunQuery(query) => {
+                    ApplicationEvent::RunQuery(query.clone(), EventSource::Tab(this.active_tab))
+                }
+            };
+
+            cx.emit(event);
         });
 
         self.tabs.push(tab);

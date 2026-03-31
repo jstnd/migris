@@ -3,8 +3,9 @@ pub mod query;
 use gpui::{
     App, AppContext, Context, Entity, EventEmitter, IntoElement, SharedString, Subscription, Window,
 };
+use migris::QueryResult;
 
-use crate::{app::ApplicationEvent, components::icon::IconName, tabs::query::QueryTab};
+use crate::{components::icon::IconName, event::TabEvent, tabs::query::QueryTab};
 
 pub enum TabKind {
     Query(usize),
@@ -27,7 +28,7 @@ pub struct TabView {
     _subscription: Subscription,
 }
 
-impl EventEmitter<ApplicationEvent> for TabView {}
+impl EventEmitter<TabEvent> for TabView {}
 
 impl TabView {
     /// Creates a new [`TabView`] of the given kind.
@@ -76,6 +77,22 @@ impl TabView {
     pub fn label(&self, cx: &App) -> SharedString {
         match &self.tab {
             TabState::Query(tab) => tab.read(cx).label(),
+        }
+    }
+
+    /// Loads the given query result into the tab.
+    pub fn load_result(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        result: QueryResult,
+    ) {
+        match &self.tab {
+            TabState::Query(tab) => {
+                tab.update(cx, |this, cx| {
+                    this.load_result(window, cx, result);
+                });
+            }
         }
     }
 }

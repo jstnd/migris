@@ -1,6 +1,7 @@
 mod app;
 mod assets;
 mod components;
+mod event;
 mod models;
 mod tabs;
 
