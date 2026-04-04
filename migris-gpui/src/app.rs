@@ -33,7 +33,7 @@ impl Application {
             }),
             cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
                 if let ApplicationEvent::RunQuery(query, source) = event {
-                    this.run_query(window, cx, query.clone(), *source);
+                    this.run_query(window, cx, query, *source);
                 }
             }),
         ]);
@@ -80,39 +80,52 @@ impl Application {
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
-        query: SharedString,
+        query: &SharedString,
         source: EventSource,
     ) {
-        let task: Task<Result<QueryResult, anyhow::Error>> = cx.spawn(async move |this, cx| {
-            let driver = this.read_with(cx, |this, _| {
-                let Some(driver) = &this.driver else {
-                    // TODO: show error modal or remove need for this
-                    return Err(anyhow!("ERROR: NO CONNECTION LOADED"));
-                };
+        let mut tasks: Vec<Task<Result<QueryResult, anyhow::Error>>> = Vec::new();
 
-                Ok(driver.clone())
-            })?;
+        for statement in migris::sql::split(query) {
+            tasks.push(cx.spawn(async move |this, cx| {
+                let driver = this.read_with(cx, |this, _| {
+                    let Some(driver) = &this.driver else {
+                        // TODO: show error modal or remove need for this
+                        return Err(anyhow!("ERROR: NO CONNECTION LOADED"));
+                    };
 
-            Ok(driver?.query(&query).await?)
-        });
+                    Ok(driver.clone())
+                })?;
 
-        cx.spawn_in(window, async move |this, cx| match task.await {
-            Ok(result) => {
-                let result = this.update_in(cx, |this, window, cx| match source {
-                    EventSource::Tab(idx) => {
-                        this.tab_panel.update(cx, |state, cx| {
-                            state.load_result(window, cx, idx, result);
-                        });
+                Ok(driver?.query(&statement.sql).await?)
+            }));
+        }
+
+        if !tasks.is_empty() {
+            cx.spawn_in(window, async move |this, cx| {
+                for task in tasks {
+                    match task.await {
+                        Ok(result) => {
+                            let result = this.update_in(cx, |this, window, cx| match source {
+                                EventSource::Tab(idx) => {
+                                    this.tab_panel.update(cx, |state, cx| {
+                                        state.load_result(window, cx, idx, result);
+                                    });
+                                }
+                            });
+
+                            if let Err(e) = result {
+                                println!("ERROR UPDATING FROM QUERY: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            println!("QUERY ERROR: {}", e);
+                            break;
+                        }
                     }
-                });
-
-                if let Err(e) = result {
-                    println!("ERROR UPDATING FROM QUERY: {}", e);
                 }
-            }
-            Err(e) => println!("QUERY ERROR: {}", e),
-        })
-        .detach();
+            })
+            .detach();
+        }
     }
 }
 

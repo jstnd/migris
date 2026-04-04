@@ -23,6 +23,8 @@ fn main() -> anyhow::Result<()> {
     app.run(|cx| {
         gpui_component::init(cx);
         gpui_component::Theme::change(ThemeMode::Dark, None, cx);
+        gpui_component::Theme::global_mut(cx).scrollbar_show =
+            gpui_component::scroll::ScrollbarShow::Always;
 
         cx.spawn(async move |cx| {
             cx.open_window(WindowOptions::default(), |window, cx| {

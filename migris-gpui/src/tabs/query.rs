@@ -1,12 +1,13 @@
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, SharedString,
-    Styled, Subscription, Window, prelude::FluentBuilder,
+    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Icon,
     button::Button,
     h_flex,
     resizable::{resizable_panel, v_resizable},
+    tab::{Tab, TabBar},
     v_flex,
 };
 use migris::QueryResult;
@@ -24,8 +25,11 @@ struct QueryTabState {
     /// The state for the editor.
     editor_state: Entity<EditorState>,
 
-    /// The state for the table showing query results.
-    table: Option<Entity<QueryTableState>>,
+    /// The states for the tables showing query results.
+    tables: Vec<Entity<QueryTableState>>,
+
+    /// The index of the active table tab.
+    active_table: usize,
 }
 
 impl EventEmitter<TabEvent> for QueryTabState {}
@@ -37,14 +41,26 @@ impl QueryTabState {
 
         Self {
             editor_state,
-            table: None,
+            tables: Vec::new(),
+            active_table: 0,
         }
+    }
+
+    /// Returns a reference to the active table.
+    fn active_table(&self) -> &Entity<QueryTableState> {
+        &self.tables[self.active_table]
+    }
+
+    /// Clears the current results from the tab.
+    fn clear_results(&mut self) {
+        self.tables.clear();
+        self.active_table = 0;
     }
 
     /// Loads the given query result into the tab.
     fn load_result(&mut self, window: &mut Window, cx: &mut Context<Self>, result: QueryResult) {
         let table = cx.new(|cx| QueryTableState::new(window, cx, result.data));
-        self.table = Some(table);
+        self.tables.push(table);
     }
 
     /// Triggers an event to run the query in the editor.
@@ -114,6 +130,7 @@ impl QueryTab {
                                     .on_click(window.listener_for(
                                         &self.state,
                                         |state, _, _, cx| {
+                                            state.clear_results();
                                             state.run_query(cx);
                                         },
                                     )),
@@ -122,8 +139,33 @@ impl QueryTab {
                         .child(Editor::new(&state.editor_state)),
                 ),
             )
-            .child(resizable_panel().when(state.table.is_some(), |this| {
-                this.child(QueryTable::new(state.table.as_ref().unwrap()))
+            .child(resizable_panel().when(!state.tables.is_empty(), |this| {
+                this.child(
+                    v_flex()
+                        .size_full()
+                        .child(
+                            h_flex()
+                                .id("table-tab-bar")
+                                .w_full()
+                                .overflow_x_scroll()
+                                .child(
+                                    TabBar::new("table-tabs")
+                                        .selected_index(state.active_table)
+                                        .on_click(window.listener_for(
+                                            &self.state,
+                                            |state, idx, _, _| {
+                                                state.active_table = *idx;
+                                            },
+                                        ))
+                                        .children(state.tables.iter().enumerate().map(
+                                            |(idx, _)| {
+                                                Tab::new().label(format!("Result #{}", idx + 1))
+                                            },
+                                        )),
+                                ),
+                        )
+                        .child(QueryTable::new(state.active_table())),
+                )
             }))
     }
 
