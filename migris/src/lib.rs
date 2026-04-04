@@ -5,6 +5,7 @@ mod drivers;
 mod entity;
 mod options;
 mod schema;
+pub mod sql;
 mod value;
 
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
