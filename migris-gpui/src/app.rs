@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Subscription,
     Task, Window, px,
 };
 use gpui_component::resizable::{h_resizable, resizable_panel};
-use migris::{Driver, QueryResult, mysql::MySqlConnection};
+use migris::{Driver, mysql::MySqlConnection};
 
 use crate::{
     components::panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
@@ -33,7 +32,7 @@ impl Application {
             }),
             cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
                 if let ApplicationEvent::RunQuery(query, source) = event {
-                    this.run_query(window, cx, query, *source);
+                    this.run_query(window, cx, query.clone(), *source);
                 }
             }),
         ]);
@@ -80,52 +79,32 @@ impl Application {
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
-        query: &SharedString,
+        query: SharedString,
         source: EventSource,
     ) {
-        let mut tasks: Vec<Task<Result<QueryResult, anyhow::Error>>> = Vec::new();
+        // TODO: remove this unwrap
+        let driver = self.driver.clone().unwrap();
 
-        for statement in migris::sql::split(query) {
-            tasks.push(cx.spawn(async move |this, cx| {
-                let driver = this.read_with(cx, |this, _| {
-                    let Some(driver) = &this.driver else {
-                        // TODO: show error modal or remove need for this
-                        return Err(anyhow!("ERROR: NO CONNECTION LOADED"));
-                    };
+        cx.spawn_in(window, async move |this, cx| {
+            for statement in migris::sql::split(&query) {
+                let result = driver.query(&statement.sql).await;
 
-                    Ok(driver.clone())
-                })?;
-
-                Ok(driver?.query(&statement.sql).await?)
-            }));
-        }
-
-        if !tasks.is_empty() {
-            cx.spawn_in(window, async move |this, cx| {
-                for task in tasks {
-                    match task.await {
-                        Ok(result) => {
-                            let result = this.update_in(cx, |this, window, cx| match source {
-                                EventSource::Tab(idx) => {
-                                    this.tab_panel.update(cx, |state, cx| {
-                                        state.load_result(window, cx, idx, result);
-                                    });
-                                }
-                            });
-
-                            if let Err(e) = result {
-                                println!("ERROR UPDATING FROM QUERY: {}", e);
-                            }
-                        }
-                        Err(e) => {
-                            println!("QUERY ERROR: {}", e);
-                            break;
-                        }
+                match result {
+                    Ok(result) => {
+                        let _ = this.update_in(cx, |this, window, cx| match source {
+                            EventSource::Tab(idx) => this.tab_panel.update(cx, |state, cx| {
+                                state.load_result(window, cx, idx, result);
+                                cx.notify();
+                            }),
+                        });
+                    }
+                    Err(e) => {
+                        println!("QUERY ERROR: {}", e);
                     }
                 }
-            })
-            .detach();
-        }
+            }
+        })
+        .detach();
     }
 }
 
