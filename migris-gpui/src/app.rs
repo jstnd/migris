@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Subscription,
-    Task, Window, px,
+    AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
+    Subscription, Task, Window, px,
 };
-use gpui_component::resizable::{h_resizable, resizable_panel};
+use gpui_component::{
+    ActiveTheme, h_flex,
+    resizable::{h_resizable, resizable_panel},
+    v_flex,
+};
 use migris::{Driver, mysql::MySqlConnection};
 
 use crate::{
@@ -109,13 +113,28 @@ impl Application {
 }
 
 impl Render for Application {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        h_resizable("application-view")
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex()
+            .size_full()
             .child(
-                resizable_panel()
-                    .size(px(300.0))
-                    .child(ConnectionPanel::new(&self.connection_panel)),
+                h_resizable("application-view")
+                    .child(
+                        resizable_panel()
+                            .size(px(300.0))
+                            .child(ConnectionPanel::new(&self.connection_panel)),
+                    )
+                    .child(resizable_panel().child(TabPanel::new(&self.tab_panel))),
             )
-            .child(resizable_panel().child(TabPanel::new(&self.tab_panel)))
+            .child(
+                h_flex()
+                    .px_2()
+                    .w_full()
+                    .items_center()
+                    .border_t_1()
+                    .border_color(cx.theme().border)
+                    .text_color(cx.theme().muted_foreground)
+                    .text_sm()
+                    .child("localhost"),
+            )
     }
 }
