@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use gpui::{
     AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
-    Subscription, Task, Window, px,
+    Subscription, Task, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, h_flex,
+    progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
     v_flex,
 };
@@ -14,13 +15,17 @@ use migris::{Driver, mysql::MySqlConnection};
 use crate::{
     components::panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
     event::{ApplicationEvent, EventSource},
-    models::ConnectionLoadData,
+    models::{ConnectionLoadData, QueryProgress},
 };
 
 pub struct Application {
     driver: Option<Arc<dyn Driver>>,
     connection_panel: Entity<ConnectionPanelState>,
     tab_panel: Entity<TabPanelState>,
+
+    /// Tracks the progress of the running query, if any.
+    query_progress: Option<QueryProgress>,
+
     _subscriptions: Vec<Subscription>,
 }
 
@@ -45,6 +50,7 @@ impl Application {
             driver: None,
             connection_panel,
             tab_panel,
+            query_progress: None,
             _subscriptions,
         }
     }
@@ -90,16 +96,27 @@ impl Application {
         let driver = self.driver.clone().unwrap();
 
         cx.spawn_in(window, async move |this, cx| {
-            for statement in migris::sql::split(&query) {
+            let statements = migris::sql::split(&query);
+
+            // Initialize the query progress.
+            let _ = this.update(cx, |this, _| {
+                this.query_progress = Some(QueryProgress::new(statements.len()));
+            });
+
+            for (idx, statement) in statements.iter().enumerate() {
                 let result = driver.query(&statement.sql).await;
 
                 match result {
                     Ok(result) => {
-                        let _ = this.update_in(cx, |this, window, cx| match source {
-                            EventSource::Tab(idx) => this.tab_panel.update(cx, |state, cx| {
-                                state.load_result(window, cx, idx, result);
-                                cx.notify();
-                            }),
+                        let _ = this.update_in(cx, |this, window, cx| {
+                            match source {
+                                EventSource::Tab(idx) => this.tab_panel.update(cx, |state, cx| {
+                                    state.load_result(window, cx, idx, result);
+                                }),
+                            }
+
+                            this.update_query_progress(idx + 1);
+                            cx.notify();
                         });
                     }
                     Err(e) => {
@@ -107,8 +124,19 @@ impl Application {
                     }
                 }
             }
+
+            // Remove the query progress as the statements have finished running.
+            let _ = this.update(cx, |this, _| {
+                this.query_progress = None;
+            });
         })
         .detach();
+    }
+
+    fn update_query_progress(&mut self, complete: usize) {
+        if let Some(progress) = &mut self.query_progress {
+            progress.update(complete);
+        }
     }
 }
 
@@ -130,11 +158,25 @@ impl Render for Application {
                     .px_2()
                     .w_full()
                     .items_center()
+                    .justify_between()
                     .border_t_1()
                     .border_color(cx.theme().border)
                     .text_color(cx.theme().muted_foreground)
                     .text_sm()
-                    .child("localhost"),
+                    .child("localhost")
+                    .when_some(self.query_progress.as_ref(), |this, progress| {
+                        this.child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .child(
+                                    ProgressCircle::new("query-progress")
+                                        .color(cx.theme().green)
+                                        .value(progress.value()),
+                                )
+                                .child(progress.label()),
+                        )
+                    }),
             )
     }
 }
