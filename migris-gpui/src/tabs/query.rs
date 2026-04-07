@@ -147,6 +147,7 @@ impl QueryTab {
                             h_flex()
                                 .id("table-tab-bar")
                                 .w_full()
+                                .bg(cx.theme().tab_bar)
                                 .overflow_x_scroll()
                                 .child(
                                     TabBar::new("table-tabs")

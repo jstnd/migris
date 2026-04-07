@@ -77,6 +77,6 @@ impl RenderOnce for QueryTable {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
 
-        DataTable::new(&state.table_state)
+        DataTable::new(&state.table_state).bordered(false)
     }
 }

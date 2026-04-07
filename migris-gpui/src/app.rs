@@ -66,19 +66,14 @@ impl Application {
 
         cx.spawn(async |this, cx| match task.await {
             Ok(data) => {
-                let result = this.update(cx, |this, cx| {
+                _ = this.update(cx, |this, cx| {
                     this.driver = Some(data.driver);
-                    this.connection_panel.update(cx, |state, cx| {
-                        state.load_entities(cx, data.entities);
-                        cx.notify();
+                    this.connection_panel.update(cx, |connection_panel, cx| {
+                        connection_panel.load_entities(cx, data.entities);
                     });
 
                     cx.notify();
                 });
-
-                if let Err(e) = result {
-                    println!("ERROR LOADING: {}", e);
-                }
             }
             Err(e) => println!("ERROR LOADING: {}", e),
         })
@@ -99,7 +94,7 @@ impl Application {
             let statements = migris::sql::split(&query);
 
             // Initialize the query progress.
-            let _ = this.update(cx, |this, _| {
+            _ = this.update(cx, |this, _| {
                 this.query_progress = Some(QueryProgress::new(statements.len()));
             });
 
@@ -108,11 +103,13 @@ impl Application {
 
                 match result {
                     Ok(result) => {
-                        let _ = this.update_in(cx, |this, window, cx| {
+                        _ = this.update_in(cx, |this, window, cx| {
                             match source {
-                                EventSource::Tab(idx) => this.tab_panel.update(cx, |state, cx| {
-                                    state.load_result(window, cx, idx, result);
-                                }),
+                                EventSource::Tab(idx) => {
+                                    this.tab_panel.update(cx, |tab_panel, cx| {
+                                        tab_panel.load_result(window, cx, idx, result);
+                                    })
+                                }
                             }
 
                             this.update_query_progress(idx + 1);
@@ -126,7 +123,7 @@ impl Application {
             }
 
             // Remove the query progress as the statements have finished running.
-            let _ = this.update(cx, |this, _| {
+            _ = this.update(cx, |this, _| {
                 this.query_progress = None;
             });
         })
@@ -171,7 +168,7 @@ impl Render for Application {
                                 .items_center()
                                 .child(
                                     ProgressCircle::new("query-progress")
-                                        .color(cx.theme().green)
+                                        .color(cx.theme().primary)
                                         .value(progress.value()),
                                 )
                                 .child(progress.label()),

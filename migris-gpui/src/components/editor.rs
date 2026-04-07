@@ -1,5 +1,10 @@
-use gpui::{App, AppContext, Context, Entity, IntoElement, RenderOnce, SharedString, Styled, Window};
-use gpui_component::input::{Input, InputState, TabSize};
+use gpui::{
+    App, AppContext, Context, Entity, IntoElement, RenderOnce, SharedString, Styled, Window,
+};
+use gpui_component::{
+    ActiveTheme,
+    input::{Input, InputState, TabSize},
+};
 
 /// The state for use with an [`Editor`].
 pub struct EditorState {
@@ -56,6 +61,6 @@ impl RenderOnce for Editor {
             .p_0()
             .h_full()
             .appearance(false)
-            .font_family("Consolas")
+            .font_family(cx.theme().mono_font_family.clone())
     }
 }

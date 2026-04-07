@@ -298,7 +298,7 @@ impl TabPanelState {
     /// Closes the tab at the given index.
     fn close_tab(&mut self, idx: usize) {
         self.tabs.remove(idx);
-        let _ = self.subscriptions.remove(idx);
+        _ = self.subscriptions.remove(idx);
 
         // Move the active tab index if the active tab is after the tab that is being closed.
         if self.active_tab >= idx && self.active_tab > 0 {
