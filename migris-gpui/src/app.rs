@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
     Subscription, Task, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    ActiveTheme, h_flex,
+    ActiveTheme, Root, Sizable, WindowExt,
+    button::{Button, ButtonVariants},
+    h_flex,
     progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
     v_flex,
@@ -13,10 +15,27 @@ use gpui_component::{
 use migris::{Driver, mysql::MySqlConnection};
 
 use crate::{
-    components::panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
+    assets,
+    components::{
+        icon::IconName,
+        panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
+        settings,
+    },
+    config::{AppSettings, AppState},
     event::{ApplicationEvent, EventSource},
     models::{ConnectionLoadData, QueryProgress},
 };
+
+/// Initializes everything the application needs.
+///
+/// This should always (and only) be called at the application's entry point.
+pub fn init(cx: &mut App) {
+    assets::Themes::init(cx);
+
+    // Set globals for use throughout the application.
+    cx.set_global(AppSettings::default());
+    cx.set_global(AppState::default());
+}
 
 pub struct Application {
     driver: Option<Arc<dyn Driver>>,
@@ -138,7 +157,9 @@ impl Application {
 }
 
 impl Render for Application {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dialog_layer = Root::render_dialog_layer(window, cx);
+
         v_flex()
             .size_full()
             .child(
@@ -160,7 +181,24 @@ impl Render for Application {
                     .border_color(cx.theme().border)
                     .text_color(cx.theme().muted_foreground)
                     .text_sm()
-                    .child("localhost")
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(
+                                Button::new("settings")
+                                    .icon(IconName::Settings)
+                                    .ghost()
+                                    .xsmall()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .on_click(|_, window, cx| {
+                                        window.open_dialog(cx, |dialog, window, cx| {
+                                            settings::settings_dialog(dialog, window, cx)
+                                        });
+                                    }),
+                            )
+                            .child("localhost"),
+                    )
                     .when_some(self.query_progress.as_ref(), |this, progress| {
                         this.child(
                             h_flex()
@@ -175,5 +213,6 @@ impl Render for Application {
                         )
                     }),
             )
+            .children(dialog_layer)
     }
 }

@@ -10,6 +10,7 @@ pub enum IconName {
     Play,
     Plus,
     Search,
+    Settings,
     X,
 }
 
@@ -25,6 +26,7 @@ impl IconNamed for IconName {
             Self::Play => "icons/play.svg",
             Self::Plus => "icons/plus.svg",
             Self::Search => "icons/search.svg",
+            Self::Settings => "icons/settings.svg",
             Self::X => "icons/x.svg",
         }
         .into()

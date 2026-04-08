@@ -1,8 +1,10 @@
 mod app;
 mod assets;
 mod components;
+mod config;
 mod event;
 mod models;
+mod shared;
 mod tabs;
 
 use gpui::{AppContext, WindowOptions};
@@ -11,8 +13,6 @@ use gpui_component::{Root, ThemeMode};
 use crate::app::Application;
 
 fn main() -> anyhow::Result<()> {
-    let app = gpui_platform::application().with_assets(assets::Assets);
-
     // Use tokio runtime (needed for sqlx operations)
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -20,8 +20,11 @@ fn main() -> anyhow::Result<()> {
     let handle = runtime.handle();
     let _guard = handle.enter();
 
+    let app = gpui_platform::application().with_assets(assets::Assets);
     app.run(|cx| {
         gpui_component::init(cx);
+        app::init(cx);
+
         gpui_component::Theme::change(ThemeMode::Dark, None, cx);
         gpui_component::Theme::global_mut(cx).scrollbar_show =
             gpui_component::scroll::ScrollbarShow::Always;
