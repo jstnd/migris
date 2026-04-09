@@ -32,6 +32,11 @@ impl EditorState {
         self.input_state.read(cx).value().trim().is_empty()
     }
 
+    /// Returns the selected content within the editor.
+    pub fn selected_value(&self, cx: &App) -> SharedString {
+        self.input_state.read(cx).selected_value()
+    }
+
     /// Returns the content within the editor.
     pub fn value(&self, cx: &App) -> SharedString {
         self.input_state.read(cx).value()

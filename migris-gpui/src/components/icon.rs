@@ -1,4 +1,5 @@
-use gpui_component::IconNamed;
+use gpui::{App, Styled};
+use gpui_component::{ActiveTheme, Icon, IconNamed};
 
 pub enum IconName {
     ChevronDown,
@@ -7,6 +8,7 @@ pub enum IconName {
     Database,
     Eye,
     Grid3x3,
+    MousePointer2,
     Play,
     Plus,
     Search,
@@ -23,6 +25,7 @@ impl IconNamed for IconName {
             Self::Database => "icons/database.svg",
             Self::Eye => "icons/eye.svg",
             Self::Grid3x3 => "icons/grid-3x3.svg",
+            Self::MousePointer2 => "icons/mouse-pointer-2.svg",
             Self::Play => "icons/play.svg",
             Self::Plus => "icons/plus.svg",
             Self::Search => "icons/search.svg",
@@ -31,4 +34,11 @@ impl IconNamed for IconName {
         }
         .into()
     }
+}
+
+pub fn icon(cx: &App, icon: IconName, disabled: bool) -> Icon {
+    Icon::from(icon).text_color({
+        let opacity = if disabled { 0.25 } else { 1.0 };
+        cx.theme().button_primary.opacity(opacity)
+    })
 }

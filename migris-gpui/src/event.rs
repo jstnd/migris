@@ -8,10 +8,10 @@ pub enum EventSource {
 #[derive(Clone)]
 pub enum ApplicationEvent {
     AddConnection,
-    RunQuery(SharedString, EventSource),
+    RunSql(SharedString, EventSource),
 }
 
 #[derive(Clone)]
 pub enum TabEvent {
-    RunQuery(SharedString),
+    RunSql(SharedString),
 }

@@ -59,8 +59,8 @@ impl Application {
                 }
             }),
             cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
-                if let ApplicationEvent::RunQuery(query, source) = event {
-                    this.run_query(window, cx, query.clone(), *source);
+                if let ApplicationEvent::RunSql(sql, source) = event {
+                    this.run_sql(window, cx, sql.clone(), *source);
                 }
             }),
         ]);
@@ -99,18 +99,18 @@ impl Application {
         .detach();
     }
 
-    fn run_query(
+    fn run_sql(
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
-        query: SharedString,
+        sql: SharedString,
         source: EventSource,
     ) {
         // TODO: remove this unwrap
         let driver = self.driver.clone().unwrap();
 
         cx.spawn_in(window, async move |this, cx| {
-            let statements = migris::sql::split(&query);
+            let statements = migris::sql::split(&sql);
 
             // Initialize the query progress.
             _ = this.update(cx, |this, _| {

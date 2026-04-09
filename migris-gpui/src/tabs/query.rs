@@ -1,10 +1,11 @@
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
+    Action, App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
+    ParentElement, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    prelude::FluentBuilder,
 };
 use gpui_component::{
-    ActiveTheme, Disableable, Icon,
-    button::Button,
+    ActiveTheme, Disableable,
+    button::{Button, DropdownButton},
     h_flex,
     resizable::{resizable_panel, v_resizable},
     tab::{Tab, TabBar},
@@ -15,11 +16,18 @@ use migris::QueryResult;
 use crate::{
     components::{
         editor::{Editor, EditorState},
-        icon::IconName,
+        icon::{IconName, icon},
         table::{QueryTable, QueryTableState},
     },
     event::TabEvent,
 };
+
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+enum QueryTabAction {
+    Run,
+    RunSelection,
+}
 
 struct QueryTabState {
     /// The state for the editor.
@@ -46,12 +54,25 @@ impl QueryTabState {
         }
     }
 
+    fn handle_action(&mut self, action: &QueryTabAction, cx: &mut Context<Self>) {
+        match action {
+            QueryTabAction::Run => {
+                self.clear_results();
+                self.run_sql(cx, false);
+            }
+            QueryTabAction::RunSelection => {
+                self.clear_results();
+                self.run_sql(cx, true);
+            }
+        }
+    }
+
     /// Returns a reference to the active table.
     fn active_table(&self) -> &Entity<QueryTableState> {
         &self.tables[self.active_table]
     }
 
-    /// Clears the current results from the tab.
+    /// Clears the results from the tab.
     fn clear_results(&mut self) {
         self.tables.clear();
         self.active_table = 0;
@@ -63,10 +84,16 @@ impl QueryTabState {
         self.tables.push(table);
     }
 
-    /// Triggers an event to run the query in the editor.
-    fn run_query(&self, cx: &mut Context<Self>) {
-        let query = self.editor_state.read(cx).value(cx);
-        cx.emit(TabEvent::RunQuery(query));
+    /// Triggers an event to run the SQL in the editor.
+    fn run_sql(&self, cx: &mut Context<Self>, selected: bool) {
+        let editor_state = self.editor_state.read(cx);
+        let sql = if selected {
+            editor_state.selected_value(cx)
+        } else {
+            editor_state.value(cx)
+        };
+
+        cx.emit(TabEvent::RunSql(sql));
     }
 }
 
@@ -109,31 +136,51 @@ impl QueryTab {
     pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
         let state = self.state.read(cx);
         let is_editor_empty = state.editor_state.read(cx).is_empty(cx);
+        let is_editor_selected_empty = state.editor_state.read(cx).selected_value(cx).is_empty();
 
         v_resizable(format!("query-tab-{}", self.number))
             .child(
                 resizable_panel().child(
                     v_flex()
+                        .on_action(window.listener_for(&self.state, |state, action, _, cx| {
+                            state.handle_action(action, cx);
+                        }))
                         .pt_1()
                         .gap_1()
                         .size_full()
                         .child(
                             h_flex().pl_1().child(
-                                Button::new("button-run")
-                                    .icon(Icon::from(IconName::Play).text_color({
-                                        let opacity = if is_editor_empty { 0.25 } else { 1.0 };
-                                        cx.theme().button_primary.opacity(opacity)
-                                    }))
-                                    .label("Run")
+                                DropdownButton::new("run-buttons")
                                     .compact()
                                     .disabled(is_editor_empty)
-                                    .on_click(window.listener_for(
-                                        &self.state,
-                                        |state, _, _, cx| {
-                                            state.clear_results();
-                                            state.run_query(cx);
-                                        },
-                                    )),
+                                    .button(
+                                        Button::new("run-button")
+                                            .icon(icon(cx, IconName::Play, is_editor_empty))
+                                            .label("Run")
+                                            .on_click(window.listener_for(
+                                                &self.state,
+                                                |state, _, _, cx| {
+                                                    state.handle_action(&QueryTabAction::Run, cx);
+                                                },
+                                            )),
+                                    )
+                                    .dropdown_menu(move |menu, _, cx| {
+                                        menu.menu_with_icon(
+                                            "Run",
+                                            icon(cx, IconName::Play, false),
+                                            Box::new(QueryTabAction::Run),
+                                        )
+                                        .menu_with_icon_and_disabled(
+                                            "Run Selection",
+                                            icon(
+                                                cx,
+                                                IconName::MousePointer2,
+                                                is_editor_selected_empty,
+                                            ),
+                                            Box::new(QueryTabAction::RunSelection),
+                                            is_editor_selected_empty,
+                                        )
+                                    }),
                             ),
                         )
                         .child(Editor::new(&state.editor_state)),

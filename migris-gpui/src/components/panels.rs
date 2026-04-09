@@ -280,8 +280,8 @@ impl TabPanelState {
 
         let subscription = cx.subscribe(&tab, |this, _, event, cx| {
             let event = match event {
-                TabEvent::RunQuery(query) => {
-                    ApplicationEvent::RunQuery(query.clone(), EventSource::Tab(this.active_tab))
+                TabEvent::RunSql(sql) => {
+                    ApplicationEvent::RunSql(sql.clone(), EventSource::Tab(this.active_tab))
                 }
             };
 
