@@ -1,7 +1,6 @@
 use gpui::{
-    Action, App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
-    ParentElement, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
-    prelude::FluentBuilder,
+    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
     ActiveTheme, Disableable,
@@ -19,15 +18,8 @@ use crate::{
         icon::{IconName, icon},
         table::{QueryTable, QueryTableState},
     },
-    event::TabEvent,
+    event::{AppAction, TabEvent},
 };
-
-#[derive(Action, Clone, Copy, PartialEq, Eq)]
-#[action(no_json)]
-enum QueryTabAction {
-    Run,
-    RunSelection,
-}
 
 struct QueryTabState {
     /// The state for the editor.
@@ -54,13 +46,14 @@ impl QueryTabState {
         }
     }
 
-    fn handle_action(&mut self, action: &QueryTabAction, cx: &mut Context<Self>) {
+    /// Handles actions originating from the tab.
+    fn handle_action(&mut self, action: &AppAction, cx: &mut Context<Self>) {
         match action {
-            QueryTabAction::Run => {
+            AppAction::RunSql => {
                 self.clear_results();
                 self.run_sql(cx, false);
             }
-            QueryTabAction::RunSelection => {
+            AppAction::RunSqlSelection => {
                 self.clear_results();
                 self.run_sql(cx, true);
             }
@@ -142,12 +135,12 @@ impl QueryTab {
             .child(
                 resizable_panel().child(
                     v_flex()
-                        .on_action(window.listener_for(&self.state, |state, action, _, cx| {
-                            state.handle_action(action, cx);
-                        }))
                         .pt_1()
                         .gap_1()
                         .size_full()
+                        .on_action(window.listener_for(&self.state, |state, action, _, cx| {
+                            state.handle_action(action, cx);
+                        }))
                         .child(
                             h_flex().pl_1().child(
                                 DropdownButton::new("run-buttons")
@@ -160,7 +153,7 @@ impl QueryTab {
                                             .on_click(window.listener_for(
                                                 &self.state,
                                                 |state, _, _, cx| {
-                                                    state.handle_action(&QueryTabAction::Run, cx);
+                                                    state.handle_action(&AppAction::RunSql, cx);
                                                 },
                                             )),
                                     )
@@ -168,7 +161,7 @@ impl QueryTab {
                                         menu.menu_with_icon(
                                             "Run",
                                             icon(cx, IconName::Play, false),
-                                            Box::new(QueryTabAction::Run),
+                                            Box::new(AppAction::RunSql),
                                         )
                                         .menu_with_icon_and_disabled(
                                             "Run Selection",
@@ -177,7 +170,7 @@ impl QueryTab {
                                                 IconName::MousePointer2,
                                                 is_editor_selected_empty,
                                             ),
-                                            Box::new(QueryTabAction::RunSelection),
+                                            Box::new(AppAction::RunSqlSelection),
                                             is_editor_selected_empty,
                                         )
                                     }),

@@ -3,7 +3,12 @@ use gpui::{
 };
 use gpui_component::{
     ActiveTheme,
-    input::{Input, InputState, TabSize},
+    input::{self, Input, InputState, TabSize},
+};
+
+use crate::{
+    components::icon::{IconName, icon},
+    event::AppAction,
 };
 
 /// The state for use with an [`Editor`].
@@ -61,11 +66,32 @@ impl Editor {
 impl RenderOnce for Editor {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
+        let is_empty = state.is_empty(cx);
+        let is_selected_empty = state.selected_value(cx).is_empty();
 
         Input::new(&state.input_state)
             .p_0()
             .h_full()
             .appearance(false)
             .font_family(cx.theme().mono_font_family.clone())
+            .context_menu(move |menu, _, cx| {
+                menu.menu_with_icon_and_disabled(
+                    "Run",
+                    icon(cx, IconName::Play, is_empty),
+                    Box::new(AppAction::RunSql),
+                    is_empty,
+                )
+                .menu_with_icon_and_disabled(
+                    "Run Selection",
+                    icon(cx, IconName::MousePointer2, is_selected_empty),
+                    Box::new(AppAction::RunSqlSelection),
+                    is_selected_empty,
+                )
+                .separator()
+                .menu("Cut", Box::new(input::Cut))
+                .menu("Copy", Box::new(input::Copy))
+                .menu("Paste", Box::new(input::Paste))
+                .menu("Select All", Box::new(input::SelectAll))
+            })
     }
 }
