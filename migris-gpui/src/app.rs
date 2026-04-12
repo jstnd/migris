@@ -35,6 +35,7 @@ pub fn init(cx: &mut App) {
     // Set globals for use throughout the application.
     cx.set_global(AppSettings::default());
     cx.set_global(AppState::default());
+    AppState::init(cx);
 }
 
 pub struct Application {

@@ -57,17 +57,18 @@ fn appearance_group(cx: &mut App) -> SettingGroup {
         ))
         .item(SettingItem::new("Theme", {
             let options = Themes::options(cx, cx.theme().mode);
-            let theme = AppSettings::global(cx).theme.clone();
+            let theme = AppSettings::global(cx).theme(cx);
 
-            // If the theme saved in the app settings does not match the saved theme mode,
-            // we want to change the saved theme to the default for the saved theme mode.
+            // If the theme saved in the settings does not match any themes in the current theme mode,
+            // we want to change the saved theme to the default for the current theme mode.
+            // TODO: move this to happen on settings load when implemented
             if !options.iter().any(|option| option.0 == theme) {
                 shared::apply_theme(cx, Themes::default(cx.theme().mode));
             }
 
             SettingField::dropdown(
                 options,
-                |cx| AppSettings::global(cx).theme.clone(),
+                |cx| AppSettings::global(cx).theme(cx),
                 |value, cx| {
                     shared::apply_theme(cx, value);
                 },
