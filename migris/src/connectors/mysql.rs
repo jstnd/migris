@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use futures_util::StreamExt;
+use futures_lite::StreamExt;
 use rust_decimal::Decimal;
 use sqlx::{
     Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type, ValueRef,

@@ -1,12 +1,14 @@
 use std::time::Instant;
 
+use futures_lite::StreamExt;
 use sqlx::{
     Column as SqlxColumn, Executor, MySqlPool, TypeInfo,
     mysql::{MySqlColumn, MySqlTypeInfo},
 };
 
 use crate::{
-    Column, ColumnType, Driver, Entity, MigrisError, MigrisResult, QueryData, QueryResult, Row,
+    Column, ColumnType, Driver, Entity, MigrisError, MigrisResult, Row,
+    data::{QueryData, QueryResult},
     mysql::MySqlDataType,
 };
 
@@ -80,6 +82,30 @@ impl Driver for MySqlConnection {
         Ok(QueryResult {
             data: QueryData::new(columns, rows?),
             execute_time: elapsed.as_millis(),
+            stream: None,
+        })
+    }
+
+    async fn query_stream(&self, query: String) -> MigrisResult<QueryResult> {
+        let pool = self.pool.clone();
+        let columns = self.columns_from_query(&query).await?;
+        let stream_columns = columns.clone();
+        let stream = async_stream::stream! {
+            let mut stream = sqlx::query(&query).fetch(&pool);
+
+            while let Some(row) = stream.next().await {
+                let row = row
+                    .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+                    .and_then(|row| Row::from_mysql(&row, &stream_columns));
+
+                yield row;
+            }
+        };
+
+        Ok(QueryResult {
+            data: QueryData::new(columns, Vec::new()),
+            execute_time: 0,
+            stream: Some(Box::pin(stream)),
         })
     }
 }

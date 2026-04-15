@@ -1,3 +1,5 @@
+use crate::Entity;
+
 const CHAR_ASTERISK: char = '*';
 const CHAR_BACKSLASH: char = '\\';
 const CHAR_BACKTICK: char = '`';
@@ -20,16 +22,20 @@ pub struct SqlStatement {
     pub sql: String,
 }
 
-enum SplitState {
-    Normal,
-    Backtick,
-    BlockComment,
-    DoubleQuote,
-    LineComment,
-    SingleQuote,
+pub fn select_all(entity: &Entity) -> String {
+    format!("SELECT * FROM `{}`.`{}`", entity.schema, entity.name)
 }
 
 pub fn split(sql: &str) -> Vec<SqlStatement> {
+    enum SplitState {
+        Normal,
+        Backtick,
+        BlockComment,
+        DoubleQuote,
+        LineComment,
+        SingleQuote,
+    }
+
     let mut statements = Vec::new();
     let mut state = SplitState::Normal;
     let chars: Vec<char> = sql.chars().collect();

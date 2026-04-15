@@ -1,7 +1,7 @@
 use std::{fs::OpenOptions, path::Path};
 
 use csv::{Reader, StringRecord, Writer};
-use futures_util::StreamExt;
+use futures_lite::StreamExt;
 
 use crate::{
     Column, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult,
@@ -30,7 +30,7 @@ impl Connector for CsvConnector {
             .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
         let columns = Schema::from_csv(&self.path, options.infer_schema)?.columns;
-        let stream = futures_util::stream::iter(reader.into_records().map(|result| {
+        let stream = futures_lite::stream::iter(reader.into_records().map(|result| {
             result
                 .map_err(|err| MigrisError::FileReadFailed(err.to_string()))
                 .map(Row::from_csv)
