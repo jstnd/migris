@@ -3,7 +3,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
-    ActiveTheme, Disableable,
+    ActiveTheme, Disableable, Sizable,
     button::{Button, DropdownButton},
     h_flex,
     resizable::{resizable_panel, v_resizable},
@@ -158,8 +158,8 @@ impl QueryTab {
             .child(
                 resizable_panel().child(
                     v_flex()
-                        .pt_1()
                         .gap_1()
+                        .pt_1()
                         .size_full()
                         .on_action(window.listener_for(&self.state, |state, action, _, cx| {
                             state.handle_action(action, cx);
@@ -167,8 +167,9 @@ impl QueryTab {
                         .child(
                             h_flex().pl_1().child(
                                 DropdownButton::new("run-buttons")
-                                    .compact()
                                     .disabled(is_editor_empty)
+                                    .compact()
+                                    .small()
                                     .button(
                                         Button::new("run-button")
                                             .icon(icon(cx, IconName::Play, is_editor_empty))

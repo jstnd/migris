@@ -47,7 +47,6 @@ impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
         let tree_state = cx.new(|cx| TreeState::new(cx));
-
         let _subscriptions =
             vec![
                 cx.subscribe(&search_state, |this, _, event: &InputEvent, cx| {
@@ -151,14 +150,14 @@ impl RenderOnce for ConnectionPanel {
         let search_state = &self.state.read(cx).search_state;
 
         v_flex()
+            .gap_1()
             .p_1()
             .size_full()
-            .gap_1()
             .items_center()
             .child(
                 h_flex()
-                    .w_full()
                     .gap_1()
+                    .w_full()
                     .child(
                         Input::new(search_state)
                             .cleanable(true)
@@ -182,10 +181,11 @@ impl RenderOnce for ConnectionPanel {
 
                     ListItem::new(idx)
                         .p_0()
+                        .text_sm()
                         .child(
                             h_flex()
                                 .gap_1()
-                                .pl(px(20.0) * entry.depth())
+                                .pl(px(18.0) * entry.depth())
                                 .when(entity.kind == EntityKind::Schema, |this| {
                                     this.child(Icon::from(
                                         if self.state.read(cx).is_expanded(&entry.item().id) {
@@ -348,10 +348,10 @@ impl RenderOnce for TabPanel {
                 h_flex()
                     .id("panel-tab-bar")
                     .gap_1()
-                    .w_full()
                     .pr_1()
-                    .bg(cx.theme().tab_bar)
+                    .w_full()
                     .h(px(32.0))
+                    .bg(cx.theme().tab_bar)
                     .overflow_x_scroll()
                     .child(
                         TabBar::new("panel-tabs")
@@ -367,7 +367,6 @@ impl RenderOnce for TabPanel {
                                         .id(format!("panel-tab-{}", idx))
                                         .gap_1p5()
                                         .items_center()
-                                        //.hover(|style| style.bg(cx.theme().secondary_hover))
                                         .on_hover(window.listener_for(
                                             &self.state,
                                             move |state, is_hovered: &bool, _, cx| {

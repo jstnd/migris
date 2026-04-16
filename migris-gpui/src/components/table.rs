@@ -1,6 +1,9 @@
 use futures_lite::StreamExt;
 use gpui::{App, AppContext, Context, Entity, IntoElement, RenderOnce, Window};
-use gpui_component::table::{Column, DataTable, TableDelegate, TableState};
+use gpui_component::{
+    Sizable,
+    table::{Column, DataTable, TableDelegate, TableState},
+};
 use migris::data::{QueryData, QueryResult};
 use tokio::runtime::Handle;
 
@@ -112,6 +115,6 @@ impl RenderOnce for QueryTable {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
 
-        DataTable::new(&state.table_state).bordered(false)
+        DataTable::new(&state.table_state).bordered(false).small()
     }
 }
