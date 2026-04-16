@@ -1,15 +1,19 @@
+use futures_lite::StreamExt;
 use gpui::{App, AppContext, Context, Entity, IntoElement, RenderOnce, Window};
 use gpui_component::table::{Column, DataTable, TableDelegate, TableState};
-use migris::QueryData;
+use migris::data::{QueryData, QueryResult};
+use tokio::runtime::Handle;
 
 struct QueryTableDelegate {
-    data: QueryData,
+    result: QueryResult,
     columns: Vec<Column>,
 }
 
 impl QueryTableDelegate {
-    fn new(data: QueryData) -> Self {
-        let columns = data
+    /// Creates a new [`QueryTableDelegate`] with the given [`QueryResult`].
+    fn new(result: QueryResult) -> Self {
+        let columns = result
+            .data
             .columns()
             .iter()
             .map(|column| {
@@ -18,7 +22,30 @@ impl QueryTableDelegate {
             })
             .collect();
 
-        Self { data, columns }
+        Self { result, columns }
+    }
+
+    /// Returns a reference to the query data.
+    fn data(&self) -> &QueryData {
+        &self.result.data
+    }
+
+    /// Loads a number of rows from the query result's stream, determined by the given size parameter.
+    fn load(&mut self, size: usize) {
+        //
+        tokio::task::block_in_place(|| {
+            Handle::current().block_on(async {
+                if let Some(stream) = &mut self.result.stream {
+                    let mut stream = stream.take(size);
+
+                    while let Some(row) = stream.next().await {
+                        if let Ok(row) = row {
+                            self.result.data.push_row(row);
+                        }
+                    }
+                }
+            });
+        });
     }
 }
 
@@ -28,7 +55,7 @@ impl TableDelegate for QueryTableDelegate {
     }
 
     fn rows_count(&self, _: &App) -> usize {
-        self.data.rows().len()
+        self.data().rows().len()
     }
 
     fn column(&self, col_ix: usize, _: &App) -> Column {
@@ -42,7 +69,7 @@ impl TableDelegate for QueryTableDelegate {
         _: &mut Window,
         _: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
-        let row = &self.data.rows()[row_ix];
+        let row = &self.data().rows()[row_ix];
         row.values[col_ix].to_string()
     }
 }
@@ -52,11 +79,19 @@ pub struct QueryTableState {
 }
 
 impl QueryTableState {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>, data: QueryData) -> Self {
-        let delegate = QueryTableDelegate::new(data);
+    /// Creates a new [`QueryTableState`] with the given [`QueryResult`].
+    pub fn new(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
+        let delegate = QueryTableDelegate::new(result);
         let table_state = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
 
         Self { table_state }
+    }
+
+    /// Loads a number of rows from the query result's stream, determined by the given size parameter.
+    pub fn load(&mut self, cx: &mut Context<Self>, size: usize) {
+        self.table_state.update(cx, |table_state, _| {
+            table_state.delegate_mut().load(size);
+        })
     }
 }
 

@@ -10,7 +10,7 @@ use gpui_component::{
     tab::{Tab, TabBar},
     v_flex,
 };
-use migris::QueryResult;
+use migris::data::QueryResult;
 
 use crate::{
     components::{
@@ -18,7 +18,7 @@ use crate::{
         icon::{IconName, icon},
         table::{QueryTable, QueryTableState},
     },
-    event::{AppAction, TabEvent},
+    event::{AppAction, AppEvent, AppEventKind, RunSql},
 };
 
 struct QueryTabState {
@@ -32,7 +32,7 @@ struct QueryTabState {
     active_table: usize,
 }
 
-impl EventEmitter<TabEvent> for QueryTabState {}
+impl EventEmitter<AppEvent> for QueryTabState {}
 
 impl QueryTabState {
     /// Creates a new [`QueryTabState`].
@@ -73,7 +73,7 @@ impl QueryTabState {
 
     /// Loads the given query result into the tab.
     fn load_result(&mut self, window: &mut Window, cx: &mut Context<Self>, result: QueryResult) {
-        let table = cx.new(|cx| QueryTableState::new(window, cx, result.data));
+        let table = cx.new(|cx| QueryTableState::new(window, cx, result));
         self.tables.push(table);
     }
 
@@ -86,7 +86,13 @@ impl QueryTabState {
             editor_state.value(cx)
         };
 
-        cx.emit(TabEvent::RunSql(sql));
+        let event = AppEvent::new(AppEventKind::RunSql(RunSql {
+            sql,
+            show_progress: true,
+            stream: false,
+        }));
+
+        cx.emit(event);
     }
 }
 
@@ -106,7 +112,7 @@ pub struct QueryTab {
     _subscription: Subscription,
 }
 
-impl EventEmitter<TabEvent> for QueryTab {}
+impl EventEmitter<AppEvent> for QueryTab {}
 
 impl QueryTab {
     /// Creates a new [`QueryTab`].
@@ -123,6 +129,23 @@ impl QueryTab {
             number,
             _subscription,
         }
+    }
+
+    /// Returns the label for the tab.
+    pub fn label(&self) -> SharedString {
+        self.label.clone()
+    }
+
+    /// Loads the given query result into the tab.
+    pub fn load_result(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        result: QueryResult,
+    ) {
+        self.state.update(cx, |state, cx| {
+            state.load_result(window, cx, result);
+        });
     }
 
     /// Returns the content for the tab.
@@ -208,22 +231,5 @@ impl QueryTab {
                         .child(QueryTable::new(state.active_table())),
                 )
             }))
-    }
-
-    /// Returns the label for the tab.
-    pub fn label(&self) -> SharedString {
-        self.label.clone()
-    }
-
-    /// Loads the given query result into the tab.
-    pub fn load_result(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        result: QueryResult,
-    ) {
-        self.state.update(cx, |this, cx| {
-            this.load_result(window, cx, result);
-        });
     }
 }

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
-    Subscription, Task, Window, prelude::FluentBuilder, px,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
+    Task, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Root, Sizable, WindowExt,
@@ -22,8 +22,9 @@ use crate::{
         settings,
     },
     config::{AppSettings, AppState},
-    event::{ApplicationEvent, EventSource},
+    event::{AppEvent, AppEventKind, EventSource, RunSql},
     models::{ConnectionLoadData, QueryProgress},
+    tabs::TabKind,
 };
 
 /// Initializes everything the application needs.
@@ -54,15 +55,11 @@ impl Application {
         let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
         let tab_panel = cx.new(|_| TabPanelState::new());
         let _subscriptions = Vec::from([
-            cx.subscribe(&connection_panel, |_, _, event, cx| {
-                if let ApplicationEvent::AddConnection = event {
-                    Self::add_connection(cx)
-                }
+            cx.subscribe_in(&connection_panel, window, |this, _, event, window, cx| {
+                this.handle_event(window, cx, event);
             }),
             cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
-                if let ApplicationEvent::RunSql(sql, source) = event {
-                    this.run_sql(window, cx, sql.clone(), *source);
-                }
+                this.handle_event(window, cx, event);
             }),
         ]);
 
@@ -72,6 +69,21 @@ impl Application {
             tab_panel,
             query_progress: None,
             _subscriptions,
+        }
+    }
+
+    fn handle_event(&mut self, window: &mut Window, cx: &mut Context<Self>, event: &AppEvent) {
+        match event.kind() {
+            AppEventKind::AddConnection => Self::add_connection(cx),
+            AppEventKind::OpenEntity(entity) => {
+                self.tab_panel.update(cx, |tab_panel, cx| {
+                    let tab_kind = TabKind::Table(entity.clone());
+                    tab_panel.add_tab(window, cx, tab_kind);
+                });
+            }
+            AppEventKind::RunSql(event_data) => {
+                self.run_sql(window, cx, event, event_data.clone());
+            }
         }
     }
 
@@ -104,35 +116,59 @@ impl Application {
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
-        sql: SharedString,
-        source: EventSource,
+        event: &AppEvent,
+        event_data: RunSql,
     ) {
+        let id = event.id().cloned();
+        let Some(source) = event.source().cloned() else {
+            // Return if there's no source as we need
+            // somewhere to send the query result afterwards.
+            //
+            // Ideally, this event kind should always have a source anyways.
+            return;
+        };
+
         // TODO: remove this unwrap
         let driver = self.driver.clone().unwrap();
 
         cx.spawn_in(window, async move |this, cx| {
-            let statements = migris::sql::split(&sql);
+            let statements = migris::sql::split(&event_data.sql);
 
             // Initialize the query progress.
-            _ = this.update(cx, |this, _| {
-                this.query_progress = Some(QueryProgress::new(statements.len()));
-            });
+            if event_data.show_progress {
+                _ = this.update(cx, |this, _| {
+                    this.query_progress = Some(QueryProgress::new(statements.len()));
+                });
+            }
 
             for (idx, statement) in statements.iter().enumerate() {
-                let result = driver.query(&statement.sql).await;
+                let result = if event_data.stream {
+                    driver.query_stream(statement.sql.clone()).await
+                } else {
+                    driver.query(&statement.sql).await
+                };
 
                 match result {
                     Ok(result) => {
                         _ = this.update_in(cx, |this, window, cx| {
                             match source {
-                                EventSource::Tab(idx) => {
+                                EventSource::Tab(tab_idx) => {
                                     this.tab_panel.update(cx, |tab_panel, cx| {
-                                        tab_panel.load_result(window, cx, idx, result);
+                                        tab_panel.load_result(
+                                            window,
+                                            cx,
+                                            tab_idx,
+                                            id.clone(),
+                                            result,
+                                        );
                                     })
                                 }
                             }
 
-                            this.update_query_progress(idx + 1);
+                            if event_data.show_progress {
+                                this.update_query_progress(idx + 1);
+                            }
+
                             cx.notify();
                         });
                     }
@@ -143,9 +179,11 @@ impl Application {
             }
 
             // Remove the query progress as the statements have finished running.
-            _ = this.update(cx, |this, _| {
-                this.query_progress = None;
-            });
+            if event_data.show_progress {
+                _ = this.update(cx, |this, _| {
+                    this.query_progress = None;
+                });
+            }
         })
         .detach();
     }
@@ -204,7 +242,6 @@ impl Render for Application {
                         this.child(
                             h_flex()
                                 .gap_2()
-                                .items_center()
                                 .child(
                                     ProgressCircle::new("query-progress")
                                         .color(cx.theme().primary)

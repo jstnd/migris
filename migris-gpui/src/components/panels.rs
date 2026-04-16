@@ -15,14 +15,15 @@ use gpui_component::{
     tree::{self, TreeItem, TreeState},
     v_flex,
 };
-use migris::{Entity as MigrisEntity, EntityKind, QueryResult};
+use migris::{Entity as MigrisEntity, EntityKind, data::QueryResult};
 
 use crate::{
     components::icon::IconName,
-    event::{ApplicationEvent, EventSource, TabEvent},
+    event::{AppEvent, AppEventKind, EventId, EventSource},
     tabs::{TabKind, TabView},
 };
 
+/// The state for use with the [`ConnectionPanel`].
 pub struct ConnectionPanelState {
     search_state: Entity<InputState>,
     tree_state: Entity<TreeState>,
@@ -40,7 +41,7 @@ pub struct ConnectionPanelState {
     _subscriptions: Vec<Subscription>,
 }
 
-impl EventEmitter<ApplicationEvent> for ConnectionPanelState {}
+impl EventEmitter<AppEvent> for ConnectionPanelState {}
 
 impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -82,11 +83,10 @@ impl ConnectionPanelState {
     }
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
-        self.tree_state.update(cx, |state, cx| {
+        self.tree_state.update(cx, |tree_state, cx| {
             let filter = self.search_state.read(cx).value();
             let items = self.entities_to_items(filter);
-            state.set_items(items, cx);
-            cx.notify();
+            tree_state.set_items(items, cx);
         });
     }
 
@@ -171,7 +171,7 @@ impl RenderOnce for ConnectionPanel {
                             .compact()
                             .ghost()
                             .on_click(window.listener_for(&self.state, |_, _, _, cx| {
-                                cx.emit(ApplicationEvent::AddConnection);
+                                cx.emit(AppEvent::new(AppEventKind::AddConnection));
                             })),
                     ),
             )
@@ -204,16 +204,24 @@ impl RenderOnce for ConnectionPanel {
                         )
                         .on_click(window.listener_for(&self.state, {
                             let entry = entry.clone();
-                            move |state, _, _, _| {
+                            move |state, _, _, cx| {
                                 let id = entry.item().id.clone();
                                 let entity = state.entity(&id);
 
-                                if entity.kind == EntityKind::Schema {
-                                    if state.is_expanded(&id) {
-                                        state.expanded.remove(&id);
-                                    } else {
-                                        state.expanded.insert(id);
+                                match entity.kind {
+                                    EntityKind::Schema => {
+                                        if state.is_expanded(&id) {
+                                            state.expanded.remove(&id);
+                                        } else {
+                                            state.expanded.insert(id);
+                                        }
                                     }
+                                    EntityKind::Table => {
+                                        cx.emit(AppEvent::new(AppEventKind::OpenEntity(
+                                            entity.clone(),
+                                        )));
+                                    }
+                                    _ => {}
                                 }
                             }
                         }))
@@ -222,7 +230,7 @@ impl RenderOnce for ConnectionPanel {
     }
 }
 
-/// The state for use with a [`TabPanel`].
+/// The state for use with the [`TabPanel`].
 pub struct TabPanelState {
     /// The tabs shown in the panel.
     tabs: Vec<Entity<TabView>>,
@@ -239,7 +247,7 @@ pub struct TabPanelState {
     subscriptions: Vec<Subscription>,
 }
 
-impl EventEmitter<ApplicationEvent> for TabPanelState {}
+impl EventEmitter<AppEvent> for TabPanelState {}
 
 impl TabPanelState {
     /// Creates a new [`TabPanelState`].
@@ -252,39 +260,11 @@ impl TabPanelState {
         }
     }
 
-    /// Loads the given query result into the tab at the given tab index.
-    pub fn load_result(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        tab_idx: usize,
-        result: QueryResult,
-    ) {
-        let tab = &self.tabs[tab_idx];
-        tab.update(cx, |this, cx| {
-            this.load_result(window, cx, result);
-        });
-    }
-
-    /// Returns a reference to the active tab.
-    fn active_tab(&self) -> &Entity<TabView> {
-        &self.tabs[self.active_tab]
-    }
-
     /// Adds a new tab to the panel.
-    fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let tab = cx.new(|cx| {
-            let kind = TabKind::Query(self.next_query_number(cx));
-            TabView::new(window, cx, kind)
-        });
-
+    pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, kind: TabKind) {
+        let tab = cx.new(|cx| TabView::new(window, cx, kind));
         let subscription = cx.subscribe(&tab, |this, _, event, cx| {
-            let event = match event {
-                TabEvent::RunSql(sql) => {
-                    ApplicationEvent::RunSql(sql.clone(), EventSource::Tab(this.active_tab))
-                }
-            };
-
+            let event = event.clone().with_source(EventSource::Tab(this.active_tab));
             cx.emit(event);
         });
 
@@ -293,6 +273,26 @@ impl TabPanelState {
 
         // Set the active tab to be the newly added tab.
         self.active_tab = self.tabs.len() - 1;
+    }
+
+    /// Loads the given query result into the tab at the given tab index.
+    pub fn load_result(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        tab_idx: usize,
+        id: Option<EventId>,
+        result: QueryResult,
+    ) {
+        let tab = &self.tabs[tab_idx];
+        tab.update(cx, |tab, cx| {
+            tab.load_result(window, cx, id, result);
+        });
+    }
+
+    /// Returns a reference to the active tab.
+    fn active_tab(&self) -> &Entity<TabView> {
+        &self.tabs[self.active_tab]
     }
 
     /// Closes the tab at the given index.
@@ -312,9 +312,12 @@ impl TabPanelState {
     fn next_query_number(&self, cx: &App) -> usize {
         self.tabs
             .iter()
-            .map(|tab| {
-                let TabKind::Query(number) = tab.read(cx).kind();
-                *number
+            .filter_map(|tab| {
+                let TabKind::Query(number) = tab.read(cx).kind() else {
+                    return None;
+                };
+
+                Some(*number)
             })
             .max()
             .unwrap_or_default()
@@ -397,7 +400,8 @@ impl RenderOnce for TabPanel {
                             .ghost()
                             .small()
                             .on_click(window.listener_for(&self.state, |state, _, window, cx| {
-                                state.add_tab(window, cx);
+                                let tab_kind = TabKind::Query(state.next_query_number(cx));
+                                state.add_tab(window, cx, tab_kind);
                             })),
                     ),
             )
