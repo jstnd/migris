@@ -30,13 +30,13 @@ use crate::{
 /// Initializes everything the application needs.
 ///
 /// This should always (and only) be called at the application's entry point.
-pub fn init(cx: &mut App) {
+pub fn init(window: &mut Window, cx: &mut App) {
     assets::Themes::init(cx);
 
     // Set globals for use throughout the application.
     cx.set_global(AppSettings::default());
     cx.set_global(AppState::default());
-    AppState::init(cx);
+    AppState::init(window);
 }
 
 pub struct Application {

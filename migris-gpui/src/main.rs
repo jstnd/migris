@@ -8,7 +8,7 @@ mod shared;
 mod tabs;
 
 use gpui::{AppContext, WindowOptions};
-use gpui_component::{Root, ThemeMode};
+use gpui_component::Root;
 
 use crate::app::Application;
 
@@ -23,14 +23,12 @@ fn main() -> anyhow::Result<()> {
     let app = gpui_platform::application().with_assets(assets::Assets);
     app.run(|cx| {
         gpui_component::init(cx);
-        app::init(cx);
-
-        gpui_component::Theme::change(ThemeMode::Dark, None, cx);
         gpui_component::Theme::global_mut(cx).scrollbar_show =
             gpui_component::scroll::ScrollbarShow::Always;
 
         cx.spawn(async move |cx| {
             cx.open_window(WindowOptions::default(), |window, cx| {
+                app::init(window, cx);
                 window.activate_window();
 
                 let view = cx.new(|cx| Application::new(window, cx));

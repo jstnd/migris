@@ -11,6 +11,5 @@ futures-lite = "2.6.1"
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed" }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", features = ["tree-sitter-languages"] }
-mundy = { version = "0.2.2", features = ["color-scheme"] }
 rust-embed = "8.11.0"
 tokio = { version = "1.50.0", features = ["rt", "rt-multi-thread"] }

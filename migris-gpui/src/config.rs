@@ -1,9 +1,7 @@
 use std::fmt::Display;
 
-use futures_lite::StreamExt;
-use gpui::{App, Global, SharedString};
+use gpui::{App, BorrowAppContext, Global, SharedString, Window};
 use gpui_component::{Theme, ThemeMode};
-use mundy::{ColorScheme, Interest, Preferences};
 
 #[derive(Default)]
 pub struct AppSettings {
@@ -50,7 +48,7 @@ impl AppSettings {
 
 #[derive(Default)]
 pub struct AppState {
-    ///
+    /// The current system theme mode.
     system_theme_mode: ThemeMode,
 }
 
@@ -58,26 +56,21 @@ impl Global for AppState {}
 
 impl AppState {
     /// Initializes functionality needed for the global [`AppState`].
-    pub fn init(cx: &mut App) {
-        cx.spawn(async |cx| {
-            // Listen to changes in the system theme; this is needed for
-            // when the user has the system app theme mode selected.
-            let mut stream = Preferences::stream(Interest::ColorScheme);
-
-            while let Some(preferences) = stream.next().await {
+    pub fn init(window: &mut Window) {
+        // Listen to changes in the system theme; this is needed for
+        // when the user has the system app theme mode selected.
+        window
+            .observe_window_appearance(|window, cx| {
                 cx.update_global(|state: &mut AppState, cx| {
-                    state.system_theme_mode = match preferences.color_scheme {
-                        ColorScheme::Dark => ThemeMode::Dark,
-                        ColorScheme::Light | ColorScheme::NoPreference => ThemeMode::Light,
-                    };
+                    state.system_theme_mode = ThemeMode::from(window.appearance());
 
                     if AppSettings::global(cx).theme_mode.is_system() {
                         Theme::change(state.system_theme_mode, None, cx);
+                        cx.refresh_windows();
                     }
                 });
-            }
-        })
-        .detach();
+            })
+            .detach();
     }
 
     /// Returns a reference to the global [`AppState`].
