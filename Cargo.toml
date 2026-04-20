@@ -7,3 +7,4 @@ migris = { path = "migris" }
 
 # external dependencies
 clap = { version = "4.5.54", features = ["derive"] }
+serde = "1.0.228"

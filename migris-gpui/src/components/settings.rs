@@ -1,4 +1,4 @@
-use gpui::{App, ParentElement, SharedString, Styled, Window, px};
+use gpui::{App, ParentElement, SharedString, Styled, Window};
 use gpui_component::{
     ActiveTheme, Theme, WindowExt,
     button::Button,
@@ -9,14 +9,14 @@ use gpui_component::{
 
 use crate::{
     assets::Themes,
-    config::{AppSettings, AppThemeMode},
+    settings::{AppSettings, AppThemeMode},
     shared,
 };
 
 pub fn settings_dialog(dialog: Dialog, _: &mut Window, cx: &mut App) -> Dialog {
     dialog
-        .w(px(800.0))
-        .h(px(600.0))
+        .w(shared::DIALOG_WIDTH)
+        .h(shared::DIALOG_HEIGHT)
         .title("Settings")
         .child(Settings::new("app-settings").pages(Vec::from([
             SettingPage::new("General").group(appearance_group(cx)),

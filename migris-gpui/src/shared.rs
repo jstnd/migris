@@ -1,7 +1,16 @@
-use gpui::{App, SharedString};
+use gpui::{App, Pixels, SharedString, px};
 use gpui_component::{ActiveTheme, ThemeMode};
 
-use crate::{assets::Themes, config::AppSettings};
+use crate::{assets::Themes, settings::AppSettings};
+
+/// The application name.
+pub const APPLICATION_NAME: &str = "Migris";
+
+/// The width of primary dialogs (e.g. connections, settings).
+pub const DIALOG_WIDTH: Pixels = px(800.0);
+
+/// The height of primary dialogs (e.g. connections, settings).
+pub const DIALOG_HEIGHT: Pixels = px(600.0);
 
 /// Applies the given theme to the application.
 /// - Saves the theme in the application settings.

@@ -1,10 +1,12 @@
 mod app;
 mod assets;
 mod components;
-mod config;
+mod connections;
 mod event;
 mod models;
+mod settings;
 mod shared;
+mod state;
 mod tabs;
 
 use gpui::{AppContext, WindowOptions};

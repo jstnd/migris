@@ -21,9 +21,11 @@ use crate::{
         panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
         settings,
     },
-    config::{AppSettings, AppState},
+    connections::ConnectionManager,
     event::{AppEvent, AppEventKind, EventSource, RunSql},
     models::{ConnectionLoadData, QueryProgress},
+    settings::AppSettings,
+    state::AppState,
     tabs::TabKind,
 };
 
@@ -35,8 +37,10 @@ pub fn init(window: &mut Window, cx: &mut App) {
 
     // Set globals for use throughout the application.
     cx.set_global(AppSettings::default());
-    cx.set_global(AppState::default());
-    AppState::init(window);
+    cx.set_global(ConnectionManager::load());
+
+    let app_state = AppState::new(window, cx);
+    cx.set_global(app_state);
 }
 
 pub struct Application {

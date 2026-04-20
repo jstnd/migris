@@ -6,7 +6,7 @@ use gpui::{
     prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    ActiveTheme, Icon, Sizable,
+    ActiveTheme, Icon, Sizable, WindowExt,
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputEvent, InputState},
@@ -18,7 +18,7 @@ use gpui_component::{
 use migris::{Entity as MigrisEntity, EntityKind, data::QueryResult};
 
 use crate::{
-    components::icon::IconName,
+    components::{connections, icon::IconName},
     event::{AppEvent, AppEventKind, EventId, EventSource},
     tabs::{TabKind, TabView},
 };
@@ -169,8 +169,12 @@ impl RenderOnce for ConnectionPanel {
                             .tooltip("Add Connection")
                             .compact()
                             .ghost()
-                            .on_click(window.listener_for(&self.state, |_, _, _, cx| {
-                                cx.emit(AppEvent::new(AppEventKind::AddConnection));
+                            .on_click(window.listener_for(&self.state, |_, _, window, cx| {
+                                //cx.emit(AppEvent::new(AppEventKind::AddConnection));
+
+                                window.open_dialog(cx, |dialog, window, cx| {
+                                    connections::connection_dialog(dialog, window, cx)
+                                });
                             })),
                     ),
             )
