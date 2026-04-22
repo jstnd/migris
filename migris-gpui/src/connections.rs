@@ -9,18 +9,19 @@ use std::{
 use anyhow::anyhow;
 use directories::BaseDirs;
 use gpui::{App, Global, SharedString};
+use migris::connection::ConnectOptions;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::shared;
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct ConnectionConfig {
     connections: Vec<Connection>,
     folders: Vec<ConnectionFolder>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Connection {
     /// The id of the connection.
     id: ConnectionId,
@@ -30,6 +31,7 @@ pub struct Connection {
 
     /// The name of the connection.
     name: String,
+    //options: ConnectOptions,
 }
 
 impl Connection {
@@ -58,7 +60,7 @@ impl Display for ConnectionId {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ConnectionFolder {
     id: ConnectionFolderId,
     parent: Option<ConnectionFolderId>,
@@ -96,6 +98,9 @@ pub struct ConnectionManager {
     config: ConnectionConfig,
 
     ///
+    saved_config: ConnectionConfig,
+
+    ///
     connection_map: HashMap<ConnectionId, usize>,
 
     ///
@@ -108,8 +113,10 @@ impl ConnectionManager {
     ///
     pub fn load() -> Self {
         let config = Self::try_load().unwrap_or_else(|_| ConnectionConfig::default());
+        let saved_config = config.clone();
         let mut manager = Self {
             config,
+            saved_config,
             connection_map: HashMap::new(),
             folder_map: HashMap::new(),
         };
@@ -119,14 +126,25 @@ impl ConnectionManager {
     }
 
     ///
-    pub fn save(&self) {
+    pub fn revert(&mut self) {
+        self.config = self.saved_config.clone();
+    }
+
+    ///
+    pub fn save(&mut self) {
         // TODO: log errors with saving
+        self.saved_config = self.config.clone();
         _ = self.try_save();
     }
 
     /// Returns a reference to the global [`ConnectionManager`].
     pub fn global(cx: &App) -> &Self {
         cx.global::<Self>()
+    }
+
+    /// Returns a mutable reference to the global [`ConnectionManager`].
+    pub fn global_mut(cx: &mut App) -> &mut Self {
+        cx.global_mut::<Self>()
     }
 
     ///
@@ -141,6 +159,18 @@ impl ConnectionManager {
     }
 
     ///
+    pub fn try_connection(&self, id: &SharedString) -> Option<&Connection> {
+        if let Ok(uuid) = Uuid::parse_str(id)
+            && let Some(idx) = self.connection_map.get(&ConnectionId(uuid))
+            && let Some(connection) = self.config.connections.get(*idx)
+        {
+            Some(connection)
+        } else {
+            None
+        }
+    }
+
+    ///
     pub fn folders(&self) -> &Vec<ConnectionFolder> {
         &self.config.folders
     }
@@ -149,6 +179,18 @@ impl ConnectionManager {
     pub fn folder(&self, id: &ConnectionFolderId) -> &ConnectionFolder {
         let idx = self.folder_map[id];
         &self.config.folders[idx]
+    }
+
+    ///
+    pub fn try_folder(&self, id: &SharedString) -> Option<&ConnectionFolder> {
+        if let Ok(uuid) = Uuid::parse_str(id)
+            && let Some(idx) = self.folder_map.get(&ConnectionFolderId(uuid))
+            && let Some(folder) = self.config.folders.get(*idx)
+        {
+            Some(folder)
+        } else {
+            None
+        }
     }
 
     ///

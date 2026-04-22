@@ -2476,7 +2476,7 @@ dependencies = [
 [[package]]
 name = "gpui-component"
 version = "0.5.1"
-source = "git+https://github.com/longbridge/gpui-component#e9cca03fe5eabda74582aa28e4fb974e58a8e82d"
+source = "git+https://github.com/jstnd/gpui-component?branch=list-item-context-menu#e5c47f3bf6c4ea0a53e3d47546154832ee6817aa"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2552,7 +2552,7 @@ dependencies = [
 [[package]]
 name = "gpui-component-macros"
 version = "0.5.1"
-source = "git+https://github.com/longbridge/gpui-component#e9cca03fe5eabda74582aa28e4fb974e58a8e82d"
+source = "git+https://github.com/jstnd/gpui-component?branch=list-item-context-menu#e5c47f3bf6c4ea0a53e3d47546154832ee6817aa"
 dependencies = [
  "proc-macro2",
  "quote",

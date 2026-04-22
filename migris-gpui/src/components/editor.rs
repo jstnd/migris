@@ -7,7 +7,7 @@ use gpui_component::{
 };
 
 use crate::{
-    components::icon::{IconName, icon},
+    components::icon::{Icon, IconName},
     event::AppAction,
 };
 
@@ -77,13 +77,13 @@ impl RenderOnce for Editor {
             .context_menu(move |menu, _, cx| {
                 menu.menu_with_icon_and_disabled(
                     "Run",
-                    icon(cx, IconName::Play, is_empty),
+                    Icon::new(cx, IconName::Play).disabled(is_empty),
                     Box::new(AppAction::RunSql),
                     is_empty,
                 )
                 .menu_with_icon_and_disabled(
                     "Run Selection",
-                    icon(cx, IconName::MousePointer2, is_selected_empty),
+                    Icon::new(cx, IconName::MousePointer2).disabled(is_selected_empty),
                     Box::new(AppAction::RunSqlSelection),
                     is_selected_empty,
                 )

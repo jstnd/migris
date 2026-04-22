@@ -1,4 +1,5 @@
 pub mod common;
+pub mod connection;
 mod connectors;
 pub mod data;
 mod drivers;

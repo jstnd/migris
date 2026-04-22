@@ -11,5 +11,6 @@ clap = { workspace = true }
 csv = "1.4.0"
 futures-lite = "2.6.1"
 rust_decimal = "1.39.0"
+serde = { workspace = true }
 sqlx = { version = "0.8.6", features = [ "runtime-tokio", "chrono", "rust_decimal", "mysql" ] }
 thiserror = "2.0.17"

@@ -18,7 +18,7 @@ impl Global for AppState {}
 impl AppState {
     /// Creates a new [`AppState`].
     pub fn new(window: &mut Window, cx: &mut App) -> Self {
-        let connection_dialog_state = cx.new(ConnectionDialogState::new);
+        let connection_dialog_state = cx.new(|cx| ConnectionDialogState::new(window, cx));
         Self::init(window);
 
         Self {

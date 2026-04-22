@@ -15,7 +15,7 @@ use migris::data::QueryResult;
 use crate::{
     components::{
         editor::{Editor, EditorState},
-        icon::{IconName, icon},
+        icon::{Icon, IconName},
         table::{QueryTable, QueryTableState},
     },
     event::{AppAction, AppEvent, AppEventKind, RunSql},
@@ -172,7 +172,11 @@ impl QueryTab {
                                     .small()
                                     .button(
                                         Button::new("run-button")
-                                            .icon(icon(cx, IconName::Play, is_editor_empty))
+                                            .icon(
+                                                Icon::new(cx, IconName::Play)
+                                                    .disabled(is_editor_empty)
+                                                    .primary(cx),
+                                            )
                                             .label("Run")
                                             .on_click(window.listener_for(
                                                 &self.state,
@@ -184,16 +188,14 @@ impl QueryTab {
                                     .dropdown_menu(move |menu, _, cx| {
                                         menu.menu_with_icon(
                                             "Run",
-                                            icon(cx, IconName::Play, false),
+                                            Icon::new(cx, IconName::Play).primary(cx),
                                             Box::new(AppAction::RunSql),
                                         )
                                         .menu_with_icon_and_disabled(
                                             "Run Selection",
-                                            icon(
-                                                cx,
-                                                IconName::MousePointer2,
-                                                is_editor_selected_empty,
-                                            ),
+                                            Icon::new(cx, IconName::MousePointer2)
+                                                .disabled(is_editor_selected_empty)
+                                                .primary(cx),
                                             Box::new(AppAction::RunSqlSelection),
                                             is_editor_selected_empty,
                                         )

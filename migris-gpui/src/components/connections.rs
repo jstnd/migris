@@ -1,14 +1,22 @@
 use std::collections::HashMap;
 
-use gpui::{App, AppContext, Context, Entity, ParentElement, Styled, Window};
+use gpui::{
+    App, AppContext, Context, Entity, ParentElement, Styled, Window, prelude::FluentBuilder, px,
+};
 use gpui_component::{
-    dialog::Dialog,
+    WindowExt,
+    button::{Button, ButtonVariants},
+    dialog::{Dialog, DialogClose, DialogFooter},
+    h_flex,
+    input::{Input, InputState},
     list::ListItem,
     resizable::{h_resizable, resizable_panel},
     tree::{self, TreeItem, TreeState},
+    v_flex,
 };
 
 use crate::{
+    components::icon::{Icon, IconName},
     connections::{ConnectionFolderId, ConnectionId, ConnectionManager},
     shared,
     state::AppState,
@@ -22,22 +30,123 @@ pub fn connection_dialog(dialog: Dialog, _: &mut Window, cx: &mut App) -> Dialog
         .h(shared::DIALOG_HEIGHT)
         .title("Connections")
         .child(
-            h_resizable("connections-dialog-panels").child(resizable_panel().child(tree::tree(
-                &dialog_state.read(cx).tree_state,
-                |idx, entry, _, _, _| ListItem::new(idx).child(entry.item().label.clone()),
-            ))),
+            h_resizable("connections-dialog-panels")
+                .child(
+                    resizable_panel().size(shared::DIALOG_WIDTH * 0.30).child(
+                        v_flex()
+                            .gap_1()
+                            .p_3()
+                            .size_full()
+                            .items_center()
+                            .child(
+                                Input::new(&dialog_state.read(cx).search_state)
+                                    .cleanable(true)
+                                    .prefix(Icon::new(cx, IconName::Search)),
+                            )
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .justify_end()
+                                    .child(
+                                        Button::new("button-new-folder")
+                                            .icon(Icon::new(cx, IconName::FolderPlus))
+                                            .tooltip("New Folder")
+                                            .compact()
+                                            .ghost()
+                                            .on_click(|_, _, _| {}),
+                                    )
+                                    .child(
+                                        Button::new("button-new-connection")
+                                            .icon(Icon::new(cx, IconName::Plus))
+                                            .tooltip("New Connection")
+                                            .compact()
+                                            .ghost()
+                                            .on_click(|_, _, _| {}),
+                                    ),
+                            )
+                            .child(tree::tree(
+                                &dialog_state.read(cx).tree_state,
+                                |idx, entry, _, _, cx| {
+                                    let manager = ConnectionManager::global(cx);
+                                    let connection = manager.try_connection(&entry.item().id);
+                                    let folder = manager.try_folder(&entry.item().id);
+
+                                    ListItem::new(idx).p_0().px_1().text_sm().child(
+                                        h_flex()
+                                            .gap_1()
+                                            .pl(px(18.0) * entry.depth())
+                                            .when_some(connection, |this, _| {
+                                                // TODO: change icon to match connection type
+                                                this.child(Icon::new(cx, IconName::Database))
+                                            })
+                                            .when(folder.is_some(), |this| {
+                                                this.child(Icon::new(
+                                                    cx,
+                                                    if entry.is_expanded() {
+                                                        IconName::FolderOpen
+                                                    } else {
+                                                        IconName::Folder
+                                                    },
+                                                ))
+                                            })
+                                            .child(entry.item().label.clone()),
+                                    )
+                                },
+                            )),
+                    ),
+                )
+                .child(resizable_panel().child(v_flex().size_full().child("TEST"))),
         )
+        .footer(
+            DialogFooter::new().child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        DialogClose::new().child(Button::new("connections-cancel").label("Cancel")),
+                    )
+                    .child(
+                        Button::new("connections-save")
+                            .label("Save")
+                            .primary()
+                            .on_click(|_, _, cx| {
+                                ConnectionManager::global_mut(cx).save();
+                            }),
+                    )
+                    .child(
+                        Button::new("connections-open")
+                            .label("Open")
+                            .primary()
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                            }),
+                    ),
+            ),
+        )
+        .on_close(|_, _, cx| {
+            // Revert any changes to the config.
+            ConnectionManager::global_mut(cx).revert();
+        })
 }
 
 pub struct ConnectionDialogState {
+    /// The state for the connection search input.
+    search_state: Entity<InputState>,
+
+    /// The state for the connection tree.
     tree_state: Entity<TreeState>,
 }
 
 impl ConnectionDialogState {
     /// Creates a new [`ConnectionDialogState`].
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree_state = cx.new(|cx| TreeState::new(cx));
-        let mut state = Self { tree_state };
+        let mut state = Self {
+            search_state,
+            tree_state,
+        };
+
         state.load_tree(cx);
         state
     }
