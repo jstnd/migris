@@ -146,7 +146,7 @@ impl ConnectionPanel {
 }
 
 impl RenderOnce for ConnectionPanel {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let search_state = &self.state.read(cx).search_state;
 
         v_flex()
@@ -167,15 +167,12 @@ impl RenderOnce for ConnectionPanel {
                         Button::new("button-add-connection")
                             .icon(IconName::Plus)
                             .tooltip("Add Connection")
-                            .compact()
                             .ghost()
-                            .on_click(window.listener_for(&self.state, |_, _, window, cx| {
-                                //cx.emit(AppEvent::new(AppEventKind::AddConnection));
-
+                            .on_click(|_, window, cx| {
                                 window.open_dialog(cx, |dialog, window, cx| {
                                     connections::connection_dialog(dialog, window, cx)
                                 });
-                            })),
+                            }),
                     ),
             )
             .child(tree::tree(

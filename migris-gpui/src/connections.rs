@@ -9,19 +9,19 @@ use std::{
 use anyhow::anyhow;
 use directories::BaseDirs;
 use gpui::{App, Global, SharedString};
-use migris::connection::ConnectOptions;
+use migris::connection::ConnectionOptions;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::shared;
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ConnectionConfig {
     connections: Vec<Connection>,
     folders: Vec<ConnectionFolder>,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Connection {
     /// The id of the connection.
     id: ConnectionId,
@@ -31,7 +31,9 @@ pub struct Connection {
 
     /// The name of the connection.
     name: String,
-    //options: ConnectOptions,
+
+    ///
+    options: ConnectionOptions,
 }
 
 impl Connection {
@@ -49,6 +51,11 @@ impl Connection {
     pub fn name(&self) -> SharedString {
         SharedString::from(&self.name)
     }
+
+    ///
+    pub fn options(&self) -> &ConnectionOptions {
+        &self.options
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,7 +67,7 @@ impl Display for ConnectionId {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ConnectionFolder {
     id: ConnectionFolderId,
     parent: Option<ConnectionFolderId>,
@@ -98,9 +105,6 @@ pub struct ConnectionManager {
     config: ConnectionConfig,
 
     ///
-    saved_config: ConnectionConfig,
-
-    ///
     connection_map: HashMap<ConnectionId, usize>,
 
     ///
@@ -113,10 +117,8 @@ impl ConnectionManager {
     ///
     pub fn load() -> Self {
         let config = Self::try_load().unwrap_or_else(|_| ConnectionConfig::default());
-        let saved_config = config.clone();
         let mut manager = Self {
             config,
-            saved_config,
             connection_map: HashMap::new(),
             folder_map: HashMap::new(),
         };
@@ -126,14 +128,8 @@ impl ConnectionManager {
     }
 
     ///
-    pub fn revert(&mut self) {
-        self.config = self.saved_config.clone();
-    }
-
-    ///
     pub fn save(&mut self) {
         // TODO: log errors with saving
-        self.saved_config = self.config.clone();
         _ = self.try_save();
     }
 

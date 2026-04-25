@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "type")]
-pub enum ConnectOptions {
-    MySql(MySqlConnectOptions),
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ConnectionOptions {
+    MySql(MySqlOptions),
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct MySqlConnectOptions {
-    host: String,
-    port: u16,
-    user: String,
-    password: String,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MySqlOptions {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
 }

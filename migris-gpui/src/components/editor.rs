@@ -77,13 +77,15 @@ impl RenderOnce for Editor {
             .context_menu(move |menu, _, cx| {
                 menu.menu_with_icon_and_disabled(
                     "Run",
-                    Icon::new(cx, IconName::Play).disabled(is_empty),
+                    Icon::new(cx, IconName::Play).disabled(is_empty).primary(cx),
                     Box::new(AppAction::RunSql),
                     is_empty,
                 )
                 .menu_with_icon_and_disabled(
                     "Run Selection",
-                    Icon::new(cx, IconName::MousePointer2).disabled(is_selected_empty),
+                    Icon::new(cx, IconName::MousePointer2)
+                        .disabled(is_selected_empty)
+                        .primary(cx),
                     Box::new(AppAction::RunSqlSelection),
                     is_selected_empty,
                 )
