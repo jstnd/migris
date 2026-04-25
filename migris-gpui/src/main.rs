@@ -3,11 +3,11 @@ mod assets;
 mod components;
 mod connections;
 mod event;
-mod models;
 mod settings;
 mod shared;
 mod state;
 mod tabs;
+mod types;
 
 use gpui::{AppContext, WindowOptions};
 use gpui_component::Root;

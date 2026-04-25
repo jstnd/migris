@@ -13,3 +13,13 @@ pub struct MySqlOptions {
     pub user: String,
     pub password: String,
 }
+
+impl MySqlOptions {
+    /// Returns the generated connection url.
+    pub fn url(&self) -> String {
+        format!(
+            "mysql://{}:{}@{}:{}",
+            self.user, self.password, self.host, self.port
+        )
+    }
+}

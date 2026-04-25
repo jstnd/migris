@@ -3,6 +3,8 @@ use std::ops::Deref;
 use gpui::{Action, SharedString};
 use migris::Entity as MigrisEntity;
 
+use crate::connections::ConnectionId;
+
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
 pub enum AppAction {
@@ -12,7 +14,7 @@ pub enum AppAction {
 
 #[derive(Debug, Clone)]
 pub enum AppEventKind {
-    AddConnection,
+    OpenConnection(ConnectionId),
     OpenEntity(MigrisEntity),
     RunSql(RunSql),
 }

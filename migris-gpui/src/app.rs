@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use gpui::{
     App, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
-    Task, Window, prelude::FluentBuilder, px,
+    Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Root, Sizable, WindowExt,
@@ -12,7 +10,6 @@ use gpui_component::{
     resizable::{h_resizable, resizable_panel},
     v_flex,
 };
-use migris::{Driver, mysql::MySqlConnection};
 
 use crate::{
     assets,
@@ -21,12 +18,12 @@ use crate::{
         panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
         settings,
     },
-    connections::ConnectionManager,
+    connections::{ConnectionId, ConnectionManager},
     event::{AppEvent, AppEventKind, EventSource, RunSql},
-    models::{ConnectionLoadData, QueryProgress},
     settings::AppSettings,
     state::AppState,
     tabs::TabKind,
+    types::{OpenConnection, QueryProgress},
 };
 
 /// Initializes everything the application needs.
@@ -44,17 +41,26 @@ pub fn init(window: &mut Window, cx: &mut App) {
 }
 
 pub struct Application {
-    driver: Option<Arc<dyn Driver>>,
+    /// The state for the connection panel.
     connection_panel: Entity<ConnectionPanelState>,
+
+    /// The state for the tab panel.
     tab_panel: Entity<TabPanelState>,
 
-    /// Tracks the progress of the running query, if any.
+    /// The currently open connection, if any.
+    connection: Option<OpenConnection>,
+
+    /// The progress of the running query, if any.
     query_progress: Option<QueryProgress>,
 
+    /// The subscriptions for the application.
+    ///
+    /// These will pick up events from various locations and perform the needed work; see [`Self::handle_event`].
     _subscriptions: Vec<Subscription>,
 }
 
 impl Application {
+    /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
         let tab_panel = cx.new(|_| TabPanelState::new());
@@ -65,12 +71,19 @@ impl Application {
             cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
                 this.handle_event(window, cx, event);
             }),
+            cx.subscribe_in(
+                &AppState::global(cx).connection_dialog_state.clone(),
+                window,
+                |this, _, event, window, cx| {
+                    this.handle_event(window, cx, event);
+                },
+            ),
         ]);
 
         Self {
-            driver: None,
             connection_panel,
             tab_panel,
+            connection: None,
             query_progress: None,
             _subscriptions,
         }
@@ -78,7 +91,7 @@ impl Application {
 
     fn handle_event(&mut self, window: &mut Window, cx: &mut Context<Self>, event: &AppEvent) {
         match event.kind() {
-            AppEventKind::AddConnection => Self::add_connection(cx),
+            AppEventKind::OpenConnection(id) => self.open_connection(window, cx, *id),
             AppEventKind::OpenEntity(entity) => {
                 self.tab_panel.update(cx, |tab_panel, cx| {
                     let tab_kind = TabKind::Table(entity.clone());
@@ -91,27 +104,29 @@ impl Application {
         }
     }
 
-    fn add_connection(cx: &mut Context<Self>) {
-        let task: Task<Result<ConnectionLoadData, anyhow::Error>> = cx.spawn(async |_, _| {
-            let driver: Arc<dyn Driver> =
-                Arc::new(MySqlConnection::new("mysql://root:root@localhost").await?);
+    fn open_connection(&self, window: &mut Window, cx: &mut Context<Self>, id: ConnectionId) {
+        let connection = ConnectionManager::global(cx).connection(&id).clone();
 
-            let entities = driver.entities().await?;
-            Ok(ConnectionLoadData { driver, entities })
-        });
+        cx.spawn_in(window, async |this, cx| {
+            let Ok(driver) = migris::driver(connection.options()).await else {
+                println!("DRIVER FAILED");
+                return;
+            };
 
-        cx.spawn(async |this, cx| match task.await {
-            Ok(data) => {
-                _ = this.update(cx, |this, cx| {
-                    this.driver = Some(data.driver);
-                    this.connection_panel.update(cx, |connection_panel, cx| {
-                        connection_panel.load_entities(cx, data.entities);
-                    });
+            let Ok(entities) = driver.entities().await else {
+                println!("ENTITIES FAILED");
+                return;
+            };
 
-                    cx.notify();
+            _ = this.update_in(cx, |this, window, cx| {
+                this.connection = Some(OpenConnection { connection, driver });
+                this.connection_panel.update(cx, |connection_panel, cx| {
+                    connection_panel.load_entities(cx, entities);
                 });
-            }
-            Err(e) => println!("ERROR LOADING: {}", e),
+
+                // Close the connection dialog here after the connection was successfully loaded.
+                window.close_dialog(cx);
+            });
         })
         .detach();
     }
@@ -133,7 +148,7 @@ impl Application {
         };
 
         // TODO: remove this unwrap
-        let driver = self.driver.clone().unwrap();
+        let driver = self.connection.as_ref().unwrap().driver.clone();
 
         cx.spawn_in(window, async move |this, cx| {
             let statements = migris::sql::split(&event_data.sql);

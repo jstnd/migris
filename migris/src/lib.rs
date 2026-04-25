@@ -9,12 +9,16 @@ mod schema;
 pub mod sql;
 mod value;
 
+use std::sync::Arc;
+
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
 pub use drivers::Driver;
 pub use entity::{Entity, EntityKind};
 pub use options::{ReadOptions, WriteOptions};
 pub use schema::{Column, ColumnFlag, ColumnType, Row, Schema, Table};
 pub use value::Value;
+
+use crate::{connection::ConnectionOptions, mysql::MySqlConnection};
 
 pub mod csv {
     pub use crate::connectors::csv::{CsvConnector, CsvDataType};
@@ -78,5 +82,13 @@ pub fn connector_from_str(str: &str) -> Option<Box<dyn Connector>> {
         }
     } else {
         None
+    }
+}
+
+pub async fn driver(options: &ConnectionOptions) -> MigrisResult<Arc<dyn Driver>> {
+    match options {
+        ConnectionOptions::MySql(options) => {
+            Ok(Arc::new(MySqlConnection::new(options.url()).await?))
+        }
     }
 }

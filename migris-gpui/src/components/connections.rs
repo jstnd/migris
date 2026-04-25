@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use gpui::{
     App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Window, div, prelude::FluentBuilder, px,
+    SharedString, Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    Sizable, WindowExt,
+    Disableable, Sizable,
     button::{Button, ButtonVariants},
     dialog::{Dialog, DialogClose, DialogFooter},
     h_flex,
@@ -24,7 +24,7 @@ use crate::{
         labeled,
     },
     connections::{ConnectionFolderId, ConnectionId, ConnectionManager},
-    event::AppEvent,
+    event::{AppEvent, AppEventKind},
     shared,
     state::AppState,
 };
@@ -145,18 +145,23 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                         Button::new("connections-open")
                             .label("Open")
                             .primary()
-                            .on_click(window.listener_for(dialog_state, |_, _, window, cx| {
-                                window.close_dialog(cx);
-                            })),
+                            .disabled(dialog_state.read(cx).is_editor_empty(cx))
+                            .on_click(window.listener_for(
+                                dialog_state,
+                                |dialog_state, _, _, cx| {
+                                    dialog_state.open_connection(cx);
+                                },
+                            )),
                     ),
             ),
         )
-        .on_close(|_, _, cx| {
+        .on_close(|_, _, _| {
             // Revert any changes to the config.
             //ConnectionManager::global_mut(cx).revert();
         })
 }
 
+/// The state used with the connection dialog.
 pub struct ConnectionDialogState {
     /// The state for the connection editor.
     editor: Entity<ConnectionEditorState>,
@@ -185,6 +190,20 @@ impl ConnectionDialogState {
 
         state.load_tree(cx);
         state
+    }
+
+    /// Returns whether the editor is empty (i.e. has a connection open).
+    fn is_editor_empty(&self, cx: &App) -> bool {
+        self.editor.read(cx).variant.is_none()
+    }
+
+    /// Emits an event to open the connection that is currently active within the editor.
+    ///
+    /// Opening the connection in this context means loading the connection and its information into the application.
+    fn open_connection(&self, cx: &mut Context<Self>) {
+        if let Some(id) = self.editor.read(cx).connection_id() {
+            cx.emit(AppEvent::new(AppEventKind::OpenConnection(id)));
+        }
     }
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
@@ -262,11 +281,12 @@ impl ConnectionDialogState {
     }
 }
 
+/// The state used with a [`ConnectionEditor`].
 struct ConnectionEditorState {
-    ///
+    /// The state for the name input.
     name_input: Entity<InputState>,
 
-    ///
+    /// The state for the connection type select.
     type_select: Entity<SelectState<Vec<SharedString>>>,
 
     /// The variant of the editor.
@@ -276,6 +296,7 @@ struct ConnectionEditorState {
 }
 
 impl ConnectionEditorState {
+    /// Creates a new [`ConnectionEditorState`].
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let name_input = cx.new(|cx| InputState::new(window, cx));
         let type_select =
@@ -288,10 +309,19 @@ impl ConnectionEditorState {
         }
     }
 
+    /// Returns the [`ConnectionId`] of the connection open in the editor, if any.
+    fn connection_id(&self) -> Option<ConnectionId> {
+        self.variant
+            .as_ref()
+            .map(|ConnectionEditorVariant::MySql(state)| state.id)
+    }
+
+    /// Closes the connection open inside the editor.
     fn close(&mut self) {
         self.variant = None;
     }
 
+    /// Opens the connection with the given [`ConnectionId`] inside the editor.
     fn open(&mut self, window: &mut Window, cx: &mut App, id: ConnectionId) {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
 
@@ -318,11 +348,12 @@ enum ConnectionEditorVariant {
 
 #[derive(IntoElement)]
 struct ConnectionEditor {
-    ///
+    /// The state for the editor.
     state: Entity<ConnectionEditorState>,
 }
 
 impl ConnectionEditor {
+    /// Creates a new [`ConnectionEditor`].
     fn new(state: &Entity<ConnectionEditorState>) -> Self {
         Self {
             state: state.clone(),
@@ -331,7 +362,7 @@ impl ConnectionEditor {
 }
 
 impl RenderOnce for ConnectionEditor {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
 
         v_flex().gap_1().p_3().w_full().map(|this| {
@@ -367,24 +398,26 @@ impl RenderOnce for ConnectionEditor {
     }
 }
 
+/// The state used when editing a MySql connection inside a [`ConnectionEditor`].
 struct MySqlEditorState {
-    ///
+    /// The id of the connection being edited.
     id: ConnectionId,
 
-    ///
+    /// The state for the host input.
     host_input: Entity<InputState>,
 
-    ///
+    /// The state for the port input.
     port_input: Entity<InputState>,
 
-    ///
+    /// The state for the user input.
     user_input: Entity<InputState>,
 
-    ///
+    /// The state for the password input.
     password_input: Entity<InputState>,
 }
 
 impl MySqlEditorState {
+    /// Creates a new [`MySqlEditorState`].
     fn new(window: &mut Window, cx: &mut App, id: ConnectionId, options: &MySqlOptions) -> Self {
         let host_input = cx.new(|cx| InputState::new(window, cx).default_value(&options.host));
         let port_input = cx.new(|cx| {
@@ -412,10 +445,7 @@ impl MySqlEditorState {
         }
     }
 
-    fn id(&self) -> ConnectionId {
-        self.id
-    }
-
+    /// Returns the [`ConnectionOptions`] generated from the editor's entry fields.
     fn options(&self, cx: &App) -> ConnectionOptions {
         let options = MySqlOptions {
             host: self.host_input.read(cx).value().to_string(),
