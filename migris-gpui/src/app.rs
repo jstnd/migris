@@ -255,7 +255,9 @@ impl Render for Application {
                                         });
                                     }),
                             )
-                            .child("localhost"),
+                            .when_some(self.connection.as_ref(), |this, connection| {
+                                this.child(connection.connection.name())
+                            }),
                     )
                     .when_some(self.query_progress.as_ref(), |this, progress| {
                         this.child(
