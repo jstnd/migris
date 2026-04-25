@@ -1,4 +1,4 @@
-use gpui::{IntoElement, ParentElement, SharedString, Styled, div};
+use gpui::{IntoElement, ParentElement, SharedString, Styled};
 use gpui_component::{h_flex, v_flex};
 
 pub mod connections;
@@ -15,5 +15,5 @@ pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> imp
         .w_full()
         .text_sm()
         .child(h_flex().pl_1().child(label.into()))
-        .child(element)
+        .child(h_flex().child(element))
 }
