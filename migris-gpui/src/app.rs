@@ -5,7 +5,7 @@ use gpui::{
 use gpui_component::{
     ActiveTheme, Root, Sizable, WindowExt,
     button::{Button, ButtonVariants},
-    h_flex,
+    dialog, h_flex,
     progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
     v_flex,
@@ -125,7 +125,10 @@ impl Application {
                 });
 
                 // Close the connection dialog here after the connection was successfully loaded.
-                window.close_dialog(cx);
+                //
+                // We use `dispatch_action` here rather than `close_dialog`, as the former allows the `on_close` event
+                // for the dialog to be fired, which we need for resetting temporary state in the connection dialog.
+                window.dispatch_action(Box::new(dialog::CancelDialog), cx);
             });
         })
         .detach();
@@ -140,8 +143,7 @@ impl Application {
     ) {
         let id = event.id().cloned();
         let Some(source) = event.source().cloned() else {
-            // Return if there's no source as we need
-            // somewhere to send the query result afterwards.
+            // Return if there's no source as we need somewhere to send the query result afterwards.
             //
             // Ideally, this event kind should always have a source anyways.
             return;

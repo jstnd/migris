@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use gpui::{
     Action, App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
@@ -171,6 +171,10 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                         .on_click(window.listener_for(
                                             &dialog_state,
                                             move |state, _, window, cx| {
+                                                if let Some(id) = folder_id {
+                                                    state.toggle_expand(id);
+                                                }
+
                                                 state.editor.update(cx, |editor, cx| {
                                                     if let Some(id) = connection_id {
                                                         editor.open(window, cx, id);
@@ -229,10 +233,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                     ),
             ),
         )
-        .on_close(|_, _, _| {
-            // Revert any changes to the config.
-            //ConnectionManager::global_mut(cx).revert();
-        })
+        .on_close(window.listener_for(dialog_state, |dialog_state, _, _, cx| {
+            dialog_state.reset(cx);
+        }))
 }
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
@@ -254,6 +257,12 @@ pub struct ConnectionDialogState {
 
     /// The state for the connection tree.
     tree: Entity<TreeState>,
+
+    /// The expanded folders.
+    /// 
+    /// This is needed to persist expanded folders between actions that cause
+    /// the tree to re-render, such as adding, editing, or deleting a connection.
+    expanded: HashSet<ConnectionFolderId>,
 }
 
 impl EventEmitter<AppEvent> for ConnectionDialogState {}
@@ -269,6 +278,7 @@ impl ConnectionDialogState {
             editor,
             search_input,
             tree,
+            expanded: HashSet::new(),
         };
 
         state.load_tree(cx);
@@ -280,6 +290,11 @@ impl ConnectionDialogState {
         self.editor.read(cx).variant.is_none()
     }
 
+    /// Returns whether the folder with the given [`ConnectionFolderId`] is expanded.
+    fn is_expanded(&self, id: &ConnectionFolderId) -> bool {
+        self.expanded.contains(id)
+    }
+
     /// Returns the selected folder, if any.
     fn selected_folder(&self, cx: &App) -> Option<ConnectionFolderId> {
         if let Some(item) = self.tree.read(cx).selected_item()
@@ -288,6 +303,15 @@ impl ConnectionDialogState {
             Some(parent.id())
         } else {
             None
+        }
+    }
+
+    /// Toggles the expanded state of the folder with the given [`ConnectionFolderId`].
+    fn toggle_expand(&mut self, id: ConnectionFolderId) {
+        if self.is_expanded(&id) {
+            self.expanded.remove(&id);
+        } else {
+            self.expanded.insert(id);
         }
     }
 
@@ -338,6 +362,12 @@ impl ConnectionDialogState {
         }
     }
 
+    /// Resets the temporary state of the dialog.
+    fn reset(&mut self, cx: &mut Context<Self>) {
+        self.expanded.clear();
+        self.load_tree(cx);
+    }
+
     /// Saves the connection currently active within the editor.
     fn save(&mut self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
@@ -384,13 +414,14 @@ impl ConnectionDialogState {
                 .push(connection.id());
         }
 
-        let items = Self::build_tree_items(manager, None, &folders, &connections_by_folder);
+        let items = self.build_tree_items(manager, None, &folders, &connections_by_folder);
         self.tree.update(cx, |tree, cx| {
             tree.set_items(items, cx);
         });
     }
 
     fn build_tree_items(
+        &self,
         manager: &ConnectionManager,
         folder_id: Option<ConnectionFolderId>,
         folders: &HashMap<Option<ConnectionFolderId>, Vec<ConnectionFolderId>>,
@@ -404,9 +435,15 @@ impl ConnectionDialogState {
 
             for id in children_folders {
                 let folder = manager.folder(id);
-                let item = TreeItem::new(id.to_string(), folder.name()).children(
-                    Self::build_tree_items(manager, Some(*id), folders, connections_by_folder),
-                );
+                let item = TreeItem::new(id.to_string(), folder.name())
+                    .expanded(self.is_expanded(id))
+                    .children(self.build_tree_items(
+                        manager,
+                        Some(*id),
+                        folders,
+                        connections_by_folder,
+                    ));
+
                 folder_items.push(item);
             }
 
