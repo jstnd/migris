@@ -1,13 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use gpui::{
     Action, App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
     ParentElement, RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    Disableable, Sizable,
+    Disableable, Sizable, WindowExt,
     button::{Button, ButtonVariants},
-    dialog::{Dialog, DialogClose, DialogFooter},
+    dialog::{Dialog, DialogFooter},
     h_flex,
     input::{Input, InputState, MaskPattern},
     list::ListItem,
@@ -202,9 +202,12 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
             DialogFooter::new().child(
                 h_flex()
                     .gap_2()
-                    .child(
-                        DialogClose::new().child(Button::new("connections-cancel").label("Cancel")),
-                    )
+                    .child(Button::new("connections-cancel").label("Cancel").on_click(
+                        window.listener_for(dialog_state, |dialog_state, _, window, cx| {
+                            dialog_state.reset(cx);
+                            window.close_dialog(cx);
+                        }),
+                    ))
                     .child(
                         Button::new("connections-save")
                             .icon(IconName::Save)
