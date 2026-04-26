@@ -21,6 +21,15 @@ pub struct ConnectionConfig {
     folders: Vec<ConnectionFolder>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ConnectionId(Uuid);
+
+impl Display for ConnectionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Connection {
     /// The id of the connection.
@@ -37,6 +46,16 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Creates a new [`Connection`].
+    pub fn new(name: impl Into<String>, options: ConnectionOptions) -> Self {
+        Self {
+            id: ConnectionId(Uuid::now_v7()),
+            folder: None,
+            name: name.into(),
+            options,
+        }
+    }
+
     /// Returns the id of the connection.
     pub fn id(&self) -> ConnectionId {
         self.id
@@ -57,6 +76,11 @@ impl Connection {
         &self.options
     }
 
+    /// Sets the folder of the connection.
+    pub fn set_folder(&mut self, id: ConnectionFolderId) {
+        self.folder = Some(id);
+    }
+
     /// Sets the name of the connection.
     pub fn set_name(&mut self, name: SharedString) {
         self.name = name.to_string();
@@ -68,10 +92,16 @@ impl Connection {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ConnectionId(Uuid);
+impl Default for Connection {
+    fn default() -> Self {
+        Self::new("New connection", ConnectionOptions::default())
+    }
+}
 
-impl Display for ConnectionId {
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ConnectionFolderId(Uuid);
+
+impl Display for ConnectionFolderId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -85,6 +115,15 @@ pub struct ConnectionFolder {
 }
 
 impl ConnectionFolder {
+    /// Creates a new [`ConnectionFolder`].
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            id: ConnectionFolderId(Uuid::now_v7()),
+            parent: None,
+            name: name.into(),
+        }
+    }
+
     /// Returns the id of the folder.
     pub fn id(&self) -> ConnectionFolderId {
         self.id
@@ -99,32 +138,34 @@ impl ConnectionFolder {
     pub fn name(&self) -> SharedString {
         SharedString::from(&self.name)
     }
+
+    /// Sets the parent of the folder.
+    pub fn set_parent(&mut self, id: ConnectionFolderId) {
+        self.parent = Some(id);
+    }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ConnectionFolderId(Uuid);
-
-impl Display for ConnectionFolderId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+impl Default for ConnectionFolder {
+    fn default() -> Self {
+        Self::new("New folder")
     }
 }
 
 pub struct ConnectionManager {
-    ///
+    /// The config containing the connections and folders.
     config: ConnectionConfig,
 
-    ///
+    /// A map to track the locations of connections in the full list by [`ConnectionId`].
     connection_map: HashMap<ConnectionId, usize>,
 
-    ///
+    /// A map to track the locations of folders in the full list by [`ConnectionFolderId`].
     folder_map: HashMap<ConnectionFolderId, usize>,
 }
 
 impl Global for ConnectionManager {}
 
 impl ConnectionManager {
-    ///
+    /// Loads the config from the config file.
     pub fn load() -> Self {
         let config = Self::try_load().unwrap_or_else(|_| ConnectionConfig::default());
         let mut manager = Self {
@@ -137,7 +178,7 @@ impl ConnectionManager {
         manager
     }
 
-    ///
+    /// Saves the config to the config file.
     pub fn save(&mut self) {
         // TODO: log errors with saving
         _ = self.try_save();
@@ -153,24 +194,24 @@ impl ConnectionManager {
         cx.global_mut::<Self>()
     }
 
-    ///
+    /// Returns the list of connections in the config.
     pub fn connections(&self) -> &Vec<Connection> {
         &self.config.connections
     }
 
-    ///
+    /// Returns a reference to the connection matching the given [`ConnectionId`].
     pub fn connection(&self, id: &ConnectionId) -> &Connection {
         let idx = self.connection_map[id];
         &self.config.connections[idx]
     }
 
-    ///
+    /// Returns a mutable reference to the connection matching the given [`ConnectionId`].
     pub fn connection_mut(&mut self, id: &ConnectionId) -> &mut Connection {
         let idx = self.connection_map[id];
         &mut self.config.connections[idx]
     }
 
-    ///
+    /// Returns a reference to the connection matching the given id string, if one is found.
     pub fn try_connection(&self, id: &SharedString) -> Option<&Connection> {
         if let Ok(uuid) = Uuid::parse_str(id)
             && let Some(idx) = self.connection_map.get(&ConnectionId(uuid))
@@ -182,18 +223,33 @@ impl ConnectionManager {
         }
     }
 
-    ///
+    /// Adds a new connection to the config.
+    pub fn add_connection(&mut self, connection: Connection) {
+        self.config.connections.push(connection);
+        self.load_maps();
+        self.save();
+    }
+
+    /// Removes the connection with the given [`ConnectionId`] from the config.
+    pub fn remove_connection(&mut self, id: &ConnectionId) {
+        let idx = self.connection_map[id];
+        self.config.connections.swap_remove(idx);
+        self.load_maps();
+        self.save();
+    }
+
+    /// Returns the list of folders in the config.
     pub fn folders(&self) -> &Vec<ConnectionFolder> {
         &self.config.folders
     }
 
-    ///
+    /// Returns a reference to the folder matching the given [`ConnectionFolderId`].
     pub fn folder(&self, id: &ConnectionFolderId) -> &ConnectionFolder {
         let idx = self.folder_map[id];
         &self.config.folders[idx]
     }
 
-    ///
+    /// Returns a reference to the folder matching the given id string, if one is found.
     pub fn try_folder(&self, id: &SharedString) -> Option<&ConnectionFolder> {
         if let Ok(uuid) = Uuid::parse_str(id)
             && let Some(idx) = self.folder_map.get(&ConnectionFolderId(uuid))
@@ -205,7 +261,21 @@ impl ConnectionManager {
         }
     }
 
-    ///
+    /// Adds a new folder to the config.
+    pub fn add_folder(&mut self, folder: ConnectionFolder) {
+        self.config.folders.push(folder);
+        self.load_maps();
+        self.save();
+    }
+
+    /// Removes the folder with the given [`ConnectionFolderId`] from the config.
+    pub fn remove_folder(&mut self, id: &ConnectionFolderId) {
+        let idx = self.folder_map[id];
+        self.config.folders.swap_remove(idx);
+        self.load_maps();
+        self.save();
+    }
+
     fn load_maps(&mut self) {
         self.connection_map.clear();
         self.folder_map.clear();

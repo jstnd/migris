@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Window, prelude::FluentBuilder, px,
+    Action, App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     Disableable, Sizable,
@@ -23,7 +23,9 @@ use crate::{
         icon::{Icon, IconName},
         labeled,
     },
-    connections::{ConnectionFolderId, ConnectionId, ConnectionManager},
+    connections::{
+        Connection, ConnectionFolder, ConnectionFolderId, ConnectionId, ConnectionManager,
+    },
     event::{AppEvent, AppEventKind},
     shared,
     state::AppState,
@@ -56,20 +58,40 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                     .w_full()
                                     .justify_end()
                                     .child(
-                                        Button::new("button-new-folder")
-                                            .icon(Icon::new(cx, IconName::FolderPlus))
-                                            .tooltip("New Folder")
-                                            .ghost()
-                                            .small()
-                                            .on_click(|_, _, _| {}),
-                                    )
-                                    .child(
                                         Button::new("button-new-connection")
                                             .icon(Icon::new(cx, IconName::Plus))
                                             .tooltip("New Connection")
                                             .ghost()
                                             .small()
-                                            .on_click(|_, _, _| {}),
+                                            .on_click(window.listener_for(
+                                                dialog_state,
+                                                |dialog_state, _, _, cx| {
+                                                    dialog_state.handle_action(
+                                                        cx,
+                                                        &ConnectionDialogAction::AddConnection(
+                                                            dialog_state.selected_folder(cx),
+                                                        ),
+                                                    );
+                                                },
+                                            )),
+                                    )
+                                    .child(
+                                        Button::new("button-new-folder")
+                                            .icon(Icon::new(cx, IconName::FolderPlus))
+                                            .tooltip("New Folder")
+                                            .ghost()
+                                            .small()
+                                            .on_click(window.listener_for(
+                                                dialog_state,
+                                                |dialog_state, _, _, cx| {
+                                                    dialog_state.handle_action(
+                                                        cx,
+                                                        &ConnectionDialogAction::AddFolder(
+                                                            dialog_state.selected_folder(cx),
+                                                        ),
+                                                    );
+                                                },
+                                            )),
                                     ),
                             )
                             .child(tree::tree(&dialog_state.read(cx).tree, {
@@ -80,6 +102,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                     let connection_id =
                                         connection.map(|connection| connection.id());
                                     let folder = manager.try_folder(&entry.item().id);
+                                    let folder_id = folder.map(|folder| folder.id());
 
                                     ListItem::new(idx)
                                         .px_1()
@@ -105,6 +128,46 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                 })
                                                 .child(entry.item().label.clone()),
                                         )
+                                        .context_menu(move |menu, _, cx| {
+                                            if let Some(id) = folder_id {
+                                                menu.menu_with_icon(
+                                                    "Delete",
+                                                    Icon::new(cx, IconName::Trash).danger(cx),
+                                                    Box::new(ConnectionDialogAction::DeleteFolder(
+                                                        id,
+                                                    )),
+                                                )
+                                                .separator()
+                                                .menu_with_icon(
+                                                    "New Connection",
+                                                    Icon::new(cx, IconName::Plus),
+                                                    Box::new(
+                                                        ConnectionDialogAction::AddConnection(
+                                                            Some(id),
+                                                        ),
+                                                    ),
+                                                )
+                                                .menu_with_icon(
+                                                    "New Folder",
+                                                    Icon::new(cx, IconName::FolderPlus),
+                                                    Box::new(ConnectionDialogAction::AddFolder(
+                                                        Some(id),
+                                                    )),
+                                                )
+                                            } else if let Some(id) = connection_id {
+                                                menu.menu_with_icon(
+                                                    "Delete",
+                                                    Icon::new(cx, IconName::Trash).danger(cx),
+                                                    Box::new(
+                                                        ConnectionDialogAction::DeleteConnection(
+                                                            id,
+                                                        ),
+                                                    ),
+                                                )
+                                            } else {
+                                                menu
+                                            }
+                                        })
                                         .on_click(window.listener_for(
                                             &dialog_state,
                                             move |state, _, window, cx| {
@@ -118,7 +181,13 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             },
                                         ))
                                 }
-                            })),
+                            }))
+                            .on_action(window.listener_for(
+                                dialog_state,
+                                |dialog_state, action, _, cx| {
+                                    dialog_state.handle_action(cx, action);
+                                },
+                            )),
                     ),
                 )
                 .child(
@@ -166,6 +235,15 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
         })
 }
 
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+enum ConnectionDialogAction {
+    AddConnection(Option<ConnectionFolderId>),
+    AddFolder(Option<ConnectionFolderId>),
+    DeleteConnection(ConnectionId),
+    DeleteFolder(ConnectionFolderId),
+}
+
 /// The state used with the connection dialog.
 pub struct ConnectionDialogState {
     /// The state for the connection editor.
@@ -200,6 +278,55 @@ impl ConnectionDialogState {
     /// Returns whether the editor is empty (i.e. has a connection open).
     fn is_editor_empty(&self, cx: &App) -> bool {
         self.editor.read(cx).variant.is_none()
+    }
+
+    /// Returns the selected folder, if any.
+    fn selected_folder(&self, cx: &App) -> Option<ConnectionFolderId> {
+        if let Some(item) = self.tree.read(cx).selected_item()
+            && let Some(parent) = ConnectionManager::global(cx).try_folder(&item.id)
+        {
+            Some(parent.id())
+        } else {
+            None
+        }
+    }
+
+    /// Handles actions originating from the connection dialog.
+    fn handle_action(&mut self, cx: &mut Context<Self>, action: &ConnectionDialogAction) {
+        match action {
+            ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
+            ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
+            ConnectionDialogAction::DeleteConnection(id) => {
+                ConnectionManager::global_mut(cx).remove_connection(id);
+                self.load_tree(cx);
+            }
+            ConnectionDialogAction::DeleteFolder(id) => {
+                ConnectionManager::global_mut(cx).remove_folder(id);
+                self.load_tree(cx);
+            }
+        }
+    }
+
+    /// Adds a new default connection.
+    fn add_connection(&mut self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
+        let mut connection = Connection::default();
+        if let Some(id) = folder {
+            connection.set_folder(id);
+        }
+
+        ConnectionManager::global_mut(cx).add_connection(connection);
+        self.load_tree(cx);
+    }
+
+    /// Adds a new default folder.
+    fn add_folder(&mut self, cx: &mut Context<Self>, parent: Option<ConnectionFolderId>) {
+        let mut folder = ConnectionFolder::default();
+        if let Some(id) = parent {
+            folder.set_parent(id);
+        }
+
+        ConnectionManager::global_mut(cx).add_folder(folder);
+        self.load_tree(cx);
     }
 
     /// Emits an event to open the connection that is currently active within the editor.
@@ -434,7 +561,7 @@ impl RenderOnce for ConnectionEditor {
     }
 }
 
-/// The state used when editing a MySql connection inside a [`ConnectionEditor`].
+/// The state used when editing a MySQL connection inside a [`ConnectionEditor`].
 struct MySqlEditorState {
     /// The id of the connection being edited.
     id: ConnectionId,

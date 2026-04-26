@@ -1,9 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+use crate::shared;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ConnectionOptions {
     MySql(MySqlOptions),
+}
+
+impl Default for ConnectionOptions {
+    fn default() -> Self {
+        Self::MySql(MySqlOptions::default())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -21,5 +29,16 @@ impl MySqlOptions {
             "mysql://{}:{}@{}:{}",
             self.user, self.password, self.host, self.port
         )
+    }
+}
+
+impl Default for MySqlOptions {
+    fn default() -> Self {
+        Self {
+            host: String::new(),
+            port: shared::DEFAULT_MYSQL_PORT,
+            user: String::new(),
+            password: String::new(),
+        }
     }
 }

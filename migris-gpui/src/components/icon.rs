@@ -17,6 +17,7 @@ pub enum IconName {
     Save,
     Search,
     Settings,
+    Trash,
     X,
 }
 
@@ -29,7 +30,7 @@ impl IconNamed for IconName {
             Self::Database => "icons/database.svg",
             Self::Eye => "icons/eye.svg",
             Self::Folder => "icons/folder.svg",
-            Self::FolderOpen => "icons/folder-open.svg", 
+            Self::FolderOpen => "icons/folder-open.svg",
             Self::FolderPlus => "icons/folder-plus.svg",
             Self::Grid3x3 => "icons/grid-3x3.svg",
             Self::MousePointer2 => "icons/mouse-pointer-2.svg",
@@ -38,6 +39,7 @@ impl IconNamed for IconName {
             Self::Save => "icons/save.svg",
             Self::Search => "icons/search.svg",
             Self::Settings => "icons/settings.svg",
+            Self::Trash => "icons/trash.svg",
             Self::X => "icons/x.svg",
         }
         .into()
@@ -64,6 +66,12 @@ impl Icon {
     /// Sets the disabled state for the icon.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Sets the icon to use the danger color.
+    pub fn danger(mut self, cx: &App) -> Self {
+        self.color = cx.theme().danger;
         self
     }
 
