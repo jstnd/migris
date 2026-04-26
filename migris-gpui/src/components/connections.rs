@@ -321,10 +321,7 @@ impl ConnectionDialogState {
             ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
             ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
             ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
-            ConnectionDialogAction::DeleteFolder(id) => {
-                ConnectionManager::global_mut(cx).remove_folder(id);
-                self.load_tree(cx);
-            }
+            ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
         }
     }
 
@@ -362,6 +359,12 @@ impl ConnectionDialogState {
         }
 
         ConnectionManager::global_mut(cx).remove_connection(id);
+        self.load_tree(cx);
+    }
+
+    /// Deletes the folder with the given [`ConnectionFolderId`].
+    fn delete_folder(&mut self, cx: &mut Context<Self>, id: &ConnectionFolderId) {
+        ConnectionManager::global_mut(cx).remove_folder(id);
         self.load_tree(cx);
     }
 

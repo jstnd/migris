@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Display,
     fs::File,
     io::{BufReader, BufWriter},
@@ -270,8 +270,45 @@ impl ConnectionManager {
 
     /// Removes the folder with the given [`ConnectionFolderId`] from the config.
     pub fn remove_folder(&mut self, id: &ConnectionFolderId) {
-        let idx = self.folder_map[id];
-        self.config.folders.swap_remove(idx);
+        fn remove_inner(
+            manager: &mut ConnectionManager,
+            id: ConnectionFolderId,
+        ) -> (HashSet<ConnectionId>, HashSet<ConnectionFolderId>) {
+            let mut removed_connections = HashSet::new();
+            let mut removed_folders = HashSet::from([id]);
+            let inner_connections: Vec<ConnectionId> = manager
+                .config
+                .connections
+                .iter()
+                .filter_map(|connection| (connection.folder == Some(id)).then_some(connection.id))
+                .collect();
+
+            let inner_folders: Vec<ConnectionFolderId> = manager
+                .config
+                .folders
+                .iter()
+                .filter_map(|folder| (folder.parent == Some(id)).then_some(folder.id))
+                .collect();
+
+            // Recurse the removal to any inner folders.
+            for id in inner_folders {
+                let (inner_removed_connections, inner_removed_folders) = remove_inner(manager, id);
+                removed_connections.extend(inner_removed_connections);
+                removed_folders.extend(inner_removed_folders);
+            }
+
+            removed_connections.extend(inner_connections);
+            (removed_connections, removed_folders)
+        }
+
+        let (removed_connections, removed_folders) = remove_inner(self, *id);
+        self.config
+            .connections
+            .retain(|connection| !removed_connections.contains(&connection.id));
+        self.config
+            .folders
+            .retain(|folder| !removed_folders.contains(&folder.id));
+
         self.load_maps();
         self.save();
     }
