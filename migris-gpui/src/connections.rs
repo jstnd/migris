@@ -61,11 +61,6 @@ impl Connection {
         self.id
     }
 
-    /// Returns the id of the folder containing the connection, if any.
-    pub fn folder(&self) -> Option<ConnectionFolderId> {
-        self.folder
-    }
-
     /// Returns the name of the connection.
     pub fn name(&self) -> SharedString {
         SharedString::from(&self.name)
@@ -129,11 +124,6 @@ impl ConnectionFolder {
         self.id
     }
 
-    /// Returns the id of the parent folder, if any.
-    pub fn parent(&self) -> Option<ConnectionFolderId> {
-        self.parent
-    }
-
     /// Returns the name of the folder.
     pub fn name(&self) -> SharedString {
         SharedString::from(&self.name)
@@ -155,11 +145,17 @@ pub struct ConnectionManager {
     /// The config containing the connections and folders.
     config: ConnectionConfig,
 
-    /// A map to track the locations of connections in the full list by [`ConnectionId`].
+    /// Tracks the locations of connections within the full list by [`ConnectionId`].
     connection_map: HashMap<ConnectionId, usize>,
 
-    /// A map to track the locations of folders in the full list by [`ConnectionFolderId`].
+    /// Tracks the connections within each folder.
+    connections_by_folder: HashMap<Option<ConnectionFolderId>, Vec<ConnectionId>>,
+
+    /// Tracks the locations of folders within the full list by [`ConnectionFolderId`].
     folder_map: HashMap<ConnectionFolderId, usize>,
+
+    /// Tracks the folders within each parent folder.
+    folders_by_parent: HashMap<Option<ConnectionFolderId>, Vec<ConnectionFolderId>>,
 }
 
 impl Global for ConnectionManager {}
@@ -171,7 +167,9 @@ impl ConnectionManager {
         let mut manager = Self {
             config,
             connection_map: HashMap::new(),
+            connections_by_folder: HashMap::new(),
             folder_map: HashMap::new(),
+            folders_by_parent: HashMap::new(),
         };
 
         manager.load_maps();
@@ -194,9 +192,12 @@ impl ConnectionManager {
         cx.global_mut::<Self>()
     }
 
-    /// Returns the list of connections in the config.
-    pub fn connections(&self) -> &Vec<Connection> {
-        &self.config.connections
+    /// Returns the connections within the given folder.
+    pub fn connections_for_folder(
+        &self,
+        folder: &Option<ConnectionFolderId>,
+    ) -> Option<&Vec<ConnectionId>> {
+        self.connections_by_folder.get(folder)
     }
 
     /// Returns a reference to the connection matching the given [`ConnectionId`].
@@ -238,9 +239,12 @@ impl ConnectionManager {
         self.save();
     }
 
-    /// Returns the list of folders in the config.
-    pub fn folders(&self) -> &Vec<ConnectionFolder> {
-        &self.config.folders
+    /// Returns the folders within the given parent folder.
+    pub fn folders_for_parent(
+        &self,
+        parent: &Option<ConnectionFolderId>,
+    ) -> Option<&Vec<ConnectionFolderId>> {
+        self.folders_by_parent.get(parent)
     }
 
     /// Returns a reference to the folder matching the given [`ConnectionFolderId`].
@@ -271,33 +275,25 @@ impl ConnectionManager {
     /// Removes the folder with the given [`ConnectionFolderId`] from the config.
     pub fn remove_folder(&mut self, id: &ConnectionFolderId) {
         fn remove_inner(
-            manager: &mut ConnectionManager,
+            manager: &ConnectionManager,
             id: ConnectionFolderId,
         ) -> (HashSet<ConnectionId>, HashSet<ConnectionFolderId>) {
             let mut removed_connections = HashSet::new();
             let mut removed_folders = HashSet::from([id]);
-            let inner_connections: Vec<ConnectionId> = manager
-                .config
-                .connections
-                .iter()
-                .filter_map(|connection| (connection.folder == Some(id)).then_some(connection.id))
-                .collect();
 
-            let inner_folders: Vec<ConnectionFolderId> = manager
-                .config
-                .folders
-                .iter()
-                .filter_map(|folder| (folder.parent == Some(id)).then_some(folder.id))
-                .collect();
-
-            // Recurse the removal to any inner folders.
-            for id in inner_folders {
-                let (inner_removed_connections, inner_removed_folders) = remove_inner(manager, id);
-                removed_connections.extend(inner_removed_connections);
-                removed_folders.extend(inner_removed_folders);
+            if let Some(connections) = manager.connections_for_folder(&Some(id)) {
+                removed_connections.extend(connections);
             }
 
-            removed_connections.extend(inner_connections);
+            if let Some(folders) = manager.folders_for_parent(&Some(id)) {
+                for id in folders {
+                    let (inner_removed_connections, inner_removed_folders) =
+                        remove_inner(manager, *id);
+                    removed_connections.extend(inner_removed_connections);
+                    removed_folders.extend(inner_removed_folders);
+                }
+            }
+
             (removed_connections, removed_folders)
         }
 
@@ -315,14 +311,24 @@ impl ConnectionManager {
 
     fn load_maps(&mut self) {
         self.connection_map.clear();
+        self.connections_by_folder.clear();
         self.folder_map.clear();
+        self.folders_by_parent.clear();
 
         for (idx, connection) in self.config.connections.iter().enumerate() {
             self.connection_map.insert(connection.id, idx);
+            self.connections_by_folder
+                .entry(connection.folder)
+                .or_default()
+                .push(connection.id);
         }
 
         for (idx, folder) in self.config.folders.iter().enumerate() {
             self.folder_map.insert(folder.id, idx);
+            self.folders_by_parent
+                .entry(folder.parent)
+                .or_default()
+                .push(folder.id);
         }
     }
 

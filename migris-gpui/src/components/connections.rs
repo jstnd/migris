@@ -404,32 +404,7 @@ impl ConnectionDialogState {
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
         let manager = ConnectionManager::global(cx);
-
-        //
-        let mut folders: HashMap<Option<ConnectionFolderId>, Vec<ConnectionFolderId>> =
-            HashMap::new();
-
-        //
-        let mut connections_by_folder: HashMap<Option<ConnectionFolderId>, Vec<ConnectionId>> =
-            HashMap::new();
-
-        //
-        for folder in manager.folders() {
-            folders
-                .entry(folder.parent())
-                .or_default()
-                .push(folder.id());
-        }
-
-        //
-        for connection in manager.connections() {
-            connections_by_folder
-                .entry(connection.folder())
-                .or_default()
-                .push(connection.id());
-        }
-
-        let items = self.build_tree_items(manager, None, &folders, &connections_by_folder);
+        let items = self.build_tree_items(manager, None);
         self.tree.update(cx, |tree, cx| {
             tree.set_items(items, cx);
         });
@@ -439,25 +414,18 @@ impl ConnectionDialogState {
         &self,
         manager: &ConnectionManager,
         folder_id: Option<ConnectionFolderId>,
-        folders: &HashMap<Option<ConnectionFolderId>, Vec<ConnectionFolderId>>,
-        connections_by_folder: &HashMap<Option<ConnectionFolderId>, Vec<ConnectionId>>,
     ) -> Vec<TreeItem> {
         let mut items = Vec::new();
 
-        //
-        if let Some(children_folders) = folders.get(&folder_id) {
+        // Build any nested folders inside the folder.
+        if let Some(children_folders) = manager.folders_for_parent(&folder_id) {
             let mut folder_items = Vec::new();
 
             for id in children_folders {
                 let folder = manager.folder(id);
                 let item = TreeItem::new(id.to_string(), folder.name())
                     .expanded(self.is_expanded(id))
-                    .children(self.build_tree_items(
-                        manager,
-                        Some(*id),
-                        folders,
-                        connections_by_folder,
-                    ));
+                    .children(self.build_tree_items(manager, Some(*id)));
 
                 folder_items.push(item);
             }
@@ -466,8 +434,8 @@ impl ConnectionDialogState {
             items.extend(folder_items);
         }
 
-        //
-        if let Some(children_connections) = connections_by_folder.get(&folder_id) {
+        // Build any connections inside the folder.
+        if let Some(children_connections) = manager.connections_for_folder(&folder_id) {
             let mut connection_items = Vec::new();
 
             for id in children_connections {
