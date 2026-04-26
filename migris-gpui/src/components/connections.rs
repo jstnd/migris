@@ -116,10 +116,13 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     // TODO: change icon to match connection type
                                                     this.child(Icon::new(cx, IconName::Database))
                                                 })
-                                                .when(folder.is_some(), |this| {
+                                                .when_some(folder, |this, folder| {
                                                     this.child(Icon::new(
                                                         cx,
-                                                        if entry.is_expanded() {
+                                                        if dialog_state
+                                                            .read(cx)
+                                                            .is_expanded(&folder.id())
+                                                        {
                                                             IconName::FolderOpen
                                                         } else {
                                                             IconName::Folder
