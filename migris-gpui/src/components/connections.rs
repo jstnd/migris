@@ -259,7 +259,7 @@ pub struct ConnectionDialogState {
     tree: Entity<TreeState>,
 
     /// The expanded folders.
-    /// 
+    ///
     /// This is needed to persist expanded folders between actions that cause
     /// the tree to re-render, such as adding, editing, or deleting a connection.
     expanded: HashSet<ConnectionFolderId>,
@@ -320,10 +320,7 @@ impl ConnectionDialogState {
         match action {
             ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
             ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
-            ConnectionDialogAction::DeleteConnection(id) => {
-                ConnectionManager::global_mut(cx).remove_connection(id);
-                self.load_tree(cx);
-            }
+            ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
             ConnectionDialogAction::DeleteFolder(id) => {
                 ConnectionManager::global_mut(cx).remove_folder(id);
                 self.load_tree(cx);
@@ -350,6 +347,21 @@ impl ConnectionDialogState {
         }
 
         ConnectionManager::global_mut(cx).add_folder(folder);
+        self.load_tree(cx);
+    }
+
+    /// Deletes the connection with the given [`ConnectionId`].
+    fn delete_connection(&mut self, cx: &mut Context<Self>, id: &ConnectionId) {
+        // Close the editor if we are deleting the connection that was being edited.
+        if let Some(editor_id) = self.editor.read(cx).connection_id()
+            && editor_id == *id
+        {
+            self.editor.update(cx, |editor, _| {
+                editor.close();
+            });
+        }
+
+        ConnectionManager::global_mut(cx).remove_connection(id);
         self.load_tree(cx);
     }
 
