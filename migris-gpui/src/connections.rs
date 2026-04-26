@@ -32,7 +32,7 @@ pub struct Connection {
     /// The name of the connection.
     name: String,
 
-    ///
+    /// The options for the connection.
     options: ConnectionOptions,
 }
 
@@ -52,9 +52,19 @@ impl Connection {
         SharedString::from(&self.name)
     }
 
-    ///
+    /// Returns the options for the connection.
     pub fn options(&self) -> &ConnectionOptions {
         &self.options
+    }
+
+    /// Sets the name of the connection.
+    pub fn set_name(&mut self, name: SharedString) {
+        self.name = name.to_string();
+    }
+
+    /// Sets the options for the connection.
+    pub fn set_options(&mut self, options: ConnectionOptions) {
+        self.options = options;
     }
 }
 
@@ -152,6 +162,12 @@ impl ConnectionManager {
     pub fn connection(&self, id: &ConnectionId) -> &Connection {
         let idx = self.connection_map[id];
         &self.config.connections[idx]
+    }
+
+    ///
+    pub fn connection_mut(&mut self, id: &ConnectionId) -> &mut Connection {
+        let idx = self.connection_map[id];
+        &mut self.config.connections[idx]
     }
 
     ///

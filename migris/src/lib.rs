@@ -6,6 +6,7 @@ mod drivers;
 mod entity;
 mod options;
 mod schema;
+pub mod shared;
 pub mod sql;
 mod value;
 

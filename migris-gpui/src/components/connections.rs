@@ -12,7 +12,7 @@ use gpui_component::{
     input::{Input, InputState, MaskPattern},
     list::ListItem,
     resizable::{h_resizable, resizable_panel},
-    select::{Select, SelectState},
+    select::SelectState,
     tree::{self, TreeItem, TreeState},
     v_flex,
 };
@@ -31,6 +31,7 @@ use crate::{
 
 pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> Dialog {
     let dialog_state = &AppState::global(cx).connection_dialog_state;
+    let is_editor_empty = dialog_state.read(cx).is_editor_empty(cx);
 
     dialog
         .w(shared::DIALOG_WIDTH)
@@ -137,15 +138,19 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             .label("Save")
                             .compact()
                             .primary()
-                            .on_click(|_, _, cx| {
-                                ConnectionManager::global_mut(cx).save();
-                            }),
+                            .disabled(is_editor_empty)
+                            .on_click(window.listener_for(
+                                dialog_state,
+                                |dialog_state, _, _, cx| {
+                                    dialog_state.save(cx);
+                                },
+                            )),
                     )
                     .child(
                         Button::new("connections-open")
                             .label("Open")
                             .primary()
-                            .disabled(dialog_state.read(cx).is_editor_empty(cx))
+                            .disabled(is_editor_empty)
                             .on_click(window.listener_for(
                                 dialog_state,
                                 |dialog_state, _, _, cx| {
@@ -203,6 +208,25 @@ impl ConnectionDialogState {
     fn open_connection(&self, cx: &mut Context<Self>) {
         if let Some(id) = self.editor.read(cx).connection_id() {
             cx.emit(AppEvent::new(AppEventKind::OpenConnection(id)));
+        }
+    }
+
+    /// Saves the connection currently active within the editor.
+    fn save(&mut self, cx: &mut Context<Self>) {
+        let editor = self.editor.read(cx);
+
+        if let Some(id) = editor.connection_id()
+            && let Some(options) = editor.options(cx)
+        {
+            let name = editor.name(cx);
+            let manager = ConnectionManager::global_mut(cx);
+            let connection = manager.connection_mut(&id);
+            connection.set_name(name);
+            connection.set_options(options);
+            manager.save();
+
+            // Reload the tree with the newly saved connection.
+            self.load_tree(cx);
         }
     }
 
@@ -309,6 +333,11 @@ impl ConnectionEditorState {
         }
     }
 
+    /// Closes the connection open inside the editor.
+    fn close(&mut self) {
+        self.variant = None;
+    }
+
     /// Returns the [`ConnectionId`] of the connection open in the editor, if any.
     fn connection_id(&self) -> Option<ConnectionId> {
         self.variant
@@ -316,9 +345,9 @@ impl ConnectionEditorState {
             .map(|ConnectionEditorVariant::MySql(state)| state.id)
     }
 
-    /// Closes the connection open inside the editor.
-    fn close(&mut self) {
-        self.variant = None;
+    /// Returns the name entered inside the editor.
+    fn name(&self, cx: &App) -> SharedString {
+        self.name_input.read(cx).value()
     }
 
     /// Opens the connection with the given [`ConnectionId`] inside the editor.
@@ -339,6 +368,13 @@ impl ConnectionEditorState {
                 ConnectionEditorVariant::MySql(state)
             }
         });
+    }
+
+    /// Returns the [`ConnectionOptions`] generated from the editor's entry fields, if any.
+    fn options(&self, cx: &App) -> Option<ConnectionOptions> {
+        self.variant
+            .as_ref()
+            .map(|ConnectionEditorVariant::MySql(state)| state.options(cx))
     }
 }
 
@@ -368,7 +404,7 @@ impl RenderOnce for ConnectionEditor {
         v_flex().gap_1().p_3().w_full().map(|this| {
             if let Some(variant) = &state.variant {
                 this.child(labeled("Name", Input::new(&state.name_input)))
-                    .child(labeled("Connection Type", Select::new(&state.type_select)))
+                    //.child(labeled("Connection Type", Select::new(&state.type_select)))
                     .map(|this| match variant {
                         ConnectionEditorVariant::MySql(state) => this
                             .child(
@@ -449,7 +485,12 @@ impl MySqlEditorState {
     fn options(&self, cx: &App) -> ConnectionOptions {
         let options = MySqlOptions {
             host: self.host_input.read(cx).value().to_string(),
-            port: 0,
+            port: self
+                .port_input
+                .read(cx)
+                .value()
+                .parse::<u16>()
+                .unwrap_or(migris::shared::DEFAULT_MYSQL_PORT),
             user: self.user_input.read(cx).value().to_string(),
             password: self.password_input.read(cx).value().to_string(),
         };
