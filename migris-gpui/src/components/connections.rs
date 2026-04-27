@@ -5,12 +5,13 @@ use gpui::{
     ParentElement, RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    Disableable, Sizable, WindowExt,
+    ActiveTheme, Disableable, Sizable, WindowExt,
     button::{Button, ButtonVariants},
     dialog::{Dialog, DialogFooter},
     h_flex,
     input::{Input, InputState, MaskPattern},
     list::ListItem,
+    progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
     select::SelectState,
     tree::{self, TreeItem, TreeState},
@@ -34,6 +35,7 @@ use crate::{
 pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> Dialog {
     let dialog_state = &AppState::global(cx).connection_dialog_state;
     let is_editor_empty = dialog_state.read(cx).is_editor_empty(cx);
+    let is_opening = dialog_state.read(cx).opening;
 
     dialog
         .w(shared::DIALOG_WIDTH)
@@ -217,7 +219,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             .label("Save")
                             .compact()
                             .primary()
-                            .disabled(is_editor_empty)
+                            .disabled(is_editor_empty || is_opening)
                             .on_click(window.listener_for(
                                 dialog_state,
                                 |dialog_state, _, _, cx| {
@@ -228,12 +230,22 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                     .child(
                         Button::new("connections-open")
                             .label("Open")
+                            .compact()
                             .primary()
                             .disabled(is_editor_empty)
+                            .when(is_opening, |this| {
+                                this.icon(
+                                    ProgressCircle::new("open-progress")
+                                        .color(cx.theme().button_primary_foreground)
+                                        .loading(true),
+                                )
+                            })
                             .on_click(window.listener_for(
                                 dialog_state,
-                                |dialog_state, _, _, cx| {
-                                    dialog_state.open_connection(cx);
+                                move |dialog_state, _, _, cx| {
+                                    if !is_opening {
+                                        dialog_state.open_connection(cx);
+                                    }
                                 },
                             )),
                     ),
@@ -269,6 +281,9 @@ pub struct ConnectionDialogState {
     /// This is needed to persist expanded folders between actions that cause
     /// the tree to re-render, such as adding, editing, or deleting a connection.
     expanded: HashSet<ConnectionFolderId>,
+
+    /// Whether a connection is in the progress of opening.
+    opening: bool,
 }
 
 impl EventEmitter<AppEvent> for ConnectionDialogState {}
@@ -285,6 +300,7 @@ impl ConnectionDialogState {
             search_input,
             tree,
             expanded: HashSet::new(),
+            opening: false,
         };
 
         state.load_tree(cx);
@@ -377,14 +393,16 @@ impl ConnectionDialogState {
     /// Emits an event to open the connection that is currently active within the editor.
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
-    fn open_connection(&self, cx: &mut Context<Self>) {
+    fn open_connection(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.editor.read(cx).connection_id() {
+            self.opening = true;
             cx.emit(AppEvent::new(AppEventKind::OpenConnection(id)));
         }
     }
 
     /// Resets the temporary state of the dialog.
     fn reset(&mut self, cx: &mut Context<Self>) {
+        self.opening = false;
         self.expanded.clear();
         self.load_tree(cx);
     }
