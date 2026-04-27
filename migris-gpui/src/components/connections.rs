@@ -96,101 +96,110 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             )),
                                     ),
                             )
-                            .child(tree::tree(&dialog_state.read(cx).tree, {
-                                let dialog_state = dialog_state.clone();
-                                move |idx, entry, _, window, cx| {
-                                    let manager = ConnectionManager::global(cx);
-                                    let connection = manager.try_connection(&entry.item().id);
-                                    let connection_id =
-                                        connection.map(|connection| connection.id());
-                                    let folder = manager.try_folder(&entry.item().id);
-                                    let folder_id = folder.map(|folder| folder.id());
+                            .child(
+                                tree::tree(&dialog_state.read(cx).tree, {
+                                    let dialog_state = dialog_state.clone();
+                                    move |idx, entry, _, window, cx| {
+                                        let manager = ConnectionManager::global(cx);
+                                        let connection = manager.try_connection(&entry.item().id);
+                                        let connection_id =
+                                            connection.map(|connection| connection.id());
+                                        let folder = manager.try_folder(&entry.item().id);
+                                        let folder_id = folder.map(|folder| folder.id());
 
-                                    ListItem::new(idx)
-                                        .px_1()
-                                        .py_0()
-                                        .text_sm()
-                                        .child(
-                                            h_flex()
-                                                .gap_1()
-                                                .pl(px(18.0) * entry.depth())
-                                                .when_some(connection, |this, _| {
-                                                    // TODO: change icon to match connection type
-                                                    this.child(Icon::new(cx, IconName::Database))
-                                                })
-                                                .when_some(folder, |this, folder| {
-                                                    this.child(Icon::new(
-                                                        cx,
-                                                        if dialog_state
-                                                            .read(cx)
-                                                            .is_expanded(&folder.id())
-                                                        {
-                                                            IconName::FolderOpen
-                                                        } else {
-                                                            IconName::Folder
-                                                        },
-                                                    ))
-                                                })
-                                                .child(entry.item().label.clone()),
-                                        )
-                                        .context_menu(move |menu, _, cx| {
-                                            if let Some(id) = folder_id {
-                                                menu.menu_with_icon(
-                                                    "Delete",
-                                                    Icon::new(cx, IconName::Trash).danger(cx),
-                                                    Box::new(ConnectionDialogAction::DeleteFolder(
-                                                        id,
-                                                    )),
-                                                )
-                                                .separator()
-                                                .menu_with_icon(
-                                                    "New Connection",
-                                                    Icon::new(cx, IconName::Plus),
-                                                    Box::new(
-                                                        ConnectionDialogAction::AddConnection(
-                                                            Some(id),
-                                                        ),
-                                                    ),
-                                                )
-                                                .menu_with_icon(
-                                                    "New Folder",
-                                                    Icon::new(cx, IconName::FolderPlus),
-                                                    Box::new(ConnectionDialogAction::AddFolder(
-                                                        Some(id),
-                                                    )),
-                                                )
-                                            } else if let Some(id) = connection_id {
-                                                menu.menu_with_icon(
-                                                    "Delete",
-                                                    Icon::new(cx, IconName::Trash).danger(cx),
-                                                    Box::new(
-                                                        ConnectionDialogAction::DeleteConnection(
-                                                            id,
-                                                        ),
-                                                    ),
-                                                )
-                                            } else {
-                                                menu
-                                            }
-                                        })
-                                        .on_click(window.listener_for(
-                                            &dialog_state,
-                                            move |state, _, window, cx| {
-                                                if let Some(id) = folder_id {
-                                                    state.toggle_expand(id);
-                                                }
-
-                                                state.editor.update(cx, |editor, cx| {
-                                                    if let Some(id) = connection_id {
-                                                        editor.open(window, cx, id);
-                                                    } else {
-                                                        editor.close();
+                                        ListItem::new(idx)
+                                            .px_1()
+                                            .py_0()
+                                            .text_sm()
+                                            .child(
+                                                h_flex()
+                                                    .gap_1()
+                                                    .pl(px(18.0) * entry.depth())
+                                                    .when_some(connection, |this, _| {
+                                                        // TODO: change icon to match connection type
+                                                        this.child(Icon::new(
+                                                            cx,
+                                                            IconName::Database,
+                                                        ))
+                                                    })
+                                                    .when_some(folder, |this, folder| {
+                                                        this.child(Icon::new(
+                                                            cx,
+                                                            if dialog_state
+                                                                .read(cx)
+                                                                .is_expanded(&folder.id())
+                                                            {
+                                                                IconName::FolderOpen
+                                                            } else {
+                                                                IconName::Folder
+                                                            },
+                                                        ))
+                                                    })
+                                                    .child(entry.item().label.clone()),
+                                            )
+                                            .on_click(window.listener_for(
+                                                &dialog_state,
+                                                move |state, _, window, cx| {
+                                                    if let Some(id) = folder_id {
+                                                        state.toggle_expand(id);
                                                     }
-                                                });
-                                            },
-                                        ))
-                                }
-                            }))
+
+                                                    state.editor.update(cx, |editor, cx| {
+                                                        if let Some(id) = connection_id {
+                                                            editor.open(window, cx, id);
+                                                        } else {
+                                                            editor.close();
+                                                        }
+                                                    });
+                                                },
+                                            ))
+                                    }
+                                })
+                                .context_menu(
+                                    |_, entry, menu, _, cx| {
+                                        let manager = ConnectionManager::global(cx);
+                                        let connection_id = manager
+                                            .try_connection(&entry.item().id)
+                                            .map(|connection| connection.id());
+                                        let folder_id = manager
+                                            .try_folder(&entry.item().id)
+                                            .map(|folder| folder.id());
+
+                                        if let Some(id) = connection_id {
+                                            menu.menu_with_icon(
+                                                "Delete",
+                                                Icon::new(cx, IconName::Trash).danger(cx),
+                                                Box::new(ConnectionDialogAction::DeleteConnection(
+                                                    id,
+                                                )),
+                                            )
+                                        } else if let Some(id) = folder_id {
+                                            menu.menu_with_icon(
+                                                "Delete",
+                                                Icon::new(cx, IconName::Trash).danger(cx),
+                                                Box::new(ConnectionDialogAction::DeleteFolder(id)),
+                                            )
+                                            .separator()
+                                            .menu_with_icon(
+                                                "New Connection",
+                                                Icon::new(cx, IconName::Plus),
+                                                Box::new(ConnectionDialogAction::AddConnection(
+                                                    Some(id),
+                                                )),
+                                            )
+                                            .menu_with_icon(
+                                                "New Folder",
+                                                Icon::new(cx, IconName::FolderPlus),
+                                                Box::new(ConnectionDialogAction::AddFolder(Some(
+                                                    id,
+                                                ))),
+                                            )
+                                        } else {
+                                            menu
+                                        }
+                                    },
+                                ),
+                            )
                             .on_action(window.listener_for(
                                 dialog_state,
                                 |dialog_state, action, _, cx| {
