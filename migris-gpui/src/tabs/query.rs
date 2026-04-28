@@ -1,6 +1,6 @@
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, SharedString,
+    StatefulInteractiveElement, Styled, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable,
@@ -17,7 +17,7 @@ use crate::{
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableState},
     },
-    events::{AppAction, Event, EventId, EventManager, RunSqlEvent},
+    events::{AppAction, Event, EventManager, RunSqlEvent},
 };
 
 struct QueryTabState {
@@ -30,8 +30,6 @@ struct QueryTabState {
     /// The index of the active table tab.
     active_table: usize,
 }
-
-impl EventEmitter<EventId> for QueryTabState {}
 
 impl QueryTabState {
     /// Creates a new [`QueryTabState`].
@@ -46,15 +44,15 @@ impl QueryTabState {
     }
 
     /// Handles actions originating from the tab.
-    fn handle_action(&mut self, cx: &mut Context<Self>, action: &AppAction) {
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &AppAction) {
         match action {
             AppAction::RunSql => {
                 self.clear_results();
-                self.run_sql(cx, false);
+                self.run_sql(window, cx, false);
             }
             AppAction::RunSqlSelection => {
                 self.clear_results();
-                self.run_sql(cx, true);
+                self.run_sql(window, cx, true);
             }
         }
     }
@@ -71,7 +69,7 @@ impl QueryTabState {
     }
 
     /// Triggers an event to run the SQL in the editor.
-    fn run_sql(&self, cx: &mut Context<Self>, selected: bool) {
+    fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, selected: bool) {
         let editor_state = self.editor_state.read(cx);
         let sql = if selected {
             editor_state.selected_value(cx)
@@ -89,7 +87,7 @@ impl QueryTabState {
                 });
             });
 
-        EventManager::emit(cx, Event::new(event));
+        EventManager::emit(window, cx, Event::new(event));
     }
 }
 
@@ -102,29 +100,17 @@ pub struct QueryTab {
 
     /// The query tab number.
     number: usize,
-
-    /// The subscription for the tab.
-    ///
-    /// This will mainly be used for emitting events from the tab upwards.
-    _subscription: Subscription,
 }
-
-impl EventEmitter<EventId> for QueryTab {}
 
 impl QueryTab {
     /// Creates a new [`QueryTab`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>, number: usize) -> Self {
         let state = cx.new(|cx| QueryTabState::new(window, cx));
-        let _subscription = cx.subscribe(&state, |_, _, event, cx| {
-            // Emit the event upwards.
-            cx.emit(*event);
-        });
 
         Self {
             state,
             label: SharedString::from(format!("Query #{}", number)),
             number,
-            _subscription,
         }
     }
 
@@ -146,9 +132,11 @@ impl QueryTab {
                         .gap_1()
                         .pt_1()
                         .size_full()
-                        .on_action(window.listener_for(&self.state, |state, action, _, cx| {
-                            state.handle_action(cx, action);
-                        }))
+                        .on_action(
+                            window.listener_for(&self.state, |state, action, window, cx| {
+                                state.handle_action(window, cx, action);
+                            }),
+                        )
                         .child(
                             h_flex().pl_1().child(
                                 DropdownButton::new("run-buttons")
@@ -165,8 +153,12 @@ impl QueryTab {
                                             .label("Run")
                                             .on_click(window.listener_for(
                                                 &self.state,
-                                                |state, _, _, cx| {
-                                                    state.handle_action(cx, &AppAction::RunSql);
+                                                |state, _, window, cx| {
+                                                    state.handle_action(
+                                                        window,
+                                                        cx,
+                                                        &AppAction::RunSql,
+                                                    );
                                                 },
                                             )),
                                     )

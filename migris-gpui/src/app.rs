@@ -1,6 +1,6 @@
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
-    Window, prelude::FluentBuilder, px,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
+    Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Root, Sizable, WindowExt,
@@ -19,7 +19,7 @@ use crate::{
         settings,
     },
     connections::{ConnectionId, ConnectionManager},
-    events::{EventId, EventManager, EventVariant, RunSqlEvent},
+    events::{EventEmitted, EventId, EventManager, EventVariant, RunSqlEvent},
     settings::AppSettings,
     state::AppState,
     tabs::TabKind,
@@ -53,11 +53,6 @@ pub struct Application {
 
     /// The progress of the running query, if any.
     query_progress: Option<QueryProgress>,
-
-    /// The subscriptions for the application.
-    ///
-    /// These will pick up events from various locations and perform the needed work; see [`Self::handle_event`].
-    _subscriptions: Vec<Subscription>,
 }
 
 impl Application {
@@ -65,28 +60,12 @@ impl Application {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
         let tab_panel = cx.new(|_| TabPanelState::new());
-        let _subscriptions = Vec::from([
-            cx.subscribe_in(&connection_panel, window, |this, _, event, window, cx| {
-                this.handle_event(window, cx, event);
-            }),
-            cx.subscribe_in(&tab_panel, window, |this, _, event, window, cx| {
-                this.handle_event(window, cx, event);
-            }),
-            cx.subscribe_in(
-                &AppState::global(cx).connection_dialog_state.clone(),
-                window,
-                |this, _, event, window, cx| {
-                    this.handle_event(window, cx, event);
-                },
-            ),
-        ]);
 
         Self {
             connection_panel,
             tab_panel,
             connection: None,
             query_progress: None,
-            _subscriptions,
         }
     }
 
@@ -257,5 +236,10 @@ impl Render for Application {
                     }),
             )
             .children(dialog_layer)
+            .on_action(
+                cx.listener(|application, action: &EventEmitted, window, cx| {
+                    application.handle_event(window, cx, &action.0);
+                }),
+            )
     }
 }

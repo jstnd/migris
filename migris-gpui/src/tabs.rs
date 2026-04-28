@@ -1,12 +1,8 @@
-use gpui::{
-    AnyElement, App, AppContext, Context, Entity, EventEmitter, IntoElement, SharedString,
-    Subscription, Window,
-};
+use gpui::{AnyElement, App, AppContext, Context, Entity, IntoElement, SharedString, Window};
 use migris::Entity as MigrisEntity;
 
 use crate::{
     components::icon::IconName,
-    events::EventId,
     tabs::{query::QueryTab, table::TableTab},
 };
 
@@ -29,14 +25,7 @@ pub struct TabView {
 
     /// The state for the tab view.
     tab: TabState,
-
-    /// The subscription for the tab view.
-    ///
-    /// This will mainly be used for emitting events from the tab upwards.
-    _subscription: Subscription,
 }
-
-impl EventEmitter<EventId> for TabView {}
 
 impl TabView {
     /// Creates a new [`TabView`] of the given kind.
@@ -52,31 +41,7 @@ impl TabView {
             }
         };
 
-        // Create subscription that will emit events upwards.
-        let _subscription = match &tab {
-            TabState::Query(tab) => cx.subscribe(tab, |_, _, event, cx| {
-                cx.emit(*event);
-            }),
-            TabState::Table(tab) => cx.subscribe(tab, |_, _, event, cx| {
-                cx.emit(*event);
-            }),
-        };
-
-        // Initialize the tab if needed.
-        match &tab {
-            TabState::Query(_) => {}
-            TabState::Table(tab) => {
-                tab.update(cx, |tab, cx| {
-                    tab.init(cx);
-                });
-            }
-        }
-
-        Self {
-            kind,
-            tab,
-            _subscription,
-        }
+        Self { kind, tab }
     }
 
     /// Returns the content for the tab view.

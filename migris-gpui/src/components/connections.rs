@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use gpui::{
-    Action, App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable, WindowExt,
@@ -27,7 +27,7 @@ use crate::{
     connections::{
         Connection, ConnectionFolder, ConnectionFolderId, ConnectionId, ConnectionManager,
     },
-    events::{Event, EventId, EventManager, EventVariant},
+    events::{Event, EventManager, EventVariant},
     shared,
     state::AppState,
 };
@@ -251,9 +251,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             })
                             .on_click(window.listener_for(
                                 dialog_state,
-                                move |dialog_state, _, _, cx| {
+                                move |dialog_state, _, window, cx| {
                                     if !is_opening {
-                                        dialog_state.open_connection(cx);
+                                        dialog_state.open_connection(window, cx);
                                     }
                                 },
                             )),
@@ -294,8 +294,6 @@ pub struct ConnectionDialogState {
     /// Whether a connection is in the progress of opening.
     opening: bool,
 }
-
-impl EventEmitter<EventId> for ConnectionDialogState {}
 
 impl ConnectionDialogState {
     /// Creates a new [`ConnectionDialogState`].
@@ -402,12 +400,12 @@ impl ConnectionDialogState {
     /// Emits an event to open the connection that is currently active within the editor.
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
-    fn open_connection(&mut self, cx: &mut Context<Self>) {
+    fn open_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(id) = self.editor.read(cx).connection_id() {
             self.opening = true;
 
             let event = Event::new(EventVariant::OpenConnection(id));
-            EventManager::emit(cx, event);
+            EventManager::emit(window, cx, event);
         }
     }
 

@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
-    prelude::FluentBuilder, px,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
+    px,
 };
 use gpui_component::{
     ActiveTheme, Icon, Sizable, WindowExt,
@@ -19,7 +19,7 @@ use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
     components::{connections, icon::IconName},
-    events::{Event, EventId, EventManager, EventVariant},
+    events::{Event, EventManager, EventVariant},
     tabs::{TabKind, TabView},
 };
 
@@ -40,8 +40,6 @@ pub struct ConnectionPanelState {
 
     _subscriptions: Vec<Subscription>,
 }
-
-impl EventEmitter<EventId> for ConnectionPanelState {}
 
 impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -205,7 +203,7 @@ impl RenderOnce for ConnectionPanel {
                         )
                         .on_click(window.listener_for(&self.state, {
                             let entry = entry.clone();
-                            move |state, _, _, cx| {
+                            move |state, _, window, cx| {
                                 let id = entry.item().id.clone();
                                 let entity = state.entity(&id);
 
@@ -220,7 +218,7 @@ impl RenderOnce for ConnectionPanel {
                                     EntityKind::Table => {
                                         let event =
                                             Event::new(EventVariant::OpenEntity(entity.clone()));
-                                        EventManager::emit(cx, event);
+                                        EventManager::emit(window, cx, event);
                                     }
                                     _ => {}
                                 }
@@ -241,14 +239,7 @@ pub struct TabPanelState {
 
     /// The index of the currently hovered tab, if any.
     hovered_tab: Option<usize>,
-
-    /// The subscriptions for the panel.
-    ///
-    /// These will mainly be used for emitting events from tabs upwards to the main application.
-    subscriptions: Vec<Subscription>,
 }
-
-impl EventEmitter<EventId> for TabPanelState {}
 
 impl TabPanelState {
     /// Creates a new [`TabPanelState`].
@@ -257,19 +248,13 @@ impl TabPanelState {
             tabs: Vec::new(),
             active_tab: 0,
             hovered_tab: None,
-            subscriptions: Vec::new(),
         }
     }
 
     /// Adds a new tab to the panel.
     pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, kind: TabKind) {
         let tab = cx.new(|cx| TabView::new(window, cx, kind));
-        let subscription = cx.subscribe(&tab, |_, _, event, cx| {
-            cx.emit(*event);
-        });
-
         self.tabs.push(tab);
-        self.subscriptions.push(subscription);
 
         // Set the active tab to be the newly added tab.
         self.active_tab = self.tabs.len() - 1;
@@ -283,7 +268,6 @@ impl TabPanelState {
     /// Closes the tab at the given index.
     fn close_tab(&mut self, idx: usize) {
         self.tabs.remove(idx);
-        _ = self.subscriptions.remove(idx);
 
         // Move the active tab index if the active tab is after the tab that is being closed.
         if self.active_tab >= idx && self.active_tab > 0 {

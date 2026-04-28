@@ -1,10 +1,14 @@
 use std::{collections::HashMap, rc::Rc};
 
-use gpui::{Action, App, Context, EventEmitter, Global, SharedString, Window};
+use gpui::{Action, App, Global, SharedString, Window};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 use uuid::Uuid;
 
 use crate::connections::ConnectionId;
+
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+pub struct EventEmitted(pub EventId);
 
 pub struct EventManager {
     /// Tracks the active events by [`EventId`].
@@ -22,13 +26,10 @@ impl EventManager {
     }
 
     /// Emits the given [`Event`].
-    pub fn emit<E>(cx: &mut Context<E>, event: Event)
-    where
-        E: EventEmitter<EventId>,
-    {
+    pub fn emit(window: &mut Window, cx: &mut App, event: Event) {
         let id = event.id;
         Self::global_mut(cx).push(event);
-        cx.emit(id);
+        window.dispatch_action(Box::new(EventEmitted(id)), cx);
     }
 
     /// Returns a reference to the global [`EventManager`].

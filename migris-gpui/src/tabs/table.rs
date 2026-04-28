@@ -1,13 +1,13 @@
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, SharedString,
-    Styled, Subscription, Window, prelude::FluentBuilder,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
+    prelude::FluentBuilder,
 };
 use gpui_component::{ActiveTheme, h_flex, progress::ProgressCircle, v_flex};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
     components::table::{QueryTable, QueryTableState},
-    events::{Event, EventId, EventManager, RunSqlEvent},
+    events::{Event, EventManager, RunSqlEvent},
 };
 
 const ROW_BATCH_SIZE: usize = 1_000;
@@ -16,8 +16,6 @@ struct TableTabState {
     /// The state for the data table.
     table_state: Option<Entity<QueryTableState>>,
 }
-
-impl EventEmitter<EventId> for TableTabState {}
 
 impl TableTabState {
     /// Creates a new [`TableTabState`].
@@ -46,38 +44,27 @@ pub struct TableTab {
 
     /// The table tab label.
     label: SharedString,
-
-    /// The subscription for the tab.
-    ///
-    /// This will mainly be used for emitting events from the tab upwards.
-    _subscription: Subscription,
 }
-
-impl EventEmitter<EventId> for TableTab {}
 
 impl TableTab {
     /// Creates a new [`TableTab`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) -> Self {
         let state = cx.new(|cx| TableTabState::new(window, cx));
-        let _subscription = cx.subscribe(&state, |_, _, event, cx| {
-            // Emit the event upwards.
-            cx.emit(*event);
-        });
-
         let label = SharedString::from(&entity.name);
-
-        Self {
+        let tab = Self {
             state,
             entity,
             label,
-            _subscription,
-        }
+        };
+
+        tab.init(window, cx);
+        tab
     }
 
     /// Initializes the tab.
     ///
     /// This will emit the events needed to retrieve the data for the tab.
-    pub fn init(&self, cx: &mut Context<Self>) {
+    fn init(&self, window: &mut Window, cx: &mut Context<Self>) {
         let state = self.state.clone();
         let event = RunSqlEvent::stream(migris::sql::select_all(&self.entity)).on_result(
             move |result, window, cx| {
@@ -87,7 +74,7 @@ impl TableTab {
             },
         );
 
-        EventManager::emit(cx, Event::new(event));
+        EventManager::emit(window, cx, Event::new(event));
     }
 
     /// Returns the label for the tab.
