@@ -1,11 +1,11 @@
 use gpui::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, Window, prelude::FluentBuilder,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement,
+    SharedString, StatefulInteractiveElement, Styled, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable,
     button::{Button, DropdownButton},
-    h_flex,
+    h_flex, input,
     resizable::{resizable_panel, v_resizable},
     tab::{Tab, TabBar},
     v_flex,
@@ -17,12 +17,19 @@ use crate::{
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableState},
     },
-    events::{AppAction, Event, EventManager, RunSqlEvent},
+    events::{Event, EventManager, RunSqlEvent},
 };
+
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+pub enum QueryTabAction {
+    RunSql,
+    RunSqlSelection,
+}
 
 struct QueryTabState {
     /// The state for the editor.
-    editor_state: Entity<EditorState>,
+    editor: Entity<EditorState>,
 
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
@@ -34,23 +41,28 @@ struct QueryTabState {
 impl QueryTabState {
     /// Creates a new [`QueryTabState`].
     fn new(window: &mut Window, cx: &mut App) -> Self {
-        let editor_state = cx.new(|cx| EditorState::new(window, cx));
+        let editor = cx.new(|cx| EditorState::new(window, cx));
 
         Self {
-            editor_state,
+            editor,
             tables: Vec::new(),
             active_table: 0,
         }
     }
 
     /// Handles actions originating from the tab.
-    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &AppAction) {
+    fn handle_action(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        action: &QueryTabAction,
+    ) {
         match action {
-            AppAction::RunSql => {
+            QueryTabAction::RunSql => {
                 self.clear_results();
                 self.run_sql(window, cx, false);
             }
-            AppAction::RunSqlSelection => {
+            QueryTabAction::RunSqlSelection => {
                 self.clear_results();
                 self.run_sql(window, cx, true);
             }
@@ -70,11 +82,11 @@ impl QueryTabState {
 
     /// Triggers an event to run the SQL in the editor.
     fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, selected: bool) {
-        let editor_state = self.editor_state.read(cx);
+        let editor = self.editor.read(cx);
         let sql = if selected {
-            editor_state.selected_value(cx)
+            editor.selected_value(cx)
         } else {
-            editor_state.value(cx)
+            editor.value(cx)
         };
 
         let this = cx.entity();
@@ -122,8 +134,8 @@ impl QueryTab {
     /// Returns the content for the tab.
     pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
         let state = self.state.read(cx);
-        let is_editor_empty = state.editor_state.read(cx).is_empty(cx);
-        let is_editor_selected_empty = state.editor_state.read(cx).selected_value(cx).is_empty();
+        let is_editor_empty = state.editor.read(cx).is_empty(cx);
+        let is_editor_selected_empty = state.editor.read(cx).selected_value(cx).is_empty();
 
         v_resizable(format!("query-tab-{}", self.number))
             .child(
@@ -157,7 +169,7 @@ impl QueryTab {
                                                     state.handle_action(
                                                         window,
                                                         cx,
-                                                        &AppAction::RunSql,
+                                                        &QueryTabAction::RunSql,
                                                     );
                                                 },
                                             )),
@@ -166,20 +178,44 @@ impl QueryTab {
                                         menu.menu_with_icon(
                                             "Run",
                                             Icon::new(cx, IconName::Play).primary(cx),
-                                            Box::new(AppAction::RunSql),
+                                            Box::new(QueryTabAction::RunSql),
                                         )
                                         .menu_with_icon_and_disabled(
                                             "Run Selection",
                                             Icon::new(cx, IconName::MousePointer2)
                                                 .disabled(is_editor_selected_empty)
                                                 .primary(cx),
-                                            Box::new(AppAction::RunSqlSelection),
+                                            Box::new(QueryTabAction::RunSqlSelection),
                                             is_editor_selected_empty,
                                         )
                                     }),
                             ),
                         )
-                        .child(Editor::new(&state.editor_state)),
+                        .child(
+                            Editor::new(&state.editor).context_menu(move |menu, _, cx| {
+                                menu.menu_with_icon_and_disabled(
+                                    "Run",
+                                    Icon::new(cx, IconName::Play)
+                                        .disabled(is_editor_empty)
+                                        .primary(cx),
+                                    Box::new(QueryTabAction::RunSql),
+                                    is_editor_empty,
+                                )
+                                .menu_with_icon_and_disabled(
+                                    "Run Selection",
+                                    Icon::new(cx, IconName::MousePointer2)
+                                        .disabled(is_editor_selected_empty)
+                                        .primary(cx),
+                                    Box::new(QueryTabAction::RunSqlSelection),
+                                    is_editor_selected_empty,
+                                )
+                                .separator()
+                                .menu("Cut", Box::new(input::Cut))
+                                .menu("Copy", Box::new(input::Copy))
+                                .menu("Paste", Box::new(input::Paste))
+                                .menu("Select All", Box::new(input::SelectAll))
+                            }),
+                        ),
                 ),
             )
             .child(resizable_panel().when(!state.tables.is_empty(), |this| {

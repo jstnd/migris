@@ -144,10 +144,3 @@ impl From<RunSqlEvent> for EventVariant {
         EventVariant::RunSql(event)
     }
 }
-
-#[derive(Action, Clone, Copy, PartialEq, Eq)]
-#[action(no_json)]
-pub enum AppAction {
-    RunSql,
-    RunSqlSelection,
-}
