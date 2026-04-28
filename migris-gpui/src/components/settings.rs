@@ -66,7 +66,7 @@ fn appearance_group(cx: &mut App) -> SettingGroup {
                 shared::apply_theme(cx, Themes::default(cx.theme().mode));
             }
 
-            SettingField::dropdown(
+            SettingField::scrollable_dropdown(
                 options,
                 |cx| AppSettings::global(cx).theme(cx),
                 |value, cx| {
