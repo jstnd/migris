@@ -27,7 +27,7 @@ use crate::{
     connections::{
         Connection, ConnectionFolder, ConnectionFolderId, ConnectionId, ConnectionManager,
     },
-    event::{AppEvent, AppEventKind},
+    events::{Event, EventId, EventManager, EventVariant},
     shared,
     state::AppState,
 };
@@ -295,7 +295,7 @@ pub struct ConnectionDialogState {
     opening: bool,
 }
 
-impl EventEmitter<AppEvent> for ConnectionDialogState {}
+impl EventEmitter<EventId> for ConnectionDialogState {}
 
 impl ConnectionDialogState {
     /// Creates a new [`ConnectionDialogState`].
@@ -405,7 +405,9 @@ impl ConnectionDialogState {
     fn open_connection(&mut self, cx: &mut Context<Self>) {
         if let Some(id) = self.editor.read(cx).connection_id() {
             self.opening = true;
-            cx.emit(AppEvent::new(AppEventKind::OpenConnection(id)));
+
+            let event = Event::new(EventVariant::OpenConnection(id));
+            EventManager::emit(cx, event);
         }
     }
 

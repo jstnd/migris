@@ -19,7 +19,7 @@ use crate::{
         settings,
     },
     connections::{ConnectionId, ConnectionManager},
-    event::{AppEvent, AppEventKind, EventSource, RunSql},
+    events::{EventId, EventManager, EventVariant, RunSqlEvent},
     settings::AppSettings,
     state::AppState,
     tabs::TabKind,
@@ -35,6 +35,7 @@ pub fn init(window: &mut Window, cx: &mut App) {
     // Set globals for use throughout the application.
     cx.set_global(AppSettings::default());
     cx.set_global(ConnectionManager::load());
+    cx.set_global(EventManager::new());
 
     let app_state = AppState::new(window, cx);
     cx.set_global(app_state);
@@ -89,19 +90,24 @@ impl Application {
         }
     }
 
-    fn handle_event(&mut self, window: &mut Window, cx: &mut Context<Self>, event: &AppEvent) {
-        match event.kind() {
-            AppEventKind::OpenConnection(id) => self.open_connection(window, cx, *id),
-            AppEventKind::OpenEntity(entity) => {
+    fn handle_event(&mut self, window: &mut Window, cx: &mut Context<Self>, id: &EventId) {
+        let Some(event) = EventManager::global(cx).get(id) else {
+            return;
+        };
+
+        match event.variant() {
+            EventVariant::OpenConnection(id) => self.open_connection(window, cx, *id),
+            EventVariant::OpenEntity(entity) => {
+                let entity = entity.clone();
                 self.tab_panel.update(cx, |tab_panel, cx| {
-                    let tab_kind = TabKind::Table(entity.clone());
+                    let tab_kind = TabKind::Table(entity);
                     tab_panel.add_tab(window, cx, tab_kind);
-                });
+                })
             }
-            AppEventKind::RunSql(event_data) => {
-                self.run_sql(window, cx, event, event_data.clone());
-            }
+            EventVariant::RunSql(event) => self.run_sql(window, cx, event.clone()),
         }
+
+        EventManager::global_mut(cx).complete(id);
     }
 
     fn open_connection(&self, window: &mut Window, cx: &mut Context<Self>, id: ConnectionId) {
@@ -134,36 +140,22 @@ impl Application {
         .detach();
     }
 
-    fn run_sql(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        event: &AppEvent,
-        event_data: RunSql,
-    ) {
-        let id = event.id().cloned();
-        let Some(source) = event.source().cloned() else {
-            // Return if there's no source as we need somewhere to send the query result afterwards.
-            //
-            // Ideally, this event kind should always have a source anyways.
-            return;
-        };
-
+    fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, event: RunSqlEvent) {
         // TODO: remove this unwrap
         let driver = self.connection.as_ref().unwrap().driver.clone();
 
         cx.spawn_in(window, async move |this, cx| {
-            let statements = migris::sql::split(&event_data.sql);
+            let statements = migris::sql::split(&event.sql);
 
             // Initialize the query progress.
-            if event_data.show_progress {
+            if event.show_progress {
                 _ = this.update(cx, |this, _| {
                     this.query_progress = Some(QueryProgress::new(statements.len()));
                 });
             }
 
             for (idx, statement) in statements.iter().enumerate() {
-                let result = if event_data.stream {
+                let result = if event.stream {
                     driver.query_stream(statement.sql.clone()).await
                 } else {
                     driver.query(&statement.sql).await
@@ -172,21 +164,11 @@ impl Application {
                 match result {
                     Ok(result) => {
                         _ = this.update_in(cx, |this, window, cx| {
-                            match source {
-                                EventSource::Tab(tab_idx) => {
-                                    this.tab_panel.update(cx, |tab_panel, cx| {
-                                        tab_panel.load_result(
-                                            window,
-                                            cx,
-                                            tab_idx,
-                                            id.clone(),
-                                            result,
-                                        );
-                                    })
-                                }
+                            if let Some(on_result) = event.on_result.clone() {
+                                on_result(result, window, cx)
                             }
 
-                            if event_data.show_progress {
+                            if event.show_progress {
                                 this.update_query_progress(idx + 1);
                             }
 
@@ -200,7 +182,7 @@ impl Application {
             }
 
             // Remove the query progress as the statements have finished running.
-            if event_data.show_progress {
+            if event.show_progress {
                 _ = this.update(cx, |this, _| {
                     this.query_progress = None;
                 });

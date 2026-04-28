@@ -2,7 +2,7 @@ mod app;
 mod assets;
 mod components;
 mod connections;
-mod event;
+mod events;
 mod settings;
 mod shared;
 mod state;

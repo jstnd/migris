@@ -8,7 +8,7 @@ use gpui_component::{
 
 use crate::{
     components::icon::{Icon, IconName},
-    event::AppAction,
+    events::AppAction,
 };
 
 /// The state for use with an [`Editor`].

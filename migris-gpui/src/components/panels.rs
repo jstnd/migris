@@ -15,11 +15,11 @@ use gpui_component::{
     tree::{self, TreeItem, TreeState},
     v_flex,
 };
-use migris::{Entity as MigrisEntity, EntityKind, data::QueryResult};
+use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
     components::{connections, icon::IconName},
-    event::{AppEvent, AppEventKind, EventId, EventSource},
+    events::{Event, EventId, EventManager, EventVariant},
     tabs::{TabKind, TabView},
 };
 
@@ -41,7 +41,7 @@ pub struct ConnectionPanelState {
     _subscriptions: Vec<Subscription>,
 }
 
-impl EventEmitter<AppEvent> for ConnectionPanelState {}
+impl EventEmitter<EventId> for ConnectionPanelState {}
 
 impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -218,9 +218,9 @@ impl RenderOnce for ConnectionPanel {
                                         }
                                     }
                                     EntityKind::Table => {
-                                        cx.emit(AppEvent::new(AppEventKind::OpenEntity(
-                                            entity.clone(),
-                                        )));
+                                        let event =
+                                            Event::new(EventVariant::OpenEntity(entity.clone()));
+                                        EventManager::emit(cx, event);
                                     }
                                     _ => {}
                                 }
@@ -248,7 +248,7 @@ pub struct TabPanelState {
     subscriptions: Vec<Subscription>,
 }
 
-impl EventEmitter<AppEvent> for TabPanelState {}
+impl EventEmitter<EventId> for TabPanelState {}
 
 impl TabPanelState {
     /// Creates a new [`TabPanelState`].
@@ -264,9 +264,8 @@ impl TabPanelState {
     /// Adds a new tab to the panel.
     pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, kind: TabKind) {
         let tab = cx.new(|cx| TabView::new(window, cx, kind));
-        let subscription = cx.subscribe(&tab, |this, _, event, cx| {
-            let event = event.clone().with_source(EventSource::Tab(this.active_tab));
-            cx.emit(event);
+        let subscription = cx.subscribe(&tab, |_, _, event, cx| {
+            cx.emit(*event);
         });
 
         self.tabs.push(tab);
@@ -274,21 +273,6 @@ impl TabPanelState {
 
         // Set the active tab to be the newly added tab.
         self.active_tab = self.tabs.len() - 1;
-    }
-
-    /// Loads the given query result into the tab at the given tab index.
-    pub fn load_result(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        tab_idx: usize,
-        id: Option<EventId>,
-        result: QueryResult,
-    ) {
-        let tab = &self.tabs[tab_idx];
-        tab.update(cx, |tab, cx| {
-            tab.load_result(window, cx, id, result);
-        });
     }
 
     /// Returns a reference to the active tab.

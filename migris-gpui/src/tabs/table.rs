@@ -7,20 +7,17 @@ use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
     components::table::{QueryTable, QueryTableState},
-    event::{AppEvent, AppEventKind, EventId, RunSql},
+    events::{Event, EventId, EventManager, RunSqlEvent},
 };
 
 const ROW_BATCH_SIZE: usize = 1_000;
-
-const ID_EVENT_DATA_STR: &str = "ID_EVENT_DATA";
-const ID_EVENT_DATA: SharedString = SharedString::new_static(ID_EVENT_DATA_STR);
 
 struct TableTabState {
     /// The state for the data table.
     table_state: Option<Entity<QueryTableState>>,
 }
 
-impl EventEmitter<AppEvent> for TableTabState {}
+impl EventEmitter<EventId> for TableTabState {}
 
 impl TableTabState {
     /// Creates a new [`TableTabState`].
@@ -51,12 +48,12 @@ pub struct TableTab {
     label: SharedString,
 
     /// The subscription for the tab.
-    /// 
+    ///
     /// This will mainly be used for emitting events from the tab upwards.
     _subscription: Subscription,
 }
 
-impl EventEmitter<AppEvent> for TableTab {}
+impl EventEmitter<EventId> for TableTab {}
 
 impl TableTab {
     /// Creates a new [`TableTab`].
@@ -64,7 +61,7 @@ impl TableTab {
         let state = cx.new(|cx| TableTabState::new(window, cx));
         let _subscription = cx.subscribe(&state, |_, _, event, cx| {
             // Emit the event upwards.
-            cx.emit(event.clone());
+            cx.emit(*event);
         });
 
         let label = SharedString::from(&entity.name);
@@ -78,42 +75,24 @@ impl TableTab {
     }
 
     /// Initializes the tab.
-    /// 
+    ///
     /// This will emit the events needed to retrieve the data for the tab.
     pub fn init(&self, cx: &mut Context<Self>) {
-        cx.emit(
-            AppEvent::new(AppEventKind::RunSql(RunSql {
-                sql: SharedString::from(migris::sql::select_all(&self.entity)),
-                show_progress: false,
-                stream: true,
-            }))
-            .with_id(ID_EVENT_DATA),
+        let state = self.state.clone();
+        let event = RunSqlEvent::stream(migris::sql::select_all(&self.entity)).on_result(
+            move |result, window, cx| {
+                state.update(cx, |state, cx| {
+                    state.load_data(window, cx, result);
+                });
+            },
         );
+
+        EventManager::emit(cx, Event::new(event));
     }
 
     /// Returns the label for the tab.
     pub fn label(&self) -> SharedString {
         self.label.clone()
-    }
-
-    /// Loads the given query result into the tab.
-    pub fn load_result(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        id: Option<EventId>,
-        result: QueryResult,
-    ) {
-        if let Some(id) = id {
-            match id.as_str() {
-                ID_EVENT_DATA_STR => {
-                    self.state.update(cx, |state, cx| {
-                        state.load_data(window, cx, result);
-                    });
-                }
-                _ => {}
-            }
-        }
     }
 
     /// Returns the content for the tab.

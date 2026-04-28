@@ -2,11 +2,11 @@ use gpui::{
     AnyElement, App, AppContext, Context, Entity, EventEmitter, IntoElement, SharedString,
     Subscription, Window,
 };
-use migris::{Entity as MigrisEntity, data::QueryResult};
+use migris::Entity as MigrisEntity;
 
 use crate::{
     components::icon::IconName,
-    event::{AppEvent, EventId},
+    events::EventId,
     tabs::{query::QueryTab, table::TableTab},
 };
 
@@ -36,7 +36,7 @@ pub struct TabView {
     _subscription: Subscription,
 }
 
-impl EventEmitter<AppEvent> for TabView {}
+impl EventEmitter<EventId> for TabView {}
 
 impl TabView {
     /// Creates a new [`TabView`] of the given kind.
@@ -55,10 +55,10 @@ impl TabView {
         // Create subscription that will emit events upwards.
         let _subscription = match &tab {
             TabState::Query(tab) => cx.subscribe(tab, |_, _, event, cx| {
-                cx.emit(event.clone());
+                cx.emit(*event);
             }),
             TabState::Table(tab) => cx.subscribe(tab, |_, _, event, cx| {
-                cx.emit(event.clone());
+                cx.emit(*event);
             }),
         };
 
@@ -105,28 +105,6 @@ impl TabView {
         match &self.tab {
             TabState::Query(tab) => tab.read(cx).label(),
             TabState::Table(tab) => tab.read(cx).label(),
-        }
-    }
-
-    /// Loads the given query result into the tab.
-    pub fn load_result(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        id: Option<EventId>,
-        result: QueryResult,
-    ) {
-        match &self.tab {
-            TabState::Query(tab) => {
-                tab.update(cx, |tab, cx| {
-                    tab.load_result(window, cx, result);
-                });
-            }
-            TabState::Table(tab) => {
-                tab.update(cx, |tab, cx| {
-                    tab.load_result(window, cx, id, result);
-                });
-            }
         }
     }
 }
