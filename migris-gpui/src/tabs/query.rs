@@ -27,6 +27,7 @@ pub enum QueryTabAction {
     RunSqlSelection,
 }
 
+/// The state used with a [`QueryTab`].
 struct QueryTabState {
     /// The state for the editor.
     editor: Entity<EditorState>,

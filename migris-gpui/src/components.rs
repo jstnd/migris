@@ -8,7 +8,6 @@ pub mod panels;
 pub mod settings;
 pub mod table;
 
-///
 pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> impl IntoElement {
     v_flex()
         .gap_0p5()

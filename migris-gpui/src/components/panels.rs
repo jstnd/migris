@@ -20,13 +20,17 @@ use migris::{Entity as MigrisEntity, EntityKind};
 use crate::{
     components::{connections, icon::IconName},
     events::{Event, EventManager, EventVariant},
+    shared,
     tabs::{TabKind, TabView},
 };
 
-/// The state for use with the [`ConnectionPanel`].
+/// The state used with a [`ConnectionPanel`].
 pub struct ConnectionPanelState {
-    search_state: Entity<InputState>,
-    tree_state: Entity<TreeState>,
+    /// The state for the search input.
+    search_input: Entity<InputState>,
+
+    /// The state for the tree.
+    tree: Entity<TreeState>,
 
     /// The underlying objects used to build the displayed tree.
     entities: Vec<MigrisEntity>,
@@ -43,11 +47,12 @@ pub struct ConnectionPanelState {
 
 impl ConnectionPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
-        let tree_state = cx.new(|cx| TreeState::new(cx));
+        let search_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
+        let tree = cx.new(|cx| TreeState::new(cx));
         let _subscriptions =
             vec![
-                cx.subscribe(&search_state, |this, _, event: &InputEvent, cx| {
+                cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
                     if let InputEvent::Change = event {
                         this.load_tree(cx);
                     }
@@ -55,8 +60,8 @@ impl ConnectionPanelState {
             ];
 
         Self {
-            search_state,
-            tree_state,
+            search_input,
+            tree,
             entities: Vec::new(),
             entity_id_map: HashMap::new(),
             expanded: HashSet::new(),
@@ -80,10 +85,10 @@ impl ConnectionPanelState {
     }
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
-        self.tree_state.update(cx, |tree_state, cx| {
-            let filter = self.search_state.read(cx).value();
+        self.tree.update(cx, |tree, cx| {
+            let filter = self.search_input.read(cx).value();
             let items = self.entities_to_items(filter);
-            tree_state.set_items(items, cx);
+            tree.set_items(items, cx);
         });
     }
 
@@ -132,10 +137,12 @@ impl ConnectionPanelState {
 
 #[derive(IntoElement)]
 pub struct ConnectionPanel {
+    /// The state for the connection panel.
     state: Entity<ConnectionPanelState>,
 }
 
 impl ConnectionPanel {
+    /// Creates a new [`ConnectionPanel`].
     pub fn new(state: &Entity<ConnectionPanelState>) -> Self {
         Self {
             state: state.clone(),
@@ -145,7 +152,7 @@ impl ConnectionPanel {
 
 impl RenderOnce for ConnectionPanel {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let search_state = &self.state.read(cx).search_state;
+        let state = self.state.read(cx);
 
         v_flex()
             .gap_1()
@@ -157,7 +164,7 @@ impl RenderOnce for ConnectionPanel {
                     .gap_1()
                     .w_full()
                     .child(
-                        Input::new(search_state)
+                        Input::new(&state.search_input)
                             .cleanable(true)
                             .prefix(Icon::from(IconName::Search)),
                     )
@@ -173,63 +180,60 @@ impl RenderOnce for ConnectionPanel {
                             }),
                     ),
             )
-            .child(tree::tree(
-                &self.state.read(cx).tree_state,
-                move |idx, entry, _, window, cx| {
-                    let entity = self.state.read(cx).entity(&entry.item().id);
+            .child(tree::tree(&state.tree, move |idx, entry, _, window, cx| {
+                let entity = self.state.read(cx).entity(&entry.item().id);
 
-                    ListItem::new(idx)
-                        .p_0()
-                        .text_sm()
-                        .child(
-                            h_flex()
-                                .gap_1()
-                                .pl(px(18.0) * entry.depth())
-                                .when(entity.kind == EntityKind::Schema, |this| {
-                                    this.child(Icon::from(
-                                        if self.state.read(cx).is_expanded(&entry.item().id) {
-                                            IconName::ChevronDown
-                                        } else {
-                                            IconName::ChevronRight
-                                        },
-                                    ))
-                                })
-                                .child(Icon::from(match entity.kind {
-                                    EntityKind::Schema => IconName::Database,
-                                    EntityKind::Table => IconName::Grid3x3,
-                                    EntityKind::View => IconName::Eye,
-                                }))
-                                .child(entry.item().label.clone()),
-                        )
-                        .on_click(window.listener_for(&self.state, {
-                            let entry = entry.clone();
-                            move |state, _, window, cx| {
-                                let id = entry.item().id.clone();
-                                let entity = state.entity(&id);
+                ListItem::new(idx)
+                    .p_0()
+                    .text_sm()
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .pl(px(18.0) * entry.depth())
+                            .when(entity.kind == EntityKind::Schema, |this| {
+                                this.child(Icon::from(
+                                    if self.state.read(cx).is_expanded(&entry.item().id) {
+                                        IconName::ChevronDown
+                                    } else {
+                                        IconName::ChevronRight
+                                    },
+                                ))
+                            })
+                            .child(Icon::from(match entity.kind {
+                                EntityKind::Schema => IconName::Database,
+                                EntityKind::Table => IconName::Grid3x3,
+                                EntityKind::View => IconName::Eye,
+                            }))
+                            .child(entry.item().label.clone()),
+                    )
+                    .on_click(window.listener_for(&self.state, {
+                        let entry = entry.clone();
+                        move |state, _, window, cx| {
+                            let id = entry.item().id.clone();
+                            let entity = state.entity(&id);
 
-                                match entity.kind {
-                                    EntityKind::Schema => {
-                                        if state.is_expanded(&id) {
-                                            state.expanded.remove(&id);
-                                        } else {
-                                            state.expanded.insert(id);
-                                        }
+                            match entity.kind {
+                                EntityKind::Schema => {
+                                    if state.is_expanded(&id) {
+                                        state.expanded.remove(&id);
+                                    } else {
+                                        state.expanded.insert(id);
                                     }
-                                    EntityKind::Table => {
-                                        let event =
-                                            Event::new(EventVariant::OpenEntity(entity.clone()));
-                                        EventManager::emit(window, cx, event);
-                                    }
-                                    _ => {}
                                 }
+                                EntityKind::Table => {
+                                    let event =
+                                        Event::new(EventVariant::OpenEntity(entity.clone()));
+                                    EventManager::emit(window, cx, event);
+                                }
+                                _ => {}
                             }
-                        }))
-                },
-            ))
+                        }
+                    }))
+            }))
     }
 }
 
-/// The state for use with the [`TabPanel`].
+/// The state used with a [`TabPanel`].
 pub struct TabPanelState {
     /// The tabs shown in the panel.
     tabs: Vec<Entity<TabView>>,
@@ -296,10 +300,12 @@ impl TabPanelState {
 
 #[derive(IntoElement)]
 pub struct TabPanel {
+    /// The state for the tab panel.
     state: Entity<TabPanelState>,
 }
 
 impl TabPanel {
+    /// Creates a new [`TabPanel`].
     pub fn new(state: &Entity<TabPanelState>) -> Self {
         Self {
             state: state.clone(),

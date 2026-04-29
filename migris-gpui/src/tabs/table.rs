@@ -12,26 +12,27 @@ use crate::{
 
 const ROW_BATCH_SIZE: usize = 1_000;
 
+/// The state used with a [`TableTab`].
 struct TableTabState {
     /// The state for the data table.
-    table_state: Option<Entity<QueryTableState>>,
+    table: Option<Entity<QueryTableState>>,
 }
 
 impl TableTabState {
     /// Creates a new [`TableTabState`].
     fn new(_: &mut Window, _: &mut Context<Self>) -> Self {
-        Self { table_state: None }
+        Self { table: None }
     }
 
     /// Loads the given table data into the tab.
     fn load_data(&mut self, window: &mut Window, cx: &mut Context<Self>, result: QueryResult) {
-        let table_state = cx.new(|cx| {
+        let table = cx.new(|cx| {
             let mut state = QueryTableState::new(window, cx, result);
             state.load(cx, ROW_BATCH_SIZE);
             state
         });
 
-        self.table_state = Some(table_state);
+        self.table = Some(table);
     }
 }
 
@@ -89,7 +90,7 @@ impl TableTab {
         v_flex()
             .gap_1()
             .size_full()
-            .when(state.table_state.is_none(), |this| {
+            .when(state.table.is_none(), |this| {
                 this.child(
                     h_flex()
                         .gap_2()
@@ -104,8 +105,8 @@ impl TableTab {
                         .child("Loading..."),
                 )
             })
-            .when_some(state.table_state.as_ref(), |this, table_state| {
-                this.child(QueryTable::new(table_state))
+            .when_some(state.table.as_ref(), |this, table| {
+                this.child(QueryTable::new(table))
             })
     }
 }

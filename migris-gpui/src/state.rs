@@ -7,7 +7,7 @@ pub struct AppState {
     /// The state for the application's connection dialog.
     ///
     /// This is stored here to be available globally so that the dialog can be opened from anywhere.
-    pub connection_dialog_state: Entity<ConnectionDialogState>,
+    pub connection_dialog: Entity<ConnectionDialogState>,
 
     /// The current system theme mode.
     pub system_theme_mode: ThemeMode,
@@ -18,11 +18,11 @@ impl Global for AppState {}
 impl AppState {
     /// Creates a new [`AppState`].
     pub fn new(window: &mut Window, cx: &mut App) -> Self {
-        let connection_dialog_state = cx.new(|cx| ConnectionDialogState::new(window, cx));
+        let connection_dialog = cx.new(|cx| ConnectionDialogState::new(window, cx));
         Self::init(window);
 
         Self {
-            connection_dialog_state,
+            connection_dialog,
             system_theme_mode: ThemeMode::default(),
         }
     }

@@ -33,9 +33,9 @@ use crate::{
 };
 
 pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> Dialog {
-    let dialog_state = &AppState::global(cx).connection_dialog_state;
-    let is_editor_empty = dialog_state.read(cx).is_editor_empty(cx);
-    let is_opening = dialog_state.read(cx).opening;
+    let state = &AppState::global(cx).connection_dialog;
+    let is_editor_empty = state.read(cx).is_editor_empty(cx);
+    let is_opening = state.read(cx).opening;
 
     dialog
         .w(shared::DIALOG_WIDTH)
@@ -51,7 +51,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             .size_full()
                             .items_center()
                             .child(
-                                Input::new(&dialog_state.read(cx).search_input)
+                                Input::new(&state.read(cx).search_input)
                                     .cleanable(true)
                                     .prefix(Icon::new(cx, IconName::Search)),
                             )
@@ -66,12 +66,12 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             .ghost()
                                             .small()
                                             .on_click(window.listener_for(
-                                                dialog_state,
-                                                |dialog_state, _, _, cx| {
-                                                    dialog_state.handle_action(
+                                                state,
+                                                |state, _, _, cx| {
+                                                    state.handle_action(
                                                         cx,
                                                         &ConnectionDialogAction::AddConnection(
-                                                            dialog_state.selected_folder(cx),
+                                                            state.selected_folder(cx),
                                                         ),
                                                     );
                                                 },
@@ -84,12 +84,12 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             .ghost()
                                             .small()
                                             .on_click(window.listener_for(
-                                                dialog_state,
-                                                |dialog_state, _, _, cx| {
-                                                    dialog_state.handle_action(
+                                                state,
+                                                |state, _, _, cx| {
+                                                    state.handle_action(
                                                         cx,
                                                         &ConnectionDialogAction::AddFolder(
-                                                            dialog_state.selected_folder(cx),
+                                                            state.selected_folder(cx),
                                                         ),
                                                     );
                                                 },
@@ -97,8 +97,8 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                     ),
                             )
                             .child(
-                                tree::tree(&dialog_state.read(cx).tree, {
-                                    let dialog_state = dialog_state.clone();
+                                tree::tree(&state.read(cx).tree, {
+                                    let state = state.clone();
                                     move |idx, entry, _, window, cx| {
                                         let manager = ConnectionManager::global(cx);
                                         let connection = manager.try_connection(&entry.item().id);
@@ -125,7 +125,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     .when_some(folder, |this, folder| {
                                                         this.child(Icon::new(
                                                             cx,
-                                                            if dialog_state
+                                                            if state
                                                                 .read(cx)
                                                                 .is_expanded(&folder.id())
                                                             {
@@ -138,7 +138,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     .child(entry.item().label.clone()),
                                             )
                                             .on_click(window.listener_for(
-                                                &dialog_state,
+                                                &state,
                                                 move |state, _, window, cx| {
                                                     if let Some(id) = folder_id {
                                                         state.toggle_expand(id);
@@ -200,25 +200,20 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                     },
                                 ),
                             )
-                            .on_action(window.listener_for(
-                                dialog_state,
-                                |dialog_state, action, _, cx| {
-                                    dialog_state.handle_action(cx, action);
-                                },
-                            )),
+                            .on_action(window.listener_for(state, |state, action, _, cx| {
+                                state.handle_action(cx, action);
+                            })),
                     ),
                 )
-                .child(
-                    resizable_panel().child(ConnectionEditor::new(&dialog_state.read(cx).editor)),
-                ),
+                .child(resizable_panel().child(ConnectionEditor::new(&state.read(cx).editor))),
         )
         .footer(
             DialogFooter::new().child(
                 h_flex()
                     .gap_2()
                     .child(Button::new("connections-cancel").label("Cancel").on_click(
-                        window.listener_for(dialog_state, |dialog_state, _, window, cx| {
-                            dialog_state.reset(cx);
+                        window.listener_for(state, |state, _, window, cx| {
+                            state.reset(cx);
                             window.close_dialog(cx);
                         }),
                     ))
@@ -229,12 +224,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             .compact()
                             .primary()
                             .disabled(is_editor_empty || is_opening)
-                            .on_click(window.listener_for(
-                                dialog_state,
-                                |dialog_state, _, _, cx| {
-                                    dialog_state.save(cx);
-                                },
-                            )),
+                            .on_click(window.listener_for(state, |state, _, _, cx| {
+                                state.save(cx);
+                            })),
                     )
                     .child(
                         Button::new("connections-open")
@@ -249,19 +241,16 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                         .loading(true),
                                 )
                             })
-                            .on_click(window.listener_for(
-                                dialog_state,
-                                move |dialog_state, _, window, cx| {
-                                    if !is_opening {
-                                        dialog_state.open_connection(window, cx);
-                                    }
-                                },
-                            )),
+                            .on_click(window.listener_for(state, move |state, _, window, cx| {
+                                if !is_opening {
+                                    state.open_connection(window, cx);
+                                }
+                            })),
                     ),
             ),
         )
-        .on_close(window.listener_for(dialog_state, |dialog_state, _, _, cx| {
-            dialog_state.reset(cx);
+        .on_close(window.listener_for(state, |state, _, _, cx| {
+            state.reset(cx);
         }))
 }
 

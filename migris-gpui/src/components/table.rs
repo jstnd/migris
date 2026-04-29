@@ -13,7 +13,7 @@ struct QueryTableDelegate {
 }
 
 impl QueryTableDelegate {
-    /// Creates a new [`QueryTableDelegate`] with the given [`QueryResult`].
+    /// Creates a new [`QueryTableDelegate`].
     fn new(result: QueryResult) -> Self {
         let columns = result
             .data
@@ -77,33 +77,37 @@ impl TableDelegate for QueryTableDelegate {
     }
 }
 
+/// The state used with a [`QueryTable`].
 pub struct QueryTableState {
-    table_state: Entity<TableState<QueryTableDelegate>>,
+    /// The state for the table.
+    table: Entity<TableState<QueryTableDelegate>>,
 }
 
 impl QueryTableState {
-    /// Creates a new [`QueryTableState`] with the given [`QueryResult`].
+    /// Creates a new [`QueryTableState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
         let delegate = QueryTableDelegate::new(result);
-        let table_state = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
+        let table = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
 
-        Self { table_state }
+        Self { table }
     }
 
     /// Loads a number of rows from the query result's stream, determined by the given size parameter.
     pub fn load(&mut self, cx: &mut Context<Self>, size: usize) {
-        self.table_state.update(cx, |table_state, _| {
-            table_state.delegate_mut().load(size);
+        self.table.update(cx, |table, _| {
+            table.delegate_mut().load(size);
         })
     }
 }
 
 #[derive(IntoElement)]
 pub struct QueryTable {
+    /// The state for the query table.
     state: Entity<QueryTableState>,
 }
 
 impl QueryTable {
+    /// Creates a new [`QueryTable`].
     pub fn new(state: &Entity<QueryTableState>) -> Self {
         Self {
             state: state.clone(),
@@ -115,6 +119,6 @@ impl RenderOnce for QueryTable {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
 
-        DataTable::new(&state.table_state).bordered(false).small()
+        DataTable::new(&state.table).bordered(false).small()
     }
 }
