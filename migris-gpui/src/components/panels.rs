@@ -21,7 +21,7 @@ use crate::{
     components::{connections, icon::IconName},
     events::{Event, EventManager, EventVariant},
     shared,
-    tabs::{TabKind, TabView},
+    tabs::{TabVariant, TabView},
 };
 
 /// The state used with a [`ConnectionPanel`].
@@ -256,8 +256,8 @@ impl TabPanelState {
     }
 
     /// Adds a new tab to the panel.
-    pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, kind: TabKind) {
-        let tab = cx.new(|cx| TabView::new(window, cx, kind));
+    pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, variant: TabVariant) {
+        let tab = cx.new(|cx| TabView::new(window, cx, variant));
         self.tabs.push(tab);
 
         // Set the active tab to be the newly added tab.
@@ -286,7 +286,7 @@ impl TabPanelState {
         self.tabs
             .iter()
             .filter_map(|tab| {
-                let TabKind::Query(number) = tab.read(cx).kind() else {
+                let TabVariant::Query(number) = tab.read(cx).variant() else {
                     return None;
                 };
 
@@ -374,8 +374,8 @@ impl RenderOnce for TabPanel {
                             .ghost()
                             .small()
                             .on_click(window.listener_for(&self.state, |state, _, window, cx| {
-                                let tab_kind = TabKind::Query(state.next_query_number(cx));
-                                state.add_tab(window, cx, tab_kind);
+                                let variant = TabVariant::Query(state.next_query_number(cx));
+                                state.add_tab(window, cx, variant);
                             })),
                     ),
             )

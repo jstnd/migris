@@ -22,7 +22,7 @@ use crate::{
     events::{EventEmitted, EventId, EventManager, EventVariant, RunSqlEvent},
     settings::AppSettings,
     state::AppState,
-    tabs::TabKind,
+    tabs::TabVariant,
     types::{OpenConnection, QueryProgress},
 };
 
@@ -79,8 +79,8 @@ impl Application {
             EventVariant::OpenEntity(entity) => {
                 let entity = entity.clone();
                 self.tab_panel.update(cx, |tab_panel, cx| {
-                    let tab_kind = TabKind::Table(entity);
-                    tab_panel.add_tab(window, cx, tab_kind);
+                    let variant = TabVariant::Table(entity);
+                    tab_panel.add_tab(window, cx, variant);
                 })
             }
             EventVariant::RunSql(event) => self.run_sql(window, cx, event.clone()),
