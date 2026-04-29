@@ -382,7 +382,17 @@ impl ConnectionDialogState {
 
     /// Deletes the folder with the given [`ConnectionFolderId`].
     fn delete_folder(&mut self, cx: &mut Context<Self>, id: &ConnectionFolderId) {
-        ConnectionManager::global_mut(cx).remove_folder(id);
+        let removed_connections = ConnectionManager::global_mut(cx).remove_folder(id);
+
+        // Close the editor if the connection that was being edited was included in the connections under the deleted folder.
+        if let Some(editor_id) = self.editor.read(cx).connection_id()
+            && removed_connections.contains(&editor_id)
+        {
+            self.editor.update(cx, |editor, _| {
+                editor.close();
+            });
+        }
+
         self.load_tree(cx);
     }
 

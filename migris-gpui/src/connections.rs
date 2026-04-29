@@ -273,7 +273,9 @@ impl ConnectionManager {
     }
 
     /// Removes the folder with the given [`ConnectionFolderId`] from the config.
-    pub fn remove_folder(&mut self, id: &ConnectionFolderId) {
+    /// 
+    /// Returns the set of connections that were removed for future processing if needed.
+    pub fn remove_folder(&mut self, id: &ConnectionFolderId) -> HashSet<ConnectionId> {
         fn remove_inner(
             manager: &ConnectionManager,
             id: ConnectionFolderId,
@@ -307,6 +309,7 @@ impl ConnectionManager {
 
         self.load_maps();
         self.save();
+        removed_connections
     }
 
     fn load_maps(&mut self) {
