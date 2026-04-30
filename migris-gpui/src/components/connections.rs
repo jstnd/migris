@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use gpui::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
+    Action, App, AppContext, ClickEvent, Context, Entity, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable, WindowExt,
@@ -139,8 +139,14 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             )
                                             .on_click(window.listener_for(
                                                 &state,
-                                                move |state, _, window, cx| {
-                                                    if let Some(id) = folder_id {
+                                                move |state, event: &ClickEvent, window, cx| {
+                                                    if let Some(id) = connection_id
+                                                        && event.click_count() >= 2
+                                                    {
+                                                        // Open connection on double-click.
+                                                        state.open_connection(window, cx, Some(id));
+                                                        return;
+                                                    } else if let Some(id) = folder_id {
                                                         state.toggle_expand(id);
                                                     }
 
@@ -242,9 +248,11 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                 )
                             })
                             .on_click(window.listener_for(state, move |state, _, window, cx| {
-                                if !is_opening {
-                                    state.open_connection(window, cx);
-                                }
+                                state.open_connection(
+                                    window,
+                                    cx,
+                                    state.editor.read(cx).connection_id(),
+                                );
                             })),
                     ),
             ),
@@ -252,6 +260,23 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
         .on_close(window.listener_for(state, |state, _, _, cx| {
             state.reset(cx);
         }))
+        .on_ok({
+            let state = state.clone();
+            move |_, window, cx| {
+                state.update(cx, |state, cx| {
+                    if let Some(item) = state.tree.read(cx).selected_item()
+                        && let Some(connection) =
+                            ConnectionManager::global(cx).try_connection(&item.id)
+                    {
+                        state.open_connection(window, cx, Some(connection.id()));
+                    } else if let Some(id) = state.editor.read(cx).connection_id() {
+                        state.open_connection(window, cx, Some(id));
+                    }
+                });
+
+                false
+            }
+        })
 }
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
@@ -396,15 +421,25 @@ impl ConnectionDialogState {
         self.load_tree(cx);
     }
 
-    /// Emits an event to open the connection that is currently active within the editor.
+    /// Emits an event to open the connection with the given [`ConnectionId`].
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
-    fn open_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(id) = self.editor.read(cx).connection_id() {
-            self.opening = true;
+    fn open_connection(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        id: Option<ConnectionId>,
+    ) {
+        // Do not open another connection if one is already opening.
+        if self.opening {
+            return;
+        }
 
+        if let Some(id) = id {
+            self.opening = true;
             let event = Event::new(EventVariant::OpenConnection(id));
             EventManager::emit(window, cx, event);
+            cx.notify();
         }
     }
 
@@ -413,6 +448,10 @@ impl ConnectionDialogState {
         self.opening = false;
         self.expanded.clear();
         self.load_tree(cx);
+
+        self.editor.update(cx, |editor, _| {
+            editor.close();
+        })
     }
 
     /// Saves the connection currently active within the editor.
