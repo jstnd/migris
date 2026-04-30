@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use gpui::{
     Action, App, AppContext, ClickEvent, Context, Entity, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px,
+    KeystrokeEvent, ParentElement, RenderOnce, SharedString, Styled, Subscription, Window,
+    prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable, WindowExt,
@@ -32,6 +33,8 @@ use crate::{
     state::AppState,
 };
 
+const CONNECTION_DIALOG: &str = "CONNECTION_DIALOG";
+
 pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> Dialog {
     let state = &AppState::global(cx).connection_dialog;
     let is_editor_empty = state.read(cx).is_editor_empty(cx);
@@ -46,6 +49,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                 .child(
                     resizable_panel().size(shared::DIALOG_WIDTH * 0.3).child(
                         v_flex()
+                            .key_context(CONNECTION_DIALOG)
                             .gap_1()
                             .p_3()
                             .size_full()
@@ -102,10 +106,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                     move |idx, entry, _, window, cx| {
                                         let manager = ConnectionManager::global(cx);
                                         let connection = manager.try_connection(&entry.item().id);
-                                        let connection_id =
-                                            connection.map(|connection| connection.id());
+                                        let connection_id = connection.map(|c| c.id());
                                         let folder = manager.try_folder(&entry.item().id);
-                                        let folder_id = folder.map(|folder| folder.id());
+                                        let folder_id = folder.map(|f| f.id());
 
                                         ListItem::new(idx)
                                             .px_1()
@@ -307,6 +310,9 @@ pub struct ConnectionDialogState {
 
     /// Whether a connection is in the progress of opening.
     opening: bool,
+
+    /// The subscription for handling keystroke events.
+    _keystroke_subscription: Subscription,
 }
 
 impl ConnectionDialogState {
@@ -316,16 +322,59 @@ impl ConnectionDialogState {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
+        let _keystroke_subscription = cx.observe_keystrokes(|this, event, _, cx| {
+            this.handle_keystroke(cx, event);
+        });
+
         let mut state = Self {
             editor,
             search_input,
             tree,
             expanded: HashSet::new(),
             opening: false,
+            _keystroke_subscription,
         };
 
         state.load_tree(cx);
         state
+    }
+
+    /// Handles actions originating from the connection dialog.
+    fn handle_action(&mut self, cx: &mut Context<Self>, action: &ConnectionDialogAction) {
+        match action {
+            ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
+            ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
+            ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
+            ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
+        }
+    }
+
+    /// Handles keystroke events from inner components.
+    fn handle_keystroke(&mut self, cx: &mut Context<Self>, event: &KeystrokeEvent) {
+        if let Some(action) = &event.action
+            && event
+                .context_stack
+                .iter()
+                .any(|context| context.contains(CONNECTION_DIALOG))
+        {
+            match action.name() {
+                "ui::SelectDown" => {}
+                "ui::SelectLeft" => {
+                    if let Some(id) = self.selected_folder(cx) {
+                        self.expanded.remove(&id);
+                    }
+                }
+                "ui::SelectRight" => {
+                    if let Some(id) = self.selected_folder(cx) {
+                        self.expanded.insert(id);
+                    }
+                }
+                "ui::SelectUp" => {}
+                _ => {}
+            }
+
+            cx.notify();
+        }
     }
 
     /// Returns whether the editor is empty (i.e. has a connection open).
@@ -358,16 +407,6 @@ impl ConnectionDialogState {
         }
     }
 
-    /// Handles actions originating from the connection dialog.
-    fn handle_action(&mut self, cx: &mut Context<Self>, action: &ConnectionDialogAction) {
-        match action {
-            ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
-            ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
-            ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
-            ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
-        }
-    }
-
     /// Adds a new default connection.
     fn add_connection(&mut self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
         let mut connection = Connection::default();
@@ -390,15 +429,20 @@ impl ConnectionDialogState {
         self.load_tree(cx);
     }
 
+    /// Closes the connection open in the editor.
+    fn close_editor(&self, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, _| {
+            editor.close();
+        })
+    }
+
     /// Deletes the connection with the given [`ConnectionId`].
     fn delete_connection(&mut self, cx: &mut Context<Self>, id: &ConnectionId) {
         // Close the editor if we are deleting the connection that was being edited.
         if let Some(editor_id) = self.editor.read(cx).connection_id()
             && editor_id == *id
         {
-            self.editor.update(cx, |editor, _| {
-                editor.close();
-            });
+            self.close_editor(cx);
         }
 
         ConnectionManager::global_mut(cx).remove_connection(id);
@@ -413,9 +457,7 @@ impl ConnectionDialogState {
         if let Some(editor_id) = self.editor.read(cx).connection_id()
             && removed_connections.contains(&editor_id)
         {
-            self.editor.update(cx, |editor, _| {
-                editor.close();
-            });
+            self.close_editor(cx);
         }
 
         self.load_tree(cx);
@@ -447,11 +489,8 @@ impl ConnectionDialogState {
     fn reset(&mut self, cx: &mut Context<Self>) {
         self.opening = false;
         self.expanded.clear();
+        self.close_editor(cx);
         self.load_tree(cx);
-
-        self.editor.update(cx, |editor, _| {
-            editor.close();
-        })
     }
 
     /// Saves the connection currently active within the editor.
