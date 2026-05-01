@@ -143,23 +143,17 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             .on_click(window.listener_for(
                                                 &state,
                                                 move |state, event: &ClickEvent, window, cx| {
-                                                    if let Some(id) = connection_id
+                                                    if let Some(_) = connection_id
                                                         && event.click_count() >= 2
                                                     {
                                                         // Open connection on double-click.
-                                                        state.open_connection(window, cx, Some(id));
+                                                        state.open_connection(window, cx);
                                                         return;
                                                     } else if let Some(id) = folder_id {
                                                         state.toggle_expand(id);
                                                     }
 
-                                                    state.editor.update(cx, |editor, cx| {
-                                                        if let Some(id) = connection_id {
-                                                            editor.open(window, cx, id);
-                                                        } else {
-                                                            editor.close();
-                                                        }
-                                                    });
+                                                    state.open_editor(window, cx, connection_id);
                                                 },
                                             ))
                                     }
@@ -251,11 +245,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                 )
                             })
                             .on_click(window.listener_for(state, move |state, _, window, cx| {
-                                state.open_connection(
-                                    window,
-                                    cx,
-                                    state.editor.read(cx).connection_id(),
-                                );
+                                state.open_connection(window, cx);
                             })),
                     ),
             ),
@@ -267,14 +257,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
             let state = state.clone();
             move |_, window, cx| {
                 state.update(cx, |state, cx| {
-                    if let Some(item) = state.tree.read(cx).selected_item()
-                        && let Some(connection) =
-                            ConnectionManager::global(cx).try_connection(&item.id)
-                    {
-                        state.open_connection(window, cx, Some(connection.id()));
-                    } else if let Some(id) = state.editor.read(cx).connection_id() {
-                        state.open_connection(window, cx, Some(id));
-                    }
+                    state.open_connection(window, cx);
                 });
 
                 false
@@ -322,8 +305,8 @@ impl ConnectionDialogState {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
-        let _keystroke_subscription = cx.observe_keystrokes(|this, event, _, cx| {
-            this.handle_keystroke(cx, event);
+        let _keystroke_subscription = cx.observe_keystrokes(|this, event, window, cx| {
+            this.handle_keystroke(window, cx, event);
         });
 
         let mut state = Self {
@@ -350,7 +333,12 @@ impl ConnectionDialogState {
     }
 
     /// Handles keystroke events from inner components.
-    fn handle_keystroke(&mut self, cx: &mut Context<Self>, event: &KeystrokeEvent) {
+    fn handle_keystroke(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        event: &KeystrokeEvent,
+    ) {
         if let Some(action) = &event.action
             && event
                 .context_stack
@@ -358,7 +346,9 @@ impl ConnectionDialogState {
                 .any(|context| context.contains(CONNECTION_DIALOG))
         {
             match action.name() {
-                "ui::SelectDown" => {}
+                "ui::SelectDown" | "ui::SelectUp" => {
+                    self.open_editor(window, cx, self.selected_connection(cx));
+                }
                 "ui::SelectLeft" => {
                     if let Some(id) = self.selected_folder(cx) {
                         self.expanded.remove(&id);
@@ -369,41 +359,10 @@ impl ConnectionDialogState {
                         self.expanded.insert(id);
                     }
                 }
-                "ui::SelectUp" => {}
                 _ => {}
             }
 
             cx.notify();
-        }
-    }
-
-    /// Returns whether the editor is empty (i.e. has a connection open).
-    fn is_editor_empty(&self, cx: &App) -> bool {
-        self.editor.read(cx).variant.is_none()
-    }
-
-    /// Returns whether the folder with the given [`ConnectionFolderId`] is expanded.
-    fn is_expanded(&self, id: &ConnectionFolderId) -> bool {
-        self.expanded.contains(id)
-    }
-
-    /// Returns the selected folder, if any.
-    fn selected_folder(&self, cx: &App) -> Option<ConnectionFolderId> {
-        if let Some(item) = self.tree.read(cx).selected_item()
-            && let Some(parent) = ConnectionManager::global(cx).try_folder(&item.id)
-        {
-            Some(parent.id())
-        } else {
-            None
-        }
-    }
-
-    /// Toggles the expanded state of the folder with the given [`ConnectionFolderId`].
-    fn toggle_expand(&mut self, id: ConnectionFolderId) {
-        if self.is_expanded(&id) {
-            self.expanded.remove(&id);
-        } else {
-            self.expanded.insert(id);
         }
     }
 
@@ -463,26 +422,46 @@ impl ConnectionDialogState {
         self.load_tree(cx);
     }
 
+    /// Returns whether the editor is empty (i.e. has a connection open).
+    fn is_editor_empty(&self, cx: &App) -> bool {
+        self.editor.read(cx).variant.is_none()
+    }
+
+    /// Returns whether the folder with the given [`ConnectionFolderId`] is expanded.
+    fn is_expanded(&self, id: &ConnectionFolderId) -> bool {
+        self.expanded.contains(id)
+    }
+
     /// Emits an event to open the connection with the given [`ConnectionId`].
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
-    fn open_connection(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        id: Option<ConnectionId>,
-    ) {
+    fn open_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save(cx);
+
         // Do not open another connection if one is already opening.
         if self.opening {
             return;
         }
 
-        if let Some(id) = id {
+        if let Some(id) = self.editor.read(cx).connection_id() {
             self.opening = true;
             let event = Event::new(EventVariant::OpenConnection(id));
             EventManager::emit(window, cx, event);
             cx.notify();
         }
+    }
+
+    /// Opens the editor with the given [`ConnectionId`], if any.
+    ///
+    /// Closes the editor if [`None`] is given.
+    fn open_editor(&self, window: &mut Window, cx: &mut Context<Self>, id: Option<ConnectionId>) {
+        self.editor.update(cx, |editor, cx| {
+            if let Some(id) = id {
+                editor.open(window, cx, id);
+            } else {
+                editor.close();
+            }
+        });
     }
 
     /// Resets the temporary state of the dialog.
@@ -509,6 +488,37 @@ impl ConnectionDialogState {
 
             // Reload the tree with the newly saved connection.
             self.load_tree(cx);
+        }
+    }
+
+    /// Returns the selected connection, if any.
+    fn selected_connection(&self, cx: &App) -> Option<ConnectionId> {
+        if let Some(item) = self.tree.read(cx).selected_item()
+            && let Some(connection) = ConnectionManager::global(cx).try_connection(&item.id)
+        {
+            Some(connection.id())
+        } else {
+            None
+        }
+    }
+
+    /// Returns the selected folder, if any.
+    fn selected_folder(&self, cx: &App) -> Option<ConnectionFolderId> {
+        if let Some(item) = self.tree.read(cx).selected_item()
+            && let Some(parent) = ConnectionManager::global(cx).try_folder(&item.id)
+        {
+            Some(parent.id())
+        } else {
+            None
+        }
+    }
+
+    /// Toggles the expanded state of the folder with the given [`ConnectionFolderId`].
+    fn toggle_expand(&mut self, id: ConnectionFolderId) {
+        if self.is_expanded(&id) {
+            self.expanded.remove(&id);
+        } else {
+            self.expanded.insert(id);
         }
     }
 
