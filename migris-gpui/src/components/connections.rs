@@ -526,7 +526,9 @@ impl ConnectionDialogState {
         let manager = ConnectionManager::global(cx);
         let items = self.build_tree_items(manager, None);
         self.tree.update(cx, |tree, cx| {
+            let selected = tree.selected_item().cloned();
             tree.set_items(items, cx);
+            tree.set_selected_item(selected.as_ref(), cx);
         });
     }
 
