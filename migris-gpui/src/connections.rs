@@ -56,9 +56,14 @@ impl Connection {
         }
     }
 
-    /// Returns the id of the connection.
+    /// Returns the [`ConnectionId`] of the connection.
     pub fn id(&self) -> ConnectionId {
         self.id
+    }
+
+    /// Returns the [`ConnectionFolderId`] of the folder containing the connection, if any.
+    pub fn folder(&self) -> Option<ConnectionFolderId> {
+        self.folder
     }
 
     /// Returns the name of the connection.
@@ -119,7 +124,7 @@ impl ConnectionFolder {
         }
     }
 
-    /// Returns the id of the folder.
+    /// Returns the [`ConnectionFolderId`] of the folder.
     pub fn id(&self) -> ConnectionFolderId {
         self.id
     }
@@ -273,7 +278,7 @@ impl ConnectionManager {
     }
 
     /// Removes the folder with the given [`ConnectionFolderId`] from the config.
-    /// 
+    ///
     /// Returns the set of connections that were removed for future processing if needed.
     pub fn remove_folder(&mut self, id: &ConnectionFolderId) -> HashSet<ConnectionId> {
         fn remove_inner(

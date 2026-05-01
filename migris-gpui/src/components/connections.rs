@@ -75,7 +75,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     state.handle_action(
                                                         cx,
                                                         &ConnectionDialogAction::AddConnection(
-                                                            state.selected_folder(cx),
+                                                            state.selected_parent(cx),
                                                         ),
                                                     );
                                                 },
@@ -93,7 +93,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     state.handle_action(
                                                         cx,
                                                         &ConnectionDialogAction::AddFolder(
-                                                            state.selected_folder(cx),
+                                                            state.selected_parent(cx),
                                                         ),
                                                     );
                                                 },
@@ -440,7 +440,7 @@ impl ConnectionDialogState {
         self.expanded.contains(id)
     }
 
-    /// Emits an event to open the connection with the given [`ConnectionId`].
+    /// Emits an event to open the connection that is active within the editor.
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
     fn open_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -480,7 +480,7 @@ impl ConnectionDialogState {
         self.load_tree(cx);
     }
 
-    /// Saves the connection currently active within the editor.
+    /// Saves the connection that is active within the editor.
     fn save(&mut self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
 
@@ -518,6 +518,17 @@ impl ConnectionDialogState {
             Some(parent.id())
         } else {
             None
+        }
+    }
+
+    /// Returns the parent folder of the selected item, if any.
+    /// - When a connection is selected, this will return the [`ConnectionFolderId`] of its parent, if one exists.
+    /// - When a folder is selected, this will return the [`ConnectionFolderId`] of that folder.
+    fn selected_parent(&self, cx: &App) -> Option<ConnectionFolderId> {
+        if let Some(id) = self.selected_connection(cx) {
+            ConnectionManager::global(cx).connection(&id).folder()
+        } else {
+            self.selected_folder(cx)
         }
     }
 
