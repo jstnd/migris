@@ -10,7 +10,7 @@ use gpui_component::{
     button::{Button, ButtonVariants},
     dialog::{Dialog, DialogFooter},
     h_flex,
-    input::{Input, InputState, MaskPattern},
+    input::{Input, InputEvent, InputState, MaskPattern},
     list::ListItem,
     progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
@@ -294,8 +294,8 @@ pub struct ConnectionDialogState {
     /// Whether a connection is in the progress of opening.
     opening: bool,
 
-    /// The subscription for handling keystroke events.
-    _keystroke_subscription: Subscription,
+    /// The subscriptions for the connection dialog.
+    _subscriptions: Vec<Subscription>,
 }
 
 impl ConnectionDialogState {
@@ -305,9 +305,17 @@ impl ConnectionDialogState {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
-        let _keystroke_subscription = cx.observe_keystrokes(|this, event, window, cx| {
-            this.handle_keystroke(window, cx, event);
-        });
+
+        let _subscriptions = Vec::from([
+            cx.observe_keystrokes(|this, event, window, cx| {
+                this.handle_keystroke(window, cx, event);
+            }),
+            cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
+                if let InputEvent::Change = event {
+                    this.load_tree(cx);
+                }
+            }),
+        ]);
 
         let mut state = Self {
             editor,
@@ -315,7 +323,7 @@ impl ConnectionDialogState {
             tree,
             expanded: HashSet::new(),
             opening: false,
-            _keystroke_subscription,
+            _subscriptions,
         };
 
         state.load_tree(cx);
@@ -523,8 +531,8 @@ impl ConnectionDialogState {
     }
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
-        let manager = ConnectionManager::global(cx);
-        let items = self.build_tree_items(manager, None);
+        let filter = self.search_input.read(cx).value();
+        let items = self.build_tree_items(ConnectionManager::global(cx), &filter, None);
         self.tree.update(cx, |tree, cx| {
             let selected = tree.selected_item().cloned();
             tree.set_items(items, cx);
@@ -535,6 +543,7 @@ impl ConnectionDialogState {
     fn build_tree_items(
         &self,
         manager: &ConnectionManager,
+        filter: &SharedString,
         folder_id: Option<ConnectionFolderId>,
     ) -> Vec<TreeItem> {
         let mut items = Vec::new();
@@ -545,11 +554,16 @@ impl ConnectionDialogState {
 
             for id in children_folders {
                 let folder = manager.folder(id);
-                let item = TreeItem::new(id.to_string(), folder.name())
-                    .expanded(self.is_expanded(id))
-                    .children(self.build_tree_items(manager, Some(*id)));
+                let children = self.build_tree_items(manager, filter, Some(*id));
 
-                folder_items.push(item);
+                // If there's an active filter, we only want to show folders that contain connections matching the filter.
+                if filter.is_empty() || !children.is_empty() {
+                    let item = TreeItem::new(id.to_string(), folder.name())
+                        .expanded(self.is_expanded(id))
+                        .children(children);
+
+                    folder_items.push(item);
+                }
             }
 
             folder_items.sort_unstable_by(|a, b| a.label.cmp(&b.label));
@@ -562,8 +576,12 @@ impl ConnectionDialogState {
 
             for id in children_connections {
                 let connection = manager.connection(id);
-                let item = TreeItem::new(id.to_string(), connection.name());
-                connection_items.push(item);
+
+                // Only include connections that match the filter.
+                if filter.is_empty() || connection.name().to_lowercase().contains(filter.as_str()) {
+                    let item = TreeItem::new(id.to_string(), connection.name());
+                    connection_items.push(item);
+                }
             }
 
             connection_items.sort_unstable_by(|a, b| a.label.cmp(&b.label));
