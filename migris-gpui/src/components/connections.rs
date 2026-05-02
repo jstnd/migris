@@ -601,8 +601,16 @@ impl ConnectionDialogState {
         }
 
         if let Some(id) = self.editor.read(cx).connection_id() {
+            let this = cx.entity();
+            let event =
+                Event::new(EventVariant::OpenConnection(id)).on_complete(move |window, cx| {
+                    this.update(cx, |this, cx| {
+                        this.reset(cx);
+                        window.close_dialog(cx);
+                    });
+                });
+
             self.opening = true;
-            let event = Event::new(EventVariant::OpenConnection(id));
             EventManager::emit(window, cx, event);
             cx.notify();
         }

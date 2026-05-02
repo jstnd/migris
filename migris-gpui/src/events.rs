@@ -63,10 +63,13 @@ pub struct EventId(Uuid);
 
 pub struct Event {
     /// The id of the event.
-    id: EventId,
+    pub id: EventId,
+
+    /// The callbacks for the event.
+    pub callbacks: EventCallbacks,
 
     /// The variant of the event.
-    variant: EventVariant,
+    pub variant: EventVariant,
 }
 
 impl Event {
@@ -74,13 +77,28 @@ impl Event {
     pub fn new(variant: impl Into<EventVariant>) -> Self {
         Self {
             id: EventId(Uuid::now_v7()),
+            callbacks: EventCallbacks::new(),
             variant: variant.into(),
         }
     }
 
-    /// Returns the variant of the event.
-    pub fn variant(&self) -> &EventVariant {
-        &self.variant
+    /// Sets the callback used when the event successfully completes.
+    pub fn on_complete(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.callbacks.on_complete = Some(Rc::new(f));
+        self
+    }
+}
+
+#[derive(Clone)]
+pub struct EventCallbacks {
+    /// An optional callback used when the event successfully completes.
+    pub on_complete: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+}
+
+impl EventCallbacks {
+    /// Creates a new [`EventCallbacks`].
+    fn new() -> Self {
+        Self { on_complete: None }
     }
 }
 

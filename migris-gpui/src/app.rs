@@ -5,7 +5,7 @@ use gpui::{
 use gpui_component::{
     ActiveTheme, Root, Sizable, WindowExt,
     button::{Button, ButtonVariants},
-    dialog, h_flex,
+    h_flex,
     progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
     v_flex,
@@ -19,7 +19,7 @@ use crate::{
         settings,
     },
     connections::{ConnectionId, ConnectionManager},
-    events::{EventEmitted, EventId, EventManager, EventVariant, RunSqlEvent},
+    events::{EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, RunSqlEvent},
     settings::AppSettings,
     state::AppState,
     tabs::TabVariant,
@@ -74,8 +74,10 @@ impl Application {
             return;
         };
 
-        match event.variant() {
-            EventVariant::OpenConnection(id) => self.open_connection(window, cx, *id),
+        match &event.variant {
+            EventVariant::OpenConnection(id) => {
+                self.open_connection(window, cx, *id, event.callbacks.clone())
+            }
             EventVariant::OpenEntity(entity) => {
                 let entity = entity.clone();
                 self.tab_panel.update(cx, |tab_panel, cx| {
@@ -89,7 +91,13 @@ impl Application {
         EventManager::global_mut(cx).complete(id);
     }
 
-    fn open_connection(&self, window: &mut Window, cx: &mut Context<Self>, id: ConnectionId) {
+    fn open_connection(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        id: ConnectionId,
+        callbacks: EventCallbacks,
+    ) {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
 
         cx.spawn_in(window, async |this, cx| {
@@ -109,11 +117,9 @@ impl Application {
                     connection_panel.load_entities(cx, entities);
                 });
 
-                // Close the connection dialog here after the connection was successfully loaded.
-                //
-                // We use `dispatch_action` here rather than `close_dialog`, as the former allows the `on_close` event
-                // for the dialog to be fired, which we need for resetting temporary state in the connection dialog.
-                window.dispatch_action(Box::new(dialog::CancelDialog), cx);
+                if let Some(on_complete) = callbacks.on_complete {
+                    on_complete(window, cx);
+                }
             });
         })
         .detach();
