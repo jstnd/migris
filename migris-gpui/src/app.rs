@@ -100,15 +100,25 @@ impl Application {
     ) {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
 
-        cx.spawn_in(window, async |this, cx| {
-            let Ok(driver) = migris::driver(connection.options()).await else {
-                println!("DRIVER FAILED");
-                return;
+        cx.spawn_in(window, async move |this, cx| {
+            let driver = match migris::driver(connection.options()).await {
+                Ok(driver) => driver,
+                Err(err) => {
+                    _ = cx.update(|window, cx| {
+                        callbacks.on_error(err.into(), window, cx);
+                    });
+                    return;
+                }
             };
 
-            let Ok(entities) = driver.entities().await else {
-                println!("ENTITIES FAILED");
-                return;
+            let entities = match driver.entities().await {
+                Ok(entities) => entities,
+                Err(err) => {
+                    _ = cx.update(|window, cx| {
+                        callbacks.on_error(err.into(), window, cx);
+                    });
+                    return;
+                }
             };
 
             _ = this.update_in(cx, |this, window, cx| {
@@ -117,9 +127,7 @@ impl Application {
                     connection_panel.load_entities(cx, entities);
                 });
 
-                if let Some(on_complete) = callbacks.on_complete {
-                    on_complete(window, cx);
-                }
+                callbacks.on_complete(window, cx);
             });
         })
         .detach();

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use anyhow::Error;
 use gpui::{Action, App, Global, SharedString, Window};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 use uuid::Uuid;
@@ -87,18 +88,44 @@ impl Event {
         self.callbacks.on_complete = Some(Rc::new(f));
         self
     }
+
+    /// Sets the callback used when the event errors.
+    pub fn on_error(mut self, f: impl Fn(Error, &mut Window, &mut App) + 'static) -> Self {
+        self.callbacks.on_error = Some(Rc::new(f));
+        self
+    }
 }
 
 #[derive(Clone)]
 pub struct EventCallbacks {
     /// An optional callback used when the event successfully completes.
-    pub on_complete: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_complete: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+
+    /// An optional callback used when the event errors.
+    on_error: Option<Rc<dyn Fn(Error, &mut Window, &mut App) + 'static>>,
 }
 
 impl EventCallbacks {
     /// Creates a new [`EventCallbacks`].
     fn new() -> Self {
-        Self { on_complete: None }
+        Self {
+            on_complete: None,
+            on_error: None,
+        }
+    }
+
+    /// Calls the callback used when the event successfully completes, if one exists.
+    pub fn on_complete(&self, window: &mut Window, cx: &mut App) {
+        if let Some(on_complete) = self.on_complete.clone() {
+            on_complete(window, cx);
+        }
+    }
+
+    /// Calls the callback used when the event errors, if one exists.
+    pub fn on_error(&self, error: Error, window: &mut Window, cx: &mut App) {
+        if let Some(on_error) = self.on_error.clone() {
+            on_error(error, window, cx);
+        }
     }
 }
 
