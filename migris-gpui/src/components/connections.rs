@@ -71,8 +71,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             .small()
                                             .on_click(window.listener_for(
                                                 state,
-                                                |state, _, _, cx| {
+                                                |state, _, window, cx| {
                                                     state.handle_action(
+                                                        window,
                                                         cx,
                                                         &ConnectionDialogAction::AddConnection(
                                                             state.selected_parent(cx),
@@ -89,8 +90,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             .small()
                                             .on_click(window.listener_for(
                                                 state,
-                                                |state, _, _, cx| {
+                                                |state, _, window, cx| {
                                                     state.handle_action(
+                                                        window,
                                                         cx,
                                                         &ConnectionDialogAction::AddFolder(
                                                             state.selected_parent(cx),
@@ -223,6 +225,13 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
 
                                         if let Some(id) = connection_id {
                                             menu.menu_with_icon(
+                                                "Rename",
+                                                Icon::new(cx, IconName::TextCursorInput),
+                                                Box::new(ConnectionDialogAction::RenameItem(
+                                                    id.to_string(),
+                                                )),
+                                            )
+                                            .menu_with_icon(
                                                 "Delete",
                                                 Icon::new(cx, IconName::Trash).danger(cx),
                                                 Box::new(ConnectionDialogAction::DeleteConnection(
@@ -231,6 +240,13 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             )
                                         } else if let Some(id) = folder_id {
                                             menu.menu_with_icon(
+                                                "Rename",
+                                                Icon::new(cx, IconName::TextCursorInput),
+                                                Box::new(ConnectionDialogAction::RenameItem(
+                                                    id.to_string(),
+                                                )),
+                                            )
+                                            .menu_with_icon(
                                                 "Delete",
                                                 Icon::new(cx, IconName::Trash).danger(cx),
                                                 Box::new(ConnectionDialogAction::DeleteFolder(id)),
@@ -256,8 +272,8 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                     },
                                 ),
                             )
-                            .on_action(window.listener_for(state, |state, action, _, cx| {
-                                state.handle_action(cx, action);
+                            .on_action(window.listener_for(state, |state, action, window, cx| {
+                                state.handle_action(window, cx, action);
                             })),
                     ),
                 )
@@ -280,7 +296,8 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             .compact()
                             .primary()
                             .disabled(is_editor_empty || is_opening)
-                            .on_click(window.listener_for(state, |state, _, _, cx| {
+                            .on_click(window.listener_for(state, |state, _, window, cx| {
+                                state.save_inline_editor(window, cx);
                                 state.save_editor(cx);
                             })),
                     )
@@ -310,6 +327,13 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
             let state = state.clone();
             move |_, window, cx| {
                 state.update(cx, |state, cx| {
+                    // We do not want to open the connection if this closure was called as a result of pressing the Enter key inside the inline editor.
+                    //
+                    // The Enter key is used for both saving the inline editor and confirming the entire dialog, and we want these events to be mutually exclusive.
+                    if state.inline_editor_id.is_some() {
+                        return;
+                    }
+
                     state.open_connection(window, cx);
                 });
 
@@ -318,13 +342,14 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
         })
 }
 
-#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[derive(Action, Clone, PartialEq, Eq)]
 #[action(no_json)]
 enum ConnectionDialogAction {
     AddConnection(Option<ConnectionFolderId>),
     AddFolder(Option<ConnectionFolderId>),
     DeleteConnection(ConnectionId),
     DeleteFolder(ConnectionFolderId),
+    RenameItem(String),
 }
 
 /// The state used with the connection dialog.
@@ -385,7 +410,7 @@ impl ConnectionDialogState {
                             .await;
 
                         _ = this.update_in(cx, |this, window, cx| {
-                            this.save_inline_editor(cx);
+                            this.save_inline_editor(window, cx);
 
                             // Re-focus the tree if we're saving as a result of an event from the Enter key.
                             if let InputEvent::PressEnter { .. } = event {
@@ -421,12 +446,18 @@ impl ConnectionDialogState {
     }
 
     /// Handles actions originating from the connection dialog.
-    fn handle_action(&mut self, cx: &mut Context<Self>, action: &ConnectionDialogAction) {
+    fn handle_action(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        action: &ConnectionDialogAction,
+    ) {
         match action {
             ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
             ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
             ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
             ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
+            ConnectionDialogAction::RenameItem(id) => self.open_inline_editor(window, cx, id),
         }
     }
 
@@ -486,7 +517,7 @@ impl ConnectionDialogState {
         self.load_tree(cx);
     }
 
-    /// Closes the connection open in the editor.
+    /// Closes the connection open in the connection editor.
     fn close_editor(&self, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, _| {
             editor.close();
@@ -515,7 +546,7 @@ impl ConnectionDialogState {
     fn delete_folder(&mut self, cx: &mut Context<Self>, id: &ConnectionFolderId) {
         let removed_connections = ConnectionManager::global_mut(cx).remove_folder(id);
 
-        // Close the editor if the connection that was being edited was included in the connections under the deleted folder.
+        // Close the connection editor if the connection that was being edited was inside the deleted folder.
         if let Some(editor_id) = self.editor.read(cx).connection_id()
             && removed_connections.contains(&editor_id)
         {
@@ -525,7 +556,18 @@ impl ConnectionDialogState {
         self.load_tree(cx);
     }
 
-    /// Returns whether the editor is empty (i.e. has a connection open).
+    /// Returns whether the connection with the given id string is active within the connection editor.
+    fn is_editing(&self, cx: &App, id: &SharedString) -> bool {
+        if let Some(editor_id) = self.editor.read(cx).connection_id()
+            && editor_id.to_string() == id.as_ref()
+        {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns whether the connection editor is empty (i.e. does not have a connection open).
     fn is_editor_empty(&self, cx: &App) -> bool {
         self.editor.read(cx).variant.is_none()
     }
@@ -546,10 +588,11 @@ impl ConnectionDialogState {
         }
     }
 
-    /// Emits an event to open the connection that is active within the editor.
+    /// Emits an event to open the connection that is active within the connection editor.
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
     fn open_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save_inline_editor(window, cx);
         self.save_editor(cx);
 
         // Do not open another connection if one is already opening.
@@ -565,9 +608,9 @@ impl ConnectionDialogState {
         }
     }
 
-    /// Opens the editor with the given [`ConnectionId`], if any.
+    /// Opens the connection editor with the given [`ConnectionId`], if any.
     ///
-    /// Closes the editor if [`None`] is given.
+    /// Closes the connection editor if [`None`] is given.
     fn open_editor(&self, window: &mut Window, cx: &mut Context<Self>, id: Option<ConnectionId>) {
         self.editor.update(cx, |editor, cx| {
             if let Some(id) = id {
@@ -613,7 +656,7 @@ impl ConnectionDialogState {
         });
     }
 
-    /// Saves the connection that is active within the editor.
+    /// Saves the connection that is active within the connection editor.
     fn save_editor(&mut self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
 
@@ -633,12 +676,21 @@ impl ConnectionDialogState {
     }
 
     /// Saves the item that is active within the inline editor.
-    fn save_inline_editor(&mut self, cx: &mut Context<Self>) {
+    fn save_inline_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(id) = &self.inline_editor_id else {
             return;
         };
 
         let name = self.inline_name_input.read(cx).value();
+
+        // If the item that is active within the inline editor is also active within the connection editor,
+        // we want to synchronize the name within the connection editor with the name from the inline editor.
+        if self.is_editing(cx, id) {
+            self.editor.update(cx, |editor, cx| {
+                editor.set_name(window, cx, name.clone());
+            });
+        }
+
         let manager = ConnectionManager::global_mut(cx);
         if let Some(connection) = manager.try_connection_mut(id) {
             connection.set_name(name);
@@ -803,10 +855,7 @@ impl ConnectionEditorState {
     /// Opens the connection with the given [`ConnectionId`] inside the editor.
     fn open(&mut self, window: &mut Window, cx: &mut App, id: ConnectionId) {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
-
-        self.name_input.update(cx, |name_input, cx| {
-            name_input.set_value(connection.name(), window, cx);
-        });
+        self.set_name(window, cx, connection.name());
 
         self.type_select.update(cx, |type_select, cx| {
             type_select.set_selected_value(&SharedString::from(""), window, cx);
@@ -825,6 +874,13 @@ impl ConnectionEditorState {
         self.variant
             .as_ref()
             .map(|ConnectionEditorVariant::MySql(state)| state.options(cx))
+    }
+
+    /// Sets the name inside the editor.
+    fn set_name(&self, window: &mut Window, cx: &mut App, name: SharedString) {
+        self.name_input.update(cx, |name_input, cx| {
+            name_input.set_value(name, window, cx);
+        });
     }
 }
 

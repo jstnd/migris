@@ -17,6 +17,7 @@ pub enum IconName {
     Save,
     Search,
     Settings,
+    TextCursorInput,
     Trash,
     X,
 }
@@ -39,6 +40,7 @@ impl IconNamed for IconName {
             Self::Save => "icons/save.svg",
             Self::Search => "icons/search.svg",
             Self::Settings => "icons/settings.svg",
+            Self::TextCursorInput => "icons/text-cursor-input.svg",
             Self::Trash => "icons/trash.svg",
             Self::X => "icons/x.svg",
         }
