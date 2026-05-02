@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use gpui::{
     Action, App, AppContext, ClickEvent, Context, Entity, InteractiveElement, IntoElement,
-    KeystrokeEvent, ParentElement, RenderOnce, SharedString, Styled, Subscription, Window,
-    prelude::FluentBuilder, px,
+    KeystrokeEvent, MouseButton, MouseDownEvent, ParentElement, RenderOnce, SharedString, Styled,
+    Subscription, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable, WindowExt,
@@ -138,24 +138,77 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                             },
                                                         ))
                                                     })
-                                                    .child(entry.item().label.clone()),
+                                                    .child({
+                                                        if state
+                                                            .read(cx)
+                                                            .is_inline_editing(&entry.item().id)
+                                                        {
+                                                            Input::new(
+                                                                &state.read(cx).inline_name_input,
+                                                            )
+                                                            .p_0()
+                                                            .appearance(false)
+                                                            .small()
+                                                            .into_any_element()
+                                                        } else {
+                                                            entry
+                                                                .item()
+                                                                .label
+                                                                .clone()
+                                                                .into_any_element()
+                                                        }
+                                                    }),
                                             )
-                                            .on_click(window.listener_for(
-                                                &state,
-                                                move |state, event: &ClickEvent, window, cx| {
-                                                    if let Some(_) = connection_id
-                                                        && event.click_count() >= 2
-                                                    {
-                                                        // Open connection on double-click.
-                                                        state.open_connection(window, cx);
-                                                        return;
-                                                    } else if let Some(id) = folder_id {
-                                                        state.toggle_expand(id);
-                                                    }
+                                            .on_click({
+                                                let entry_id = entry.item().id.clone();
+                                                window.listener_for(
+                                                    &state,
+                                                    move |state, event: &ClickEvent, window, cx| {
+                                                        // We do not want to perform any click event handling if we are inline editing this item.
+                                                        if state.is_inline_editing(&entry_id) {
+                                                            return;
+                                                        }
 
-                                                    state.open_editor(window, cx, connection_id);
-                                                },
-                                            ))
+                                                        if event.click_count() >= 2 {
+                                                            if connection_id.is_some() {
+                                                                // Open connection on double-click.
+                                                                state.open_connection(window, cx);
+                                                            } else if let Some(id) = folder_id {
+                                                                // Open folder in inline editor on double-click.
+                                                                state.open_inline_editor(
+                                                                    window,
+                                                                    cx,
+                                                                    id.to_string(),
+                                                                );
+                                                            }
+
+                                                            return;
+                                                        } else if let Some(id) = folder_id {
+                                                            state.toggle_expand(id);
+                                                        }
+
+                                                        state.open_editor(
+                                                            window,
+                                                            cx,
+                                                            connection_id,
+                                                        );
+                                                    },
+                                                )
+                                            })
+                                            .on_mouse_down(MouseButton::Left, {
+                                                let entry_id = entry.item().id.clone();
+                                                window.listener_for(
+                                                    &state,
+                                                    move |state, event: &MouseDownEvent, _, cx| {
+                                                        // We do not want to perform any click event handling if we are inline editing this item.
+                                                        if event.click_count >= 2
+                                                            || state.is_inline_editing(&entry_id)
+                                                        {
+                                                            cx.stop_propagation();
+                                                        }
+                                                    },
+                                                )
+                                            })
                                     }
                                 })
                                 .context_menu(
@@ -228,7 +281,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                             .primary()
                             .disabled(is_editor_empty || is_opening)
                             .on_click(window.listener_for(state, |state, _, _, cx| {
-                                state.save(cx);
+                                state.save_editor(cx);
                             })),
                     )
                     .child(
@@ -279,6 +332,9 @@ pub struct ConnectionDialogState {
     /// The state for the connection editor.
     editor: Entity<ConnectionEditorState>,
 
+    /// The state for the inline name input.
+    inline_name_input: Entity<InputState>,
+
     /// The state for the connection search input.
     search_input: Entity<InputState>,
 
@@ -291,6 +347,9 @@ pub struct ConnectionDialogState {
     /// the tree to re-render, such as adding, editing, or deleting a connection.
     expanded: HashSet<ConnectionFolderId>,
 
+    /// The id of the inline editor item.
+    inline_editor_id: Option<SharedString>,
+
     /// Whether a connection is in the progress of opening.
     opening: bool,
 
@@ -302,6 +361,7 @@ impl ConnectionDialogState {
     /// Creates a new [`ConnectionDialogState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| ConnectionEditorState::new(window, cx));
+        let inline_name_input = cx.new(|cx| InputState::new(window, cx));
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
@@ -309,6 +369,34 @@ impl ConnectionDialogState {
         let _subscriptions = Vec::from([
             cx.observe_keystrokes(|this, event, window, cx| {
                 this.handle_keystroke(window, cx, event);
+            }),
+            cx.subscribe(&inline_name_input, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                    let event = event.clone();
+                    cx.spawn(async move |this, cx| {
+                        // We wait here before saving the inline editor to allow other item click events to fire first
+                        // in the scenario where we navigate from the inline editor item to another item in the tree.
+                        //
+                        // For example, if we click on a folder item with the inline editor active, we want that folder to
+                        // toggle its expanded state first before saving, as saving will reload the tree and we want that
+                        // new expanded state to take effect before the tree is reloaded to eliminate any odd rendering behavior.
+                        cx.background_executor()
+                            .timer(Duration::from_millis(100))
+                            .await;
+
+                        _ = this.update_in(cx, |this, window, cx| {
+                            this.save_inline_editor(cx);
+
+                            // Re-focus the tree if we're saving as a result of an event from the Enter key.
+                            if let InputEvent::PressEnter { .. } = event {
+                                this.tree.update(cx, |tree, cx| {
+                                    tree.focus(window, cx);
+                                });
+                            }
+                        });
+                    })
+                    .detach();
+                }
             }),
             cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
                 if let InputEvent::Change = event {
@@ -319,9 +407,11 @@ impl ConnectionDialogState {
 
         let mut state = Self {
             editor,
+            inline_name_input,
             search_input,
             tree,
             expanded: HashSet::new(),
+            inline_editor_id: None,
             opening: false,
             _subscriptions,
         };
@@ -403,6 +493,11 @@ impl ConnectionDialogState {
         })
     }
 
+    /// Closes the item open in the inline editor.
+    fn close_inline_editor(&mut self) {
+        self.inline_editor_id = None;
+    }
+
     /// Deletes the connection with the given [`ConnectionId`].
     fn delete_connection(&mut self, cx: &mut Context<Self>, id: &ConnectionId) {
         // Close the editor if we are deleting the connection that was being edited.
@@ -440,11 +535,22 @@ impl ConnectionDialogState {
         self.expanded.contains(id)
     }
 
+    /// Returns whether the item with the given id string is active within the inline editor.
+    fn is_inline_editing(&self, id: &SharedString) -> bool {
+        if let Some(editor_id) = &self.inline_editor_id
+            && editor_id == id
+        {
+            true
+        } else {
+            false
+        }
+    }
+
     /// Emits an event to open the connection that is active within the editor.
     ///
     /// Opening the connection in this context means loading the connection and its information into the application.
     fn open_connection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.save(cx);
+        self.save_editor(cx);
 
         // Do not open another connection if one is already opening.
         if self.opening {
@@ -472,16 +578,43 @@ impl ConnectionDialogState {
         });
     }
 
+    /// Opens the inline editor with the given id string.
+    fn open_inline_editor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        id: impl Into<SharedString>,
+    ) {
+        let id = id.into();
+        let manager = ConnectionManager::global(cx);
+        let name = if let Some(connection) = manager.try_connection(&id) {
+            connection.name()
+        } else if let Some(folder) = manager.try_folder(&id) {
+            folder.name()
+        } else {
+            return;
+        };
+
+        self.inline_editor_id = Some(id);
+        self.inline_name_input.update(cx, |inline_name_input, cx| {
+            inline_name_input.focus(window, cx);
+            inline_name_input.set_value(name, window, cx);
+        });
+    }
+
     /// Resets the temporary state of the dialog.
     fn reset(&mut self, cx: &mut Context<Self>) {
         self.opening = false;
         self.expanded.clear();
         self.close_editor(cx);
         self.load_tree(cx);
+        self.tree.update(cx, |tree, cx| {
+            tree.set_selected_item(None, cx);
+        });
     }
 
     /// Saves the connection that is active within the editor.
-    fn save(&mut self, cx: &mut Context<Self>) {
+    fn save_editor(&mut self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
 
         if let Some(id) = editor.connection_id()
@@ -497,6 +630,25 @@ impl ConnectionDialogState {
             // Reload the tree with the newly saved connection.
             self.load_tree(cx);
         }
+    }
+
+    /// Saves the item that is active within the inline editor.
+    fn save_inline_editor(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = &self.inline_editor_id else {
+            return;
+        };
+
+        let name = self.inline_name_input.read(cx).value();
+        let manager = ConnectionManager::global_mut(cx);
+        if let Some(connection) = manager.try_connection_mut(id) {
+            connection.set_name(name);
+        } else if let Some(folder) = manager.try_folder_mut(id) {
+            folder.set_name(name);
+        }
+
+        manager.save();
+        self.close_inline_editor();
+        self.load_tree(cx);
     }
 
     /// Returns the selected connection, if any.

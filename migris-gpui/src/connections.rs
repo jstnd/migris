@@ -109,9 +109,14 @@ impl Display for ConnectionFolderId {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ConnectionFolder {
+    /// The id of the folder.
     id: ConnectionFolderId,
-    parent: Option<ConnectionFolderId>,
+
+    /// The name of the folder.
     name: String,
+
+    /// The optional id of the parent folder containing the folder.
+    parent: Option<ConnectionFolderId>,
 }
 
 impl ConnectionFolder {
@@ -132,6 +137,11 @@ impl ConnectionFolder {
     /// Returns the name of the folder.
     pub fn name(&self) -> SharedString {
         SharedString::from(&self.name)
+    }
+
+    /// Sets the name of the folder.
+    pub fn set_name(&mut self, name: SharedString) {
+        self.name = name.to_string();
     }
 
     /// Sets the parent of the folder.
@@ -229,6 +239,18 @@ impl ConnectionManager {
         }
     }
 
+    /// Returns a mutable reference to the connection matching the given id string, if one is found.
+    pub fn try_connection_mut(&mut self, id: &SharedString) -> Option<&mut Connection> {
+        if let Ok(uuid) = Uuid::parse_str(id)
+            && let Some(idx) = self.connection_map.get(&ConnectionId(uuid))
+            && let Some(connection) = self.config.connections.get_mut(*idx)
+        {
+            Some(connection)
+        } else {
+            None
+        }
+    }
+
     /// Adds a new connection to the config.
     pub fn add_connection(&mut self, connection: Connection) {
         self.config.connections.push(connection);
@@ -263,6 +285,18 @@ impl ConnectionManager {
         if let Ok(uuid) = Uuid::parse_str(id)
             && let Some(idx) = self.folder_map.get(&ConnectionFolderId(uuid))
             && let Some(folder) = self.config.folders.get(*idx)
+        {
+            Some(folder)
+        } else {
+            None
+        }
+    }
+
+    /// Returns a mutable reference to the folder matching the given id string, if one is found.
+    pub fn try_folder_mut(&mut self, id: &SharedString) -> Option<&mut ConnectionFolder> {
+        if let Ok(uuid) = Uuid::parse_str(id)
+            && let Some(idx) = self.folder_map.get(&ConnectionFolderId(uuid))
+            && let Some(folder) = self.config.folders.get_mut(*idx)
         {
             Some(folder)
         } else {
