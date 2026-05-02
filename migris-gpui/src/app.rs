@@ -105,7 +105,7 @@ impl Application {
                 Ok(driver) => driver,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(err.into(), window, cx);
+                        callbacks.on_error(&err.to_string(), window, cx);
                     });
                     return;
                 }
@@ -115,7 +115,7 @@ impl Application {
                 Ok(entities) => entities,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(err.into(), window, cx);
+                        callbacks.on_error(&err.to_string(), window, cx);
                     });
                     return;
                 }

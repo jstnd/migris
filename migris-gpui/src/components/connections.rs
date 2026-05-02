@@ -22,6 +22,7 @@ use migris::connection::{ConnectionOptions, MySqlOptions};
 
 use crate::{
     components::{
+        self,
         icon::{Icon, IconName},
         labeled,
     },
@@ -602,12 +603,28 @@ impl ConnectionDialogState {
 
         if let Some(id) = self.editor.read(cx).connection_id() {
             let this = cx.entity();
-            let event =
-                Event::new(EventVariant::OpenConnection(id)).on_complete(move |window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.reset(cx);
-                        window.close_dialog(cx);
-                    });
+            let event = Event::new(EventVariant::OpenConnection(id))
+                .on_complete({
+                    let this = this.clone();
+                    move |window, cx| {
+                        this.update(cx, |this, cx| {
+                            this.reset(cx);
+                            window.close_dialog(cx);
+                        });
+                    }
+                })
+                .on_error({
+                    let this = this.clone();
+                    move |error, window, cx| {
+                        let error = error.to_owned();
+                        window.open_alert_dialog(cx, move |dialog, _, cx| {
+                            components::error_dialog(dialog, cx, error.clone())
+                        });
+
+                        this.update(cx, |this, _| {
+                            this.opening = false;
+                        });
+                    }
                 });
 
             self.opening = true;

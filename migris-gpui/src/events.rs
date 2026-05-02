@@ -1,6 +1,5 @@
 use std::{collections::HashMap, rc::Rc};
 
-use anyhow::Error;
 use gpui::{Action, App, Global, SharedString, Window};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 use uuid::Uuid;
@@ -90,7 +89,7 @@ impl Event {
     }
 
     /// Sets the callback used when the event errors.
-    pub fn on_error(mut self, f: impl Fn(Error, &mut Window, &mut App) + 'static) -> Self {
+    pub fn on_error(mut self, f: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
         self.callbacks.on_error = Some(Rc::new(f));
         self
     }
@@ -102,7 +101,7 @@ pub struct EventCallbacks {
     on_complete: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 
     /// An optional callback used when the event errors.
-    on_error: Option<Rc<dyn Fn(Error, &mut Window, &mut App) + 'static>>,
+    on_error: Option<Rc<dyn Fn(&str, &mut Window, &mut App) + 'static>>,
 }
 
 impl EventCallbacks {
@@ -122,7 +121,7 @@ impl EventCallbacks {
     }
 
     /// Calls the callback used when the event errors, if one exists.
-    pub fn on_error(&self, error: Error, window: &mut Window, cx: &mut App) {
+    pub fn on_error(&self, error: &str, window: &mut Window, cx: &mut App) {
         if let Some(on_error) = self.on_error.clone() {
             on_error(error, window, cx);
         }

@@ -1,5 +1,7 @@
-use gpui::{IntoElement, ParentElement, SharedString, Styled};
-use gpui_component::{h_flex, v_flex};
+use gpui::{App, IntoElement, ParentElement, SharedString, Styled};
+use gpui_component::{ dialog::AlertDialog, h_flex, v_flex};
+
+use crate::components::icon::{Icon, IconName};
 
 pub mod connections;
 pub mod editor;
@@ -7,6 +9,18 @@ pub mod icon;
 pub mod panels;
 pub mod settings;
 pub mod table;
+
+pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: String) -> AlertDialog {
+    dialog
+        .title(
+            h_flex()
+                .gap_2()
+                .child(Icon::new(cx, IconName::CircleX2).danger(cx))
+                .child("Error"),
+        )
+        .description(error)
+        .overlay_closable(true)
+}
 
 pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> impl IntoElement {
     v_flex()

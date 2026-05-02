@@ -4,6 +4,7 @@ use gpui_component::{ActiveTheme, IconNamed};
 pub enum IconName {
     ChevronDown,
     ChevronRight,
+    CircleX2,
     Code,
     Database,
     Eye,
@@ -27,6 +28,7 @@ impl IconNamed for IconName {
         match self {
             Self::ChevronDown => "icons/chevron-down.svg",
             Self::ChevronRight => "icons/chevron-right.svg",
+            Self::CircleX2 => "icons/circle-x-2.svg",
             Self::Code => "icons/code.svg",
             Self::Database => "icons/database.svg",
             Self::Eye => "icons/eye.svg",
