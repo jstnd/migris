@@ -101,7 +101,7 @@ impl Application {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
 
         cx.spawn_in(window, async move |this, cx| {
-            let driver = match migris::driver(connection.options()).await {
+            let driver = match migris::driver(&connection.options()).await {
                 Ok(driver) => driver,
                 Err(err) => {
                     _ = cx.update(|window, cx| {

@@ -6,6 +6,9 @@ use crate::{assets::Themes, settings::AppSettings};
 /// The application name.
 pub const APPLICATION_NAME: &str = "Migris";
 
+/// The application name in lowercase format.
+pub const APPLICATION_NAME_LOWER: &str = "migris";
+
 /// The width of primary dialogs (e.g. connections, settings).
 pub const DIALOG_WIDTH: Pixels = px(800.0);
 

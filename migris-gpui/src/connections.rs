@@ -13,7 +13,7 @@ use migris::connection::ConnectionOptions;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared;
+use crate::{secrets, shared};
 
 pub struct ConnectionManager {
     /// The config containing the connections and folders.
@@ -315,8 +315,15 @@ impl Connection {
     }
 
     /// Returns the options for the connection.
-    pub fn options(&self) -> &ConnectionOptions {
-        &self.options
+    pub fn options(&self) -> ConnectionOptions {
+        let mut options = self.options.clone();
+        match &mut options {
+            ConnectionOptions::MySql(options) => {
+                options.password = self.password();
+            }
+        }
+
+        options
     }
 
     /// Sets the folder of the connection.
@@ -332,6 +339,34 @@ impl Connection {
     /// Sets the options for the connection.
     pub fn set_options(&mut self, options: ConnectionOptions) {
         self.options = options;
+        self.set_password();
+    }
+
+    /// Returns the password for the connection.
+    ///
+    /// This will attempt to retrieve the password from the system key storage,
+    /// and fallback to the originally stored password if that fails.
+    fn password(&self) -> String {
+        match &self.options {
+            ConnectionOptions::MySql(options) => {
+                secrets::get_secret(&options.password).unwrap_or(options.password.clone())
+            }
+        }
+    }
+
+    /// Sets the password for the connection.
+    ///
+    /// This will attempt to store the password in the system key storage,
+    /// and fallback to keeping the plain password if that fails.
+    fn set_password(&mut self) {
+        match &mut self.options {
+            ConnectionOptions::MySql(options) => {
+                let secret = format!("{}:password", self.id);
+                if secrets::set_secret(&secret, &options.password).is_ok() {
+                    options.password = secret;
+                }
+            }
+        }
     }
 }
 

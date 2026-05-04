@@ -888,7 +888,7 @@ impl ConnectionEditorState {
 
         self.variant = Some(match connection.options() {
             ConnectionOptions::MySql(options) => {
-                let state = MySqlEditorState::new(window, cx, connection.id(), options);
+                let state = MySqlEditorState::new(window, cx, &connection, options);
                 ConnectionEditorVariant::MySql(state)
             }
         });
@@ -985,7 +985,12 @@ struct MySqlEditorState {
 
 impl MySqlEditorState {
     /// Creates a new [`MySqlEditorState`].
-    fn new(window: &mut Window, cx: &mut App, id: ConnectionId, options: &MySqlOptions) -> Self {
+    fn new(
+        window: &mut Window,
+        cx: &mut App,
+        connection: &Connection,
+        options: MySqlOptions,
+    ) -> Self {
         let host_input = cx.new(|cx| InputState::new(window, cx).default_value(&options.host));
         let port_input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -1004,7 +1009,7 @@ impl MySqlEditorState {
         });
 
         Self {
-            id,
+            id: connection.id(),
             host_input,
             port_input,
             user_input,
