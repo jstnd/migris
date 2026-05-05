@@ -159,9 +159,8 @@ impl QueryTab {
                                     .button(
                                         Button::new("run-button")
                                             .icon(
-                                                Icon::new(cx, IconName::Play)
-                                                    .disabled(is_editor_empty)
-                                                    .primary(cx),
+                                                Icon::primary(cx, IconName::Play)
+                                                    .disabled(is_editor_empty),
                                             )
                                             .label("Run")
                                             .on_click(window.listener_for(
@@ -178,45 +177,39 @@ impl QueryTab {
                                     .dropdown_menu(move |menu, _, cx| {
                                         menu.menu_with_icon(
                                             "Run",
-                                            Icon::new(cx, IconName::Play).primary(cx),
+                                            Icon::primary(cx, IconName::Play),
                                             Box::new(QueryTabAction::RunSql),
                                         )
                                         .menu_with_icon_and_disabled(
                                             "Run Selection",
-                                            Icon::new(cx, IconName::MousePointer2)
-                                                .disabled(is_editor_selected_empty)
-                                                .primary(cx),
+                                            Icon::primary(cx, IconName::MousePointer2)
+                                                .disabled(is_editor_selected_empty),
                                             Box::new(QueryTabAction::RunSqlSelection),
                                             is_editor_selected_empty,
                                         )
                                     }),
                             ),
                         )
-                        .child(
-                            Editor::new(&state.editor).context_menu(move |menu, _, cx| {
-                                menu.menu_with_icon_and_disabled(
-                                    "Run",
-                                    Icon::new(cx, IconName::Play)
-                                        .disabled(is_editor_empty)
-                                        .primary(cx),
-                                    Box::new(QueryTabAction::RunSql),
-                                    is_editor_empty,
-                                )
-                                .menu_with_icon_and_disabled(
-                                    "Run Selection",
-                                    Icon::new(cx, IconName::MousePointer2)
-                                        .disabled(is_editor_selected_empty)
-                                        .primary(cx),
-                                    Box::new(QueryTabAction::RunSqlSelection),
-                                    is_editor_selected_empty,
-                                )
-                                .separator()
-                                .menu("Cut", Box::new(input::Cut))
-                                .menu("Copy", Box::new(input::Copy))
-                                .menu("Paste", Box::new(input::Paste))
-                                .menu("Select All", Box::new(input::SelectAll))
-                            }),
-                        ),
+                        .child(Editor::new(&state.editor).context_menu(move |menu, _, cx| {
+                            menu.menu_with_icon_and_disabled(
+                                "Run",
+                                Icon::primary(cx, IconName::Play).disabled(is_editor_empty),
+                                Box::new(QueryTabAction::RunSql),
+                                is_editor_empty,
+                            )
+                            .menu_with_icon_and_disabled(
+                                "Run Selection",
+                                Icon::primary(cx, IconName::MousePointer2)
+                                    .disabled(is_editor_selected_empty),
+                                Box::new(QueryTabAction::RunSqlSelection),
+                                is_editor_selected_empty,
+                            )
+                            .separator()
+                            .menu("Cut", Box::new(input::Cut))
+                            .menu("Copy", Box::new(input::Copy))
+                            .menu("Paste", Box::new(input::Paste))
+                            .menu("Select All", Box::new(input::SelectAll))
+                        })),
                 ),
             )
             .child(resizable_panel().when(!state.tables.is_empty(), |this| {

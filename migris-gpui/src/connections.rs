@@ -100,6 +100,60 @@ impl ConnectionManager {
         self.connections_by_folder.get(folder)
     }
 
+    /// Duplicates the connection with the given [`ConnectionId`].
+    pub fn duplicate_connection(&mut self, id: &ConnectionId) {
+        let connection = self.connection(id);
+        self.add_connection(connection.duplicate_with_name(format!("{} - Copy", connection.name)));
+    }
+
+    /// Duplicates the folder with the given [`ConnectionFolderId`].
+    pub fn duplicate_folder(&mut self, id: &ConnectionFolderId) {
+        fn duplicate_inner(
+            manager: &ConnectionManager,
+            id: ConnectionFolderId,
+            new_id: ConnectionFolderId,
+        ) -> (Vec<Connection>, Vec<ConnectionFolder>) {
+            let mut new_connections = Vec::new();
+            let mut new_folders = Vec::new();
+
+            // Duplicate any connections under the folder.
+            if let Some(connections) = manager.connections_for_folder(&Some(id)) {
+                for connection_id in connections {
+                    let connection = manager
+                        .connection(connection_id)
+                        .duplicate_with_folder(new_id);
+
+                    new_connections.push(connection);
+                }
+            }
+
+            // Duplicate any folders under the folder.
+            if let Some(folders) = manager.folders_for_parent(&Some(id)) {
+                for folder_id in folders {
+                    let folder = manager.folder(folder_id).duplicate_with_parent(new_id);
+                    let (inner_new_connections, inner_new_folders) =
+                        duplicate_inner(manager, *folder_id, folder.id);
+
+                    new_connections.extend(inner_new_connections);
+                    new_folders.extend(inner_new_folders);
+                    new_folders.push(folder);
+                }
+            }
+
+            (new_connections, new_folders)
+        }
+
+        let folder = self.folder(id);
+        let new_folder = folder.duplicate_with_name(format!("{} - Copy", folder.name));
+
+        let (new_connections, new_folders) = duplicate_inner(self, folder.id, new_folder.id);
+        self.config.connections.extend(new_connections);
+        self.config.folders.extend(new_folders);
+        self.config.folders.push(new_folder);
+        self.load_maps();
+        self.save();
+    }
+
     /// Returns a reference to the folder matching the given [`ConnectionFolderId`].
     pub fn folder(&self, id: &ConnectionFolderId) -> &ConnectionFolder {
         let idx = self.folder_map[id];
@@ -267,6 +321,13 @@ pub struct ConnectionConfig {
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConnectionId(Uuid);
 
+impl ConnectionId {
+    /// Creates a new [`ConnectionId`].
+    fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
 impl Display for ConnectionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -292,11 +353,37 @@ impl Connection {
     /// Creates a new [`Connection`].
     pub fn new(name: impl Into<String>, options: ConnectionOptions) -> Self {
         Self {
-            id: ConnectionId(Uuid::now_v7()),
+            id: ConnectionId::new(),
             folder: None,
             name: name.into(),
             options,
         }
+    }
+
+    /// Duplicates the connection, using the given [`ConnectionFolderId`] as the new connection's folder.
+    pub fn duplicate_with_folder(&self, id: ConnectionFolderId) -> Self {
+        let mut connection = Self {
+            id: ConnectionId::new(),
+            folder: Some(id),
+            name: self.name.clone(),
+            options: self.options.clone(),
+        };
+
+        connection.set_password();
+        connection
+    }
+
+    /// Duplicates the connection, using the given name as the new connection's name.
+    pub fn duplicate_with_name(&self, name: impl Into<String>) -> Self {
+        let mut connection = Self {
+            id: ConnectionId::new(),
+            folder: self.folder,
+            name: name.into(),
+            options: self.options.clone(),
+        };
+
+        connection.set_password();
+        connection
     }
 
     /// Returns the [`ConnectionId`] of the connection.
@@ -379,6 +466,13 @@ impl Default for Connection {
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConnectionFolderId(Uuid);
 
+impl ConnectionFolderId {
+    /// Creates a new [`ConnectionFolderId`].
+    fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
 impl Display for ConnectionFolderId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -401,9 +495,27 @@ impl ConnectionFolder {
     /// Creates a new [`ConnectionFolder`].
     pub fn new(name: impl Into<String>) -> Self {
         Self {
-            id: ConnectionFolderId(Uuid::now_v7()),
+            id: ConnectionFolderId::new(),
             parent: None,
             name: name.into(),
+        }
+    }
+
+    /// Duplicates the folder, using the given name as the new folder's name.
+    pub fn duplicate_with_name(&self, name: impl Into<String>) -> Self {
+        Self {
+            id: ConnectionFolderId::new(),
+            name: name.into(),
+            parent: self.parent,
+        }
+    }
+
+    /// Duplicates the folder, using the given [`ConnectionFolderId`] as the new folder's parent.
+    pub fn duplicate_with_parent(&self, id: ConnectionFolderId) -> Self {
+        Self {
+            id: ConnectionFolderId::new(),
+            name: self.name.clone(),
+            parent: Some(id),
         }
     }
 

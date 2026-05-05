@@ -227,14 +227,21 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                         if let Some(id) = connection_id {
                                             menu.menu_with_icon(
                                                 "Rename",
-                                                Icon::new(cx, IconName::TextCursorInput),
+                                                Icon::primary(cx, IconName::TextCursorInput),
                                                 Box::new(ConnectionDialogAction::RenameItem(
                                                     id.to_string(),
                                                 )),
                                             )
                                             .menu_with_icon(
+                                                "Duplicate",
+                                                Icon::primary(cx, IconName::Copy),
+                                                Box::new(
+                                                    ConnectionDialogAction::DuplicateConnection(id),
+                                                ),
+                                            )
+                                            .menu_with_icon(
                                                 "Delete",
-                                                Icon::new(cx, IconName::Trash).danger(cx),
+                                                Icon::danger(cx, IconName::Trash),
                                                 Box::new(ConnectionDialogAction::DeleteConnection(
                                                     id,
                                                 )),
@@ -242,27 +249,34 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                         } else if let Some(id) = folder_id {
                                             menu.menu_with_icon(
                                                 "Rename",
-                                                Icon::new(cx, IconName::TextCursorInput),
+                                                Icon::primary(cx, IconName::TextCursorInput),
                                                 Box::new(ConnectionDialogAction::RenameItem(
                                                     id.to_string(),
                                                 )),
                                             )
                                             .menu_with_icon(
+                                                "Duplicate",
+                                                Icon::primary(cx, IconName::Copy),
+                                                Box::new(ConnectionDialogAction::DuplicateFolder(
+                                                    id,
+                                                )),
+                                            )
+                                            .menu_with_icon(
                                                 "Delete",
-                                                Icon::new(cx, IconName::Trash).danger(cx),
+                                                Icon::danger(cx, IconName::Trash),
                                                 Box::new(ConnectionDialogAction::DeleteFolder(id)),
                                             )
                                             .separator()
                                             .menu_with_icon(
                                                 "New Connection",
-                                                Icon::new(cx, IconName::Plus),
+                                                Icon::primary(cx, IconName::Plus),
                                                 Box::new(ConnectionDialogAction::AddConnection(
                                                     Some(id),
                                                 )),
                                             )
                                             .menu_with_icon(
                                                 "New Folder",
-                                                Icon::new(cx, IconName::FolderPlus),
+                                                Icon::primary(cx, IconName::FolderPlus),
                                                 Box::new(ConnectionDialogAction::AddFolder(Some(
                                                     id,
                                                 ))),
@@ -331,11 +345,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                     // We do not want to open the connection if this closure was called as a result of pressing the Enter key inside the inline editor.
                     //
                     // The Enter key is used for both saving the inline editor and confirming the entire dialog, and we want these events to be mutually exclusive.
-                    if state.inline_editor_id.is_some() {
-                        return;
+                    if state.inline_editor_id.is_none() {
+                        state.open_connection(window, cx);
                     }
-
-                    state.open_connection(window, cx);
                 });
 
                 false
@@ -350,6 +362,8 @@ enum ConnectionDialogAction {
     AddFolder(Option<ConnectionFolderId>),
     DeleteConnection(ConnectionId),
     DeleteFolder(ConnectionFolderId),
+    DuplicateConnection(ConnectionId),
+    DuplicateFolder(ConnectionFolderId),
     RenameItem(String),
 }
 
@@ -431,7 +445,7 @@ impl ConnectionDialogState {
             }),
         ]);
 
-        let mut state = Self {
+        let state = Self {
             editor,
             inline_name_input,
             search_input,
@@ -458,6 +472,8 @@ impl ConnectionDialogState {
             ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
             ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
             ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
+            ConnectionDialogAction::DuplicateConnection(id) => self.duplicate_connection(cx, id),
+            ConnectionDialogAction::DuplicateFolder(id) => self.duplicate_folder(cx, id),
             ConnectionDialogAction::RenameItem(id) => self.open_inline_editor(window, cx, id),
         }
     }
@@ -497,7 +513,7 @@ impl ConnectionDialogState {
     }
 
     /// Adds a new default connection.
-    fn add_connection(&mut self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
+    fn add_connection(&self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
         let mut connection = Connection::default();
         if let Some(id) = folder {
             connection.set_folder(id);
@@ -508,7 +524,7 @@ impl ConnectionDialogState {
     }
 
     /// Adds a new default folder.
-    fn add_folder(&mut self, cx: &mut Context<Self>, parent: Option<ConnectionFolderId>) {
+    fn add_folder(&self, cx: &mut Context<Self>, parent: Option<ConnectionFolderId>) {
         let mut folder = ConnectionFolder::default();
         if let Some(id) = parent {
             folder.set_parent(id);
@@ -531,7 +547,7 @@ impl ConnectionDialogState {
     }
 
     /// Deletes the connection with the given [`ConnectionId`].
-    fn delete_connection(&mut self, cx: &mut Context<Self>, id: &ConnectionId) {
+    fn delete_connection(&self, cx: &mut Context<Self>, id: &ConnectionId) {
         // Close the editor if we are deleting the connection that was being edited.
         if let Some(editor_id) = self.editor.read(cx).connection_id()
             && editor_id == *id
@@ -544,7 +560,7 @@ impl ConnectionDialogState {
     }
 
     /// Deletes the folder with the given [`ConnectionFolderId`].
-    fn delete_folder(&mut self, cx: &mut Context<Self>, id: &ConnectionFolderId) {
+    fn delete_folder(&self, cx: &mut Context<Self>, id: &ConnectionFolderId) {
         let removed_connections = ConnectionManager::global_mut(cx).remove_folder(id);
 
         // Close the connection editor if the connection that was being edited was inside the deleted folder.
@@ -554,6 +570,18 @@ impl ConnectionDialogState {
             self.close_editor(cx);
         }
 
+        self.load_tree(cx);
+    }
+
+    /// Duplicates the connection with the given [`ConnectionId`].
+    fn duplicate_connection(&self, cx: &mut Context<Self>, id: &ConnectionId) {
+        ConnectionManager::global_mut(cx).duplicate_connection(id);
+        self.load_tree(cx);
+    }
+
+    /// Duplicates the folder with the given [`ConnectionFolderId`].
+    fn duplicate_folder(&self, cx: &mut Context<Self>, id: &ConnectionFolderId) {
+        ConnectionManager::global_mut(cx).duplicate_folder(id);
         self.load_tree(cx);
     }
 
@@ -682,7 +710,7 @@ impl ConnectionDialogState {
     }
 
     /// Saves the connection that is active within the connection editor.
-    fn save_editor(&mut self, cx: &mut Context<Self>) {
+    fn save_editor(&self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
 
         if let Some(id) = editor.connection_id()
@@ -770,7 +798,7 @@ impl ConnectionDialogState {
         }
     }
 
-    fn load_tree(&mut self, cx: &mut Context<Self>) {
+    fn load_tree(&self, cx: &mut Context<Self>) {
         let filter = self.search_input.read(cx).value();
         let items = self.build_tree_items(ConnectionManager::global(cx), &filter, None);
         self.tree.update(cx, |tree, cx| {

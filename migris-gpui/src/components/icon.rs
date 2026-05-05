@@ -6,6 +6,7 @@ pub enum IconName {
     ChevronRight,
     CircleX2,
     Code,
+    Copy,
     Database,
     Eye,
     Folder,
@@ -30,6 +31,7 @@ impl IconNamed for IconName {
             Self::ChevronRight => "icons/chevron-right.svg",
             Self::CircleX2 => "icons/circle-x-2.svg",
             Self::Code => "icons/code.svg",
+            Self::Copy => "icons/copy.svg",
             Self::Database => "icons/database.svg",
             Self::Eye => "icons/eye.svg",
             Self::Folder => "icons/folder.svg",
@@ -67,21 +69,27 @@ impl Icon {
         }
     }
 
+    /// Creates a new [`Icon`] with the danger color.
+    pub fn danger(cx: &App, icon: IconName) -> Self {
+        Self {
+            icon,
+            color: cx.theme().danger,
+            disabled: false,
+        }
+    }
+
+    /// Creates a new [`Icon`] with the primary color.
+    pub fn primary(cx: &App, icon: IconName) -> Self {
+        Self {
+            icon,
+            color: cx.theme().button_primary,
+            disabled: false,
+        }
+    }
+
     /// Sets the disabled state for the icon.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
-        self
-    }
-
-    /// Sets the icon to use the danger color.
-    pub fn danger(mut self, cx: &App) -> Self {
-        self.color = cx.theme().danger;
-        self
-    }
-
-    /// Sets the icon to use the primary color.
-    pub fn primary(mut self, cx: &App) -> Self {
-        self.color = cx.theme().button_primary;
         self
     }
 
