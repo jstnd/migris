@@ -171,6 +171,11 @@ impl ConnectionManager {
     /// Removes the connection with the given [`ConnectionId`] from the config.
     pub fn remove_connection(&mut self, id: &ConnectionId) {
         let idx = self.connection_map[id];
+
+        // Clean up system key storage.
+        let connection = &self.config.connections[idx];
+        connection.delete_password();
+
         self.config.connections.swap_remove(idx);
         self.load_maps();
         self.save();
@@ -204,6 +209,14 @@ impl ConnectionManager {
         }
 
         let (removed_connections, removed_folders) = remove_inner(self, *id);
+
+        // Clean up system key storage.
+        for connection_id in &removed_connections {
+            let connection = self.connection(connection_id);
+            connection.delete_password();
+        }
+
+        // Remove connections and folders from config.
         self.config
             .connections
             .retain(|connection| !removed_connections.contains(&connection.id));
@@ -427,6 +440,17 @@ impl Connection {
     pub fn set_options(&mut self, options: ConnectionOptions) {
         self.options = options;
         self.set_password();
+    }
+
+    /// Deletes the password for the connection.
+    ///
+    /// This will delete the password from the system key storage.
+    fn delete_password(&self) {
+        match &self.options {
+            ConnectionOptions::MySql(options) => {
+                _ = secrets::delete_secret(&options.password);
+            }
+        }
     }
 
     /// Returns the password for the connection.

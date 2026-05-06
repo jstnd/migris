@@ -2,6 +2,12 @@ use keyring_core::Entry;
 
 use crate::shared::APPLICATION_NAME_LOWER;
 
+/// Deletes the secret from the system key storage.
+pub fn delete_secret(secret: &str) -> anyhow::Result<()> {
+    let entry = Entry::new(APPLICATION_NAME_LOWER, secret)?;
+    Ok(entry.delete_credential()?)
+}
+
 /// Returns the secret from the system key storage, if one exists.
 pub fn get_secret(secret: &str) -> anyhow::Result<String> {
     let entry = Entry::new(APPLICATION_NAME_LOWER, secret)?;
