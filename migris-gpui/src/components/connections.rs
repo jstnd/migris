@@ -53,55 +53,61 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                         v_flex()
                             .key_context(CONNECTION_DIALOG)
                             .gap_1()
-                            .p_3()
                             .size_full()
                             .items_center()
                             .child(
-                                Input::new(&state.read(cx).search_input)
-                                    .cleanable(true)
-                                    .prefix(Icon::new(cx, IconName::Search)),
-                            )
-                            .child(
-                                h_flex()
+                                v_flex()
+                                    .gap_1()
+                                    .pt_3()
+                                    .px_3()
                                     .w_full()
-                                    .justify_end()
                                     .child(
-                                        Button::new("button-new-connection")
-                                            .icon(Icon::new(cx, IconName::Plus))
-                                            .tooltip("New Connection")
-                                            .ghost()
-                                            .small()
-                                            .on_click(window.listener_for(
-                                                state,
-                                                |state, _, window, cx| {
-                                                    state.handle_action(
+                                        Input::new(&state.read(cx).search_input)
+                                            .cleanable(true)
+                                            .prefix(Icon::new(cx, IconName::Search)),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .justify_end()
+                                            .child(
+                                                Button::new("button-new-connection")
+                                                    .icon(Icon::new(cx, IconName::Plus))
+                                                    .tooltip("New Connection")
+                                                    .ghost()
+                                                    .small()
+                                                    .on_click(window.listener_for(
+                                                        state,
+                                                        |state, _, window, cx| {
+                                                            state.handle_action(
                                                         window,
                                                         cx,
                                                         &ConnectionDialogAction::AddConnection(
                                                             state.selected_parent(cx),
                                                         ),
                                                     );
-                                                },
-                                            )),
-                                    )
-                                    .child(
-                                        Button::new("button-new-folder")
-                                            .icon(Icon::new(cx, IconName::FolderPlus))
-                                            .tooltip("New Folder")
-                                            .ghost()
-                                            .small()
-                                            .on_click(window.listener_for(
-                                                state,
-                                                |state, _, window, cx| {
-                                                    state.handle_action(
-                                                        window,
-                                                        cx,
-                                                        &ConnectionDialogAction::AddFolder(
-                                                            state.selected_parent(cx),
-                                                        ),
-                                                    );
-                                                },
-                                            )),
+                                                        },
+                                                    )),
+                                            )
+                                            .child(
+                                                Button::new("button-new-folder")
+                                                    .icon(Icon::new(cx, IconName::FolderPlus))
+                                                    .tooltip("New Folder")
+                                                    .ghost()
+                                                    .small()
+                                                    .on_click(window.listener_for(
+                                                        state,
+                                                        |state, _, window, cx| {
+                                                            state.handle_action(
+                                                                window,
+                                                                cx,
+                                                                &ConnectionDialogAction::AddFolder(
+                                                                    state.selected_parent(cx),
+                                                                ),
+                                                            );
+                                                        },
+                                                    )),
+                                            ),
                                     ),
                             )
                             .child(connection_tree(state.clone(), window, cx))
@@ -180,7 +186,6 @@ fn connection_tree(
 ) -> impl IntoElement {
     div()
         .id("connection-tree")
-        .p_1()
         .size_full()
         .child(
             tree::tree(&state.read(cx).tree, {
@@ -195,6 +200,8 @@ fn connection_tree(
                     let is_inline_editing = state.read(cx).is_inline_editing(&entry.item().id);
 
                     ListItem::new(idx)
+                        .ml_3()
+                        .mr_4()
                         .p_0()
                         .text_sm()
                         .child(
