@@ -2,9 +2,8 @@ use std::{collections::HashSet, time::Duration};
 
 use gpui::{
     Action, App, AppContext, ClickEvent, Context, Div, Entity, InteractiveElement, IntoElement,
-    KeystrokeEvent, MouseButton, MouseDownEvent, ParentElement, Pixels, Render, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div,
-    prelude::FluentBuilder, px,
+    KeystrokeEvent, MouseButton, ParentElement, Pixels, Render, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable, WindowExt,
@@ -263,23 +262,10 @@ fn connection_tree(
                                             is_expanded,
                                             offset: None,
                                         },
-                                        {
-                                            let state = state.clone();
-                                            move |drag, offset, _, cx| {
-                                                let mut drag = *drag;
-                                                drag.offset = Some(offset.x);
-
-                                                // Toggle the expanded state of the folder being dragged.
-                                                //
-                                                // This is needed as dragging also triggers a click on the tree item,
-                                                // essentially toggling its expanded state already. Performing this update
-                                                // keeps our tracked expanded folders in sync with this behavior.
-                                                state.update(cx, |state, _| {
-                                                    state.toggle_expand(drag.id);
-                                                });
-
-                                                cx.new(|_| drag)
-                                            }
+                                        |drag, offset, _, cx| {
+                                            let mut drag = *drag;
+                                            drag.offset = Some(offset.x);
+                                            cx.new(|_| drag)
                                         },
                                     )
                                     .on_drop(window.listener_for(
@@ -310,14 +296,20 @@ fn connection_tree(
                                 }),
                         )
                         .on_click({
-                            let entry_id = entry.item().id.clone();
+                            let item = entry.item().clone();
                             window.listener_for(
                                 &state,
                                 move |state, event: &ClickEvent, window, cx| {
                                     // We do not want to perform any click event handling if we are inline editing this item.
-                                    if state.is_inline_editing(&entry_id) {
+                                    if state.is_inline_editing(&item.id) {
                                         return;
                                     }
+
+                                    // Set the selected item after click.
+                                    state.tree.update(cx, |tree, cx| {
+                                        tree.focus(window, cx);
+                                        tree.set_selected_item(Some(&item), cx);
+                                    });
 
                                     if event.click_count() >= 2 {
                                         if connection_id.is_some() {
@@ -330,25 +322,17 @@ fn connection_tree(
 
                                         return;
                                     } else if let Some(id) = folder_id {
-                                        state.toggle_expand(id);
+                                        state.toggle_expand(cx, id);
                                     }
 
                                     state.open_editor(window, cx, connection_id);
                                 },
                             )
                         })
-                        .on_mouse_down(MouseButton::Left, {
-                            let entry_id = entry.item().id.clone();
-                            window.listener_for(
-                                &state,
-                                move |state, event: &MouseDownEvent, _, cx| {
-                                    // We do not want to perform any click event handling if we are inline editing this item.
-                                    if event.click_count >= 2 || state.is_inline_editing(&entry_id)
-                                    {
-                                        cx.stop_propagation();
-                                    }
-                                },
-                            )
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                            // The underlying tree component uses the `on_mouse_down` event to handle things such as item expansion.
+                            // We stop that event from firing using `stop_propagation` here to give us more control over behavior resulting from mouse events.
+                            cx.stop_propagation();
                         })
                 }
             })
@@ -970,12 +954,14 @@ impl ConnectionDialogState {
     }
 
     /// Toggles the expanded state of the folder with the given [`ConnectionFolderId`].
-    fn toggle_expand(&mut self, id: ConnectionFolderId) {
+    fn toggle_expand(&mut self, cx: &mut Context<Self>, id: ConnectionFolderId) {
         if self.is_expanded(&id) {
             self.expanded.remove(&id);
         } else {
             self.expanded.insert(id);
         }
+
+        self.load_tree(cx);
     }
 
     fn load_tree(&self, cx: &mut Context<Self>) {
