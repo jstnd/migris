@@ -531,7 +531,7 @@ impl ConnectionDialogState {
     /// Creates a new [`ConnectionDialogState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| ConnectionEditorState::new(window, cx));
-        let inline_name_input = cx.new(|cx| InputState::new(window, cx));
+        let inline_name_input = cx.new(|cx| InputState::new(window, cx).context_menu(false));
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
