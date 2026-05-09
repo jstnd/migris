@@ -192,6 +192,8 @@ fn connection_tree(
                     let folder = manager.try_folder(&entry.item().id);
                     let folder_id = folder.map(|f| f.id());
 
+                    let is_inline_editing = state.read(cx).is_inline_editing(&entry.item().id);
+
                     ListItem::new(idx)
                         .p_0()
                         .text_sm()
@@ -206,6 +208,19 @@ fn connection_tree(
 
                                     // TODO: change icon to match connection type
                                     this.child(Icon::new(cx, IconName::Database))
+                                        .when(!is_inline_editing, |this| {
+                                            this.on_drag(
+                                                DragConnection {
+                                                    id: connection.id(),
+                                                    offset: None,
+                                                },
+                                                |drag, offset, _, cx| {
+                                                    let mut drag = *drag;
+                                                    drag.offset = Some(offset.x);
+                                                    cx.new(|_| drag)
+                                                },
+                                            )
+                                        })
                                         .drag_over(|this, _: &DragConnection, _, cx| {
                                             this.border_1()
                                                 .border_color(cx.theme().list_active_border)
@@ -214,17 +229,6 @@ fn connection_tree(
                                             this.border_1()
                                                 .border_color(cx.theme().list_active_border)
                                         })
-                                        .on_drag(
-                                            DragConnection {
-                                                id: connection.id(),
-                                                offset: None,
-                                            },
-                                            |drag, offset, _, cx| {
-                                                let mut drag = *drag;
-                                                drag.offset = Some(offset.x);
-                                                cx.new(|_| drag)
-                                            },
-                                        )
                                         .on_drop(window.listener_for(
                                             &state,
                                             move |state, drag: &DragConnection, _, cx| {
@@ -250,24 +254,26 @@ fn connection_tree(
                                             IconName::Folder
                                         },
                                     ))
+                                    .when(!is_inline_editing, |this| {
+                                        this.on_drag(
+                                            DragFolder {
+                                                id: folder.id(),
+                                                is_expanded,
+                                                offset: None,
+                                            },
+                                            |drag, offset, _, cx| {
+                                                let mut drag = *drag;
+                                                drag.offset = Some(offset.x);
+                                                cx.new(|_| drag)
+                                            },
+                                        )
+                                    })
                                     .drag_over(|this, _: &DragConnection, _, cx| {
                                         this.border_1().border_color(cx.theme().list_active_border)
                                     })
                                     .drag_over(|this, _: &DragFolder, _, cx| {
                                         this.border_1().border_color(cx.theme().list_active_border)
                                     })
-                                    .on_drag(
-                                        DragFolder {
-                                            id: folder.id(),
-                                            is_expanded,
-                                            offset: None,
-                                        },
-                                        |drag, offset, _, cx| {
-                                            let mut drag = *drag;
-                                            drag.offset = Some(offset.x);
-                                            cx.new(|_| drag)
-                                        },
-                                    )
                                     .on_drop(window.listener_for(
                                         &state,
                                         move |state, drag: &DragConnection, _, cx| {
