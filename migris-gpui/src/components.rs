@@ -1,4 +1,4 @@
-use gpui::{App, IntoElement, ParentElement, SharedString, Styled};
+use gpui::{App, IntoElement, ParentElement, SharedString, Styled, div};
 use gpui_component::{dialog::AlertDialog, h_flex, v_flex};
 
 use crate::components::icon::{Icon, IconName};
@@ -29,4 +29,12 @@ pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> imp
         .text_sm()
         .child(h_flex().pl_1().child(label.into()))
         .child(h_flex().child(element))
+}
+
+pub fn text_ellipsis(element: impl IntoElement) -> impl IntoElement {
+    div()
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .child(element)
 }

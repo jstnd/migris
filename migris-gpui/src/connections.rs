@@ -160,12 +160,50 @@ impl ConnectionManager {
         &self.config.folders[idx]
     }
 
+    /// Returns a mutable reference to the folder matching the given [`ConnectionFolderId`].
+    pub fn folder_mut(&mut self, id: &ConnectionFolderId) -> &mut ConnectionFolder {
+        let idx = self.folder_map[id];
+        &mut self.config.folders[idx]
+    }
+
+    /// Returns whether the folder with the given [`ConnectionFolderId`] contains the folder with the other [`ConnectionFolderId`].
+    pub fn folder_contains_folder(
+        &self,
+        id: &ConnectionFolderId,
+        other: &ConnectionFolderId,
+    ) -> bool {
+        if let Some(children_folders) = self.folders_for_parent(&Some(*id)) {
+            children_folders.contains(other)
+                || children_folders
+                    .iter()
+                    .any(|id| self.folder_contains_folder(id, other))
+        } else {
+            false
+        }
+    }
+
     /// Returns the folders within the given parent folder.
     pub fn folders_for_parent(
         &self,
         parent: &Option<ConnectionFolderId>,
     ) -> Option<&Vec<ConnectionFolderId>> {
         self.folders_by_parent.get(parent)
+    }
+
+    /// Moves the connection with the given [`ConnectionId`] to the given folder.
+    pub fn move_connection(&mut self, id: &ConnectionId, folder: Option<ConnectionFolderId>) {
+        let connection = self.connection_mut(id);
+        connection.set_folder(folder);
+        self.load_maps();
+        self.save();
+    }
+
+    /// Moves the folder with the given [`ConnectionFolderId`] to the given parent folder.
+    pub fn move_folder(&mut self, id: &ConnectionFolderId, parent: Option<ConnectionFolderId>) {
+        let folder = self.folder_mut(id);
+        folder.set_parent(parent);
+        self.load_maps();
+        self.save();
     }
 
     /// Removes the connection with the given [`ConnectionId`] from the config.
@@ -352,7 +390,7 @@ pub struct Connection {
     /// The id of the connection.
     id: ConnectionId,
 
-    /// The optional id of the folder containing the connection.
+    /// The optional [`ConnectionFolderId`] of the folder containing the connection.
     folder: Option<ConnectionFolderId>,
 
     /// The name of the connection.
@@ -427,8 +465,8 @@ impl Connection {
     }
 
     /// Sets the folder of the connection.
-    pub fn set_folder(&mut self, id: ConnectionFolderId) {
-        self.folder = Some(id);
+    pub fn set_folder(&mut self, folder: Option<ConnectionFolderId>) {
+        self.folder = folder;
     }
 
     /// Sets the name of the connection.
@@ -511,7 +549,7 @@ pub struct ConnectionFolder {
     /// The name of the folder.
     name: String,
 
-    /// The optional id of the parent folder containing the folder.
+    /// The optional [`ConnectionFolderId`] of the parent folder containing the folder.
     parent: Option<ConnectionFolderId>,
 }
 
@@ -559,8 +597,8 @@ impl ConnectionFolder {
     }
 
     /// Sets the parent of the folder.
-    pub fn set_parent(&mut self, id: ConnectionFolderId) {
-        self.parent = Some(id);
+    pub fn set_parent(&mut self, parent: Option<ConnectionFolderId>) {
+        self.parent = parent;
     }
 }
 

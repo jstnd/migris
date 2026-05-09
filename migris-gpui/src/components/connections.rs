@@ -1,9 +1,10 @@
 use std::{collections::HashSet, time::Duration};
 
 use gpui::{
-    Action, App, AppContext, ClickEvent, Context, Entity, InteractiveElement, IntoElement,
-    KeystrokeEvent, MouseButton, MouseDownEvent, ParentElement, RenderOnce, SharedString, Styled,
-    Subscription, Window, prelude::FluentBuilder, px,
+    Action, App, AppContext, ClickEvent, Context, Div, Entity, InteractiveElement, IntoElement,
+    KeystrokeEvent, MouseButton, MouseDownEvent, ParentElement, Pixels, Render, RenderOnce,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div,
+    prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable, WindowExt,
@@ -24,7 +25,7 @@ use crate::{
     components::{
         self,
         icon::{Icon, IconName},
-        labeled,
+        labeled, text_ellipsis,
     },
     connections::{
         Connection, ConnectionFolder, ConnectionFolderId, ConnectionId, ConnectionManager,
@@ -35,6 +36,7 @@ use crate::{
 };
 
 const CONNECTION_DIALOG: &str = "CONNECTION_DIALOG";
+const DRAG_CONTAINER_WIDTH: Pixels = px(150.0);
 
 pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> Dialog {
     let state = &AppState::global(cx).connection_dialog;
@@ -103,7 +105,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             )),
                                     ),
                             )
-                            .child(connection_tree(state.clone(), &state.read(cx).tree))
+                            .child(connection_tree(state.clone(), window, cx))
                             .on_action(window.listener_for(state, |state, action, window, cx| {
                                 state.handle_action(window, cx, action);
                             })),
@@ -174,143 +176,323 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
 
 fn connection_tree(
     state: Entity<ConnectionDialogState>,
-    tree: &Entity<TreeState>,
+    window: &mut Window,
+    cx: &App,
 ) -> impl IntoElement {
-    tree::tree(tree, {
-        let state = state.clone();
-        move |idx, entry, _, window, cx| {
-            let manager = ConnectionManager::global(cx);
-            let connection = manager.try_connection(&entry.item().id);
-            let connection_id = connection.map(|c| c.id());
-            let folder = manager.try_folder(&entry.item().id);
-            let folder_id = folder.map(|f| f.id());
+    div()
+        .id("connection-tree")
+        .p_1()
+        .size_full()
+        .child(
+            tree::tree(&state.read(cx).tree, {
+                let state = state.clone();
+                move |idx, entry, _, window, cx| {
+                    let manager = ConnectionManager::global(cx);
+                    let connection = manager.try_connection(&entry.item().id);
+                    let connection_id = connection.map(|c| c.id());
+                    let folder = manager.try_folder(&entry.item().id);
+                    let folder_id = folder.map(|f| f.id());
 
-            ListItem::new(idx)
-                .px_1()
-                .py_0()
-                .text_sm()
-                .child(
-                    h_flex()
-                        .gap_1()
-                        .pl(px(18.0) * entry.depth())
-                        .when_some(connection, |this, _| {
-                            // TODO: change icon to match connection type
-                            this.child(Icon::new(cx, IconName::Database))
-                        })
-                        .when_some(folder, |this, folder| {
-                            this.child(Icon::new(
-                                cx,
-                                if state.read(cx).is_expanded(&folder.id()) {
-                                    IconName::FolderOpen
-                                } else {
-                                    IconName::Folder
+                    ListItem::new(idx)
+                        .p_0()
+                        .text_sm()
+                        .child(
+                            h_flex()
+                                .id(("connection-item", idx))
+                                .gap_1()
+                                .px_1()
+                                .when(entry.depth() > 0, |this| this.pl(px(18.0) * entry.depth()))
+                                .when_some(connection, |this, connection| {
+                                    let folder = connection.folder();
+
+                                    // TODO: change icon to match connection type
+                                    this.child(Icon::new(cx, IconName::Database))
+                                        .drag_over(|this, _: &DragConnection, _, cx| {
+                                            this.border_1()
+                                                .border_color(cx.theme().list_active_border)
+                                        })
+                                        .drag_over(|this, _: &DragFolder, _, cx| {
+                                            this.border_1()
+                                                .border_color(cx.theme().list_active_border)
+                                        })
+                                        .on_drag(
+                                            DragConnection {
+                                                id: connection.id(),
+                                                offset: None,
+                                            },
+                                            |drag, offset, _, cx| {
+                                                let mut drag = *drag;
+                                                drag.offset = Some(offset.x);
+                                                cx.new(|_| drag)
+                                            },
+                                        )
+                                        .on_drop(window.listener_for(
+                                            &state,
+                                            move |state, drag: &DragConnection, _, cx| {
+                                                state.move_connection(cx, &drag.id, folder);
+                                            },
+                                        ))
+                                        .on_drop(window.listener_for(
+                                            &state,
+                                            move |state, drag: &DragFolder, _, cx| {
+                                                state.move_folder(cx, &drag.id, folder);
+                                            },
+                                        ))
+                                })
+                                .when_some(folder, |this, folder| {
+                                    let id = folder.id();
+                                    let is_expanded = state.read(cx).is_expanded(&folder.id());
+
+                                    this.child(Icon::new(
+                                        cx,
+                                        if is_expanded {
+                                            IconName::FolderOpen
+                                        } else {
+                                            IconName::Folder
+                                        },
+                                    ))
+                                    .drag_over(|this, _: &DragConnection, _, cx| {
+                                        this.border_1().border_color(cx.theme().list_active_border)
+                                    })
+                                    .drag_over(|this, _: &DragFolder, _, cx| {
+                                        this.border_1().border_color(cx.theme().list_active_border)
+                                    })
+                                    .on_drag(
+                                        DragFolder {
+                                            id: folder.id(),
+                                            is_expanded,
+                                            offset: None,
+                                        },
+                                        {
+                                            let state = state.clone();
+                                            move |drag, offset, _, cx| {
+                                                let mut drag = *drag;
+                                                drag.offset = Some(offset.x);
+
+                                                // Toggle the expanded state of the folder being dragged.
+                                                //
+                                                // This is needed as dragging also triggers a click on the tree item,
+                                                // essentially toggling its expanded state already. Performing this update
+                                                // keeps our tracked expanded folders in sync with this behavior.
+                                                state.update(cx, |state, _| {
+                                                    state.toggle_expand(drag.id);
+                                                });
+
+                                                cx.new(|_| drag)
+                                            }
+                                        },
+                                    )
+                                    .on_drop(window.listener_for(
+                                        &state,
+                                        move |state, drag: &DragConnection, _, cx| {
+                                            state.move_connection(cx, &drag.id, Some(id));
+                                        },
+                                    ))
+                                    .on_drop(
+                                        window.listener_for(
+                                            &state,
+                                            move |state, drag: &DragFolder, _, cx| {
+                                                state.move_folder(cx, &drag.id, Some(id));
+                                            },
+                                        ),
+                                    )
+                                })
+                                .child({
+                                    if state.read(cx).is_inline_editing(&entry.item().id) {
+                                        Input::new(&state.read(cx).inline_name_input)
+                                            .p_0()
+                                            .appearance(false)
+                                            .small()
+                                            .into_any_element()
+                                    } else {
+                                        text_ellipsis(entry.item().label.clone()).into_any_element()
+                                    }
+                                }),
+                        )
+                        .on_click({
+                            let entry_id = entry.item().id.clone();
+                            window.listener_for(
+                                &state,
+                                move |state, event: &ClickEvent, window, cx| {
+                                    // We do not want to perform any click event handling if we are inline editing this item.
+                                    if state.is_inline_editing(&entry_id) {
+                                        return;
+                                    }
+
+                                    if event.click_count() >= 2 {
+                                        if connection_id.is_some() {
+                                            // Open connection on double-click.
+                                            state.open_connection(window, cx);
+                                        } else if let Some(id) = folder_id {
+                                            // Open folder in inline editor on double-click.
+                                            state.open_inline_editor(window, cx, id.to_string());
+                                        }
+
+                                        return;
+                                    } else if let Some(id) = folder_id {
+                                        state.toggle_expand(id);
+                                    }
+
+                                    state.open_editor(window, cx, connection_id);
                                 },
-                            ))
+                            )
                         })
-                        .child({
-                            if state.read(cx).is_inline_editing(&entry.item().id) {
-                                Input::new(&state.read(cx).inline_name_input)
-                                    .p_0()
-                                    .appearance(false)
-                                    .small()
-                                    .into_any_element()
-                            } else {
-                                entry.item().label.clone().into_any_element()
-                            }
-                        }),
-                )
-                .on_click({
-                    let entry_id = entry.item().id.clone();
-                    window.listener_for(&state, move |state, event: &ClickEvent, window, cx| {
-                        // We do not want to perform any click event handling if we are inline editing this item.
-                        if state.is_inline_editing(&entry_id) {
-                            return;
-                        }
+                        .on_mouse_down(MouseButton::Left, {
+                            let entry_id = entry.item().id.clone();
+                            window.listener_for(
+                                &state,
+                                move |state, event: &MouseDownEvent, _, cx| {
+                                    // We do not want to perform any click event handling if we are inline editing this item.
+                                    if event.click_count >= 2 || state.is_inline_editing(&entry_id)
+                                    {
+                                        cx.stop_propagation();
+                                    }
+                                },
+                            )
+                        })
+                }
+            })
+            .context_menu(|_, entry, menu, _, cx| {
+                let manager = ConnectionManager::global(cx);
+                let connection_id = manager
+                    .try_connection(&entry.item().id)
+                    .map(|connection| connection.id());
+                let folder_id = manager
+                    .try_folder(&entry.item().id)
+                    .map(|folder| folder.id());
 
-                        if event.click_count() >= 2 {
-                            if connection_id.is_some() {
-                                // Open connection on double-click.
-                                state.open_connection(window, cx);
-                            } else if let Some(id) = folder_id {
-                                // Open folder in inline editor on double-click.
-                                state.open_inline_editor(window, cx, id.to_string());
-                            }
+                if let Some(id) = connection_id {
+                    menu.menu_with_icon(
+                        "Rename",
+                        Icon::primary(cx, IconName::TextCursorInput),
+                        Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
+                    )
+                    .menu_with_icon(
+                        "Duplicate",
+                        Icon::primary(cx, IconName::Copy),
+                        Box::new(ConnectionDialogAction::DuplicateConnection(id)),
+                    )
+                    .menu_with_icon(
+                        "Delete",
+                        Icon::danger(cx, IconName::Trash),
+                        Box::new(ConnectionDialogAction::DeleteConnection(id)),
+                    )
+                } else if let Some(id) = folder_id {
+                    menu.menu_with_icon(
+                        "Rename",
+                        Icon::primary(cx, IconName::TextCursorInput),
+                        Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
+                    )
+                    .menu_with_icon(
+                        "Duplicate",
+                        Icon::primary(cx, IconName::Copy),
+                        Box::new(ConnectionDialogAction::DuplicateFolder(id)),
+                    )
+                    .menu_with_icon(
+                        "Delete",
+                        Icon::danger(cx, IconName::Trash),
+                        Box::new(ConnectionDialogAction::DeleteFolder(id)),
+                    )
+                    .separator()
+                    .menu_with_icon(
+                        "New Connection",
+                        Icon::primary(cx, IconName::Plus),
+                        Box::new(ConnectionDialogAction::AddConnection(Some(id))),
+                    )
+                    .menu_with_icon(
+                        "New Folder",
+                        Icon::primary(cx, IconName::FolderPlus),
+                        Box::new(ConnectionDialogAction::AddFolder(Some(id))),
+                    )
+                } else {
+                    menu
+                }
+            }),
+        )
+        .on_drop(
+            window.listener_for(&state, |state, drag: &DragConnection, _, cx| {
+                state.move_connection(cx, &drag.id, None);
+            }),
+        )
+        .on_drop(
+            window.listener_for(&state, |state, drag: &DragFolder, _, cx| {
+                state.move_folder(cx, &drag.id, None);
+            }),
+        )
+}
 
-                            return;
-                        } else if let Some(id) = folder_id {
-                            state.toggle_expand(id);
-                        }
+fn drag_container(cx: &App) -> Div {
+    h_flex()
+        .gap_1()
+        .px_1()
+        .w(DRAG_CONTAINER_WIDTH)
+        .bg(cx.theme().background)
+        .border_1()
+        .border_color(cx.theme().border)
+        .opacity(0.9)
+        .shadow_md()
+        .text_color(cx.theme().muted_foreground)
+        .text_sm()
+}
 
-                        state.open_editor(window, cx, connection_id);
-                    })
-                })
-                .on_mouse_down(MouseButton::Left, {
-                    let entry_id = entry.item().id.clone();
-                    window.listener_for(&state, move |state, event: &MouseDownEvent, _, cx| {
-                        // We do not want to perform any click event handling if we are inline editing this item.
-                        if event.click_count >= 2 || state.is_inline_editing(&entry_id) {
-                            cx.stop_propagation();
-                        }
-                    })
-                })
-        }
-    })
-    .context_menu(|_, entry, menu, _, cx| {
-        let manager = ConnectionManager::global(cx);
-        let connection_id = manager
-            .try_connection(&entry.item().id)
-            .map(|connection| connection.id());
-        let folder_id = manager
-            .try_folder(&entry.item().id)
-            .map(|folder| folder.id());
+#[derive(Clone, Copy)]
+struct DragConnection {
+    /// The id of the connection being dragged.
+    id: ConnectionId,
 
-        if let Some(id) = connection_id {
-            menu.menu_with_icon(
-                "Rename",
-                Icon::primary(cx, IconName::TextCursorInput),
-                Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
+    /// The position offset of where the connection was dragged from.
+    offset: Option<Pixels>,
+}
+
+impl Render for DragConnection {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let connection = ConnectionManager::global(cx).connection(&self.id);
+
+        div()
+            .when_some(self.offset, |this, offset| {
+                this.pl(offset - (DRAG_CONTAINER_WIDTH / 2.0))
+            })
+            .child(
+                drag_container(cx)
+                    .child(Icon::new(cx, IconName::Database))
+                    .child(text_ellipsis(connection.name())),
             )
-            .menu_with_icon(
-                "Duplicate",
-                Icon::primary(cx, IconName::Copy),
-                Box::new(ConnectionDialogAction::DuplicateConnection(id)),
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DragFolder {
+    /// The id of the folder being dragged.
+    id: ConnectionFolderId,
+
+    /// Whether the folder is expanded.
+    is_expanded: bool,
+
+    /// The position offset of where the folder was dragged from.
+    offset: Option<Pixels>,
+}
+
+impl Render for DragFolder {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let folder = ConnectionManager::global(cx).folder(&self.id);
+
+        div()
+            .when_some(self.offset, |this, offset| {
+                this.pl(offset - (DRAG_CONTAINER_WIDTH / 2.0))
+            })
+            .child(
+                drag_container(cx)
+                    .child(Icon::new(
+                        cx,
+                        if self.is_expanded {
+                            IconName::FolderOpen
+                        } else {
+                            IconName::Folder
+                        },
+                    ))
+                    .child(text_ellipsis(folder.name())),
             )
-            .menu_with_icon(
-                "Delete",
-                Icon::danger(cx, IconName::Trash),
-                Box::new(ConnectionDialogAction::DeleteConnection(id)),
-            )
-        } else if let Some(id) = folder_id {
-            menu.menu_with_icon(
-                "Rename",
-                Icon::primary(cx, IconName::TextCursorInput),
-                Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
-            )
-            .menu_with_icon(
-                "Duplicate",
-                Icon::primary(cx, IconName::Copy),
-                Box::new(ConnectionDialogAction::DuplicateFolder(id)),
-            )
-            .menu_with_icon(
-                "Delete",
-                Icon::danger(cx, IconName::Trash),
-                Box::new(ConnectionDialogAction::DeleteFolder(id)),
-            )
-            .separator()
-            .menu_with_icon(
-                "New Connection",
-                Icon::primary(cx, IconName::Plus),
-                Box::new(ConnectionDialogAction::AddConnection(Some(id))),
-            )
-            .menu_with_icon(
-                "New Folder",
-                Icon::primary(cx, IconName::FolderPlus),
-                Box::new(ConnectionDialogAction::AddFolder(Some(id))),
-            )
-        } else {
-            menu
-        }
-    })
+    }
 }
 
 #[derive(Action, Clone, PartialEq, Eq)]
@@ -473,9 +655,7 @@ impl ConnectionDialogState {
     /// Adds a new default connection.
     fn add_connection(&self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
         let mut connection = Connection::default();
-        if let Some(id) = folder {
-            connection.set_folder(id);
-        }
+        connection.set_folder(folder);
 
         ConnectionManager::global_mut(cx).add_connection(connection);
         self.load_tree(cx);
@@ -484,9 +664,7 @@ impl ConnectionDialogState {
     /// Adds a new default folder.
     fn add_folder(&self, cx: &mut Context<Self>, parent: Option<ConnectionFolderId>) {
         let mut folder = ConnectionFolder::default();
-        if let Some(id) = parent {
-            folder.set_parent(id);
-        }
+        folder.set_parent(parent);
 
         ConnectionManager::global_mut(cx).add_folder(folder);
         self.load_tree(cx);
@@ -573,6 +751,50 @@ impl ConnectionDialogState {
         } else {
             false
         }
+    }
+
+    /// Moves the connection with the given [`ConnectionId`] to the given folder.
+    fn move_connection(
+        &mut self,
+        cx: &mut Context<Self>,
+        id: &ConnectionId,
+        folder: Option<ConnectionFolderId>,
+    ) {
+        // Do not move the connection if it's already inside the given folder.
+        if folder == ConnectionManager::global(cx).connection(id).folder() {
+            return;
+        }
+
+        // Expand the folder the connection is being moved to.
+        if let Some(folder) = folder {
+            self.expanded.insert(folder);
+        }
+
+        ConnectionManager::global_mut(cx).move_connection(id, folder);
+        self.load_tree(cx);
+    }
+
+    /// Moves the folder with the given [`ConnectionFolderId`] to the given parent folder.
+    fn move_folder(
+        &mut self,
+        cx: &mut Context<Self>,
+        id: &ConnectionFolderId,
+        parent: Option<ConnectionFolderId>,
+    ) {
+        // Do not move the folder if we are trying to move it inside itself.
+        if let Some(parent) = parent
+            && (parent == *id || ConnectionManager::global(cx).folder_contains_folder(id, &parent))
+        {
+            return;
+        }
+
+        // Expand the parent the folder is being moved to.
+        if let Some(parent) = parent {
+            self.expanded.insert(parent);
+        }
+
+        ConnectionManager::global_mut(cx).move_folder(id, parent);
+        self.load_tree(cx);
     }
 
     /// Emits an event to open the connection that is active within the connection editor.
