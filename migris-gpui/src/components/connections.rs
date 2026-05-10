@@ -374,6 +374,12 @@ fn connection_tree(
                         Icon::danger(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteConnection(id)),
                     )
+                    .separator()
+                    .menu_with_icon(
+                        "Move to Root",
+                        Icon::primary(cx, IconName::Folder),
+                        Box::new(ConnectionDialogAction::MoveConnection(id, None)),
+                    )
                 } else if let Some(id) = folder_id {
                     menu.menu_with_icon(
                         "Rename",
@@ -389,6 +395,12 @@ fn connection_tree(
                         "Delete",
                         Icon::danger(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteFolder(id)),
+                    )
+                    .separator()
+                    .menu_with_icon(
+                        "Move to Root",
+                        Icon::primary(cx, IconName::Folder),
+                        Box::new(ConnectionDialogAction::MoveFolder(id, None)),
                     )
                     .separator()
                     .menu_with_icon(
@@ -501,6 +513,8 @@ enum ConnectionDialogAction {
     DeleteFolder(ConnectionFolderId),
     DuplicateConnection(ConnectionId),
     DuplicateFolder(ConnectionFolderId),
+    MoveConnection(ConnectionId, Option<ConnectionFolderId>),
+    MoveFolder(ConnectionFolderId, Option<ConnectionFolderId>),
     RenameItem(String),
 }
 
@@ -611,6 +625,10 @@ impl ConnectionDialogState {
             ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
             ConnectionDialogAction::DuplicateConnection(id) => self.duplicate_connection(cx, id),
             ConnectionDialogAction::DuplicateFolder(id) => self.duplicate_folder(cx, id),
+            ConnectionDialogAction::MoveConnection(id, folder) => {
+                self.move_connection(cx, id, *folder)
+            }
+            ConnectionDialogAction::MoveFolder(id, parent) => self.move_folder(cx, id, *parent),
             ConnectionDialogAction::RenameItem(id) => self.open_inline_editor(window, cx, id),
         }
     }
