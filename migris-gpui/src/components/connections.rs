@@ -78,14 +78,11 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     .small()
                                                     .on_click(window.listener_for(
                                                         state,
-                                                        |state, _, window, cx| {
-                                                            state.handle_action(
-                                                        window,
-                                                        cx,
-                                                        &ConnectionDialogAction::AddConnection(
-                                                            state.selected_parent(cx),
-                                                        ),
-                                                    );
+                                                        |state, _, _, cx| {
+                                                            state.add_connection(
+                                                                cx,
+                                                                state.selected_parent(cx),
+                                                            );
                                                         },
                                                     )),
                                             )
@@ -97,13 +94,10 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     .small()
                                                     .on_click(window.listener_for(
                                                         state,
-                                                        |state, _, window, cx| {
-                                                            state.handle_action(
-                                                                window,
+                                                        |state, _, _, cx| {
+                                                            state.add_folder(
                                                                 cx,
-                                                                &ConnectionDialogAction::AddFolder(
-                                                                    state.selected_parent(cx),
-                                                                ),
+                                                                state.selected_parent(cx),
                                                             );
                                                         },
                                                     )),
