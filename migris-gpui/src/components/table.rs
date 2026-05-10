@@ -1,5 +1,5 @@
 use futures_lite::StreamExt;
-use gpui::{App, AppContext, Context, Entity, IntoElement, RenderOnce, Window};
+use gpui::{App, AppContext, Context, Entity, IntoElement, ParentElement, RenderOnce, Window, div};
 use gpui_component::{
     Sizable,
     table::{Column, DataTable, TableDelegate, TableState},
@@ -7,15 +7,28 @@ use gpui_component::{
 use migris::data::{QueryData, QueryResult};
 use tokio::runtime::Handle;
 
+const INIT_BATCH_SIZE: usize = 1_000;
+
 struct QueryTableDelegate {
-    result: QueryResult,
+    /// The query result to display in the table.
+    result: Option<QueryResult>,
+
+    /// The columns for the table.
     columns: Vec<Column>,
 }
 
 impl QueryTableDelegate {
     /// Creates a new [`QueryTableDelegate`].
-    fn new(result: QueryResult) -> Self {
-        let columns = result
+    fn new() -> Self {
+        Self {
+            result: None,
+            columns: Vec::new(),
+        }
+    }
+
+    /// Initializes the table with the given [`QueryResult`].
+    fn init(&mut self, result: QueryResult) {
+        self.columns = result
             .data
             .columns()
             .iter()
@@ -25,25 +38,34 @@ impl QueryTableDelegate {
             })
             .collect();
 
-        Self { result, columns }
+        self.result = Some(result);
+        self.load(INIT_BATCH_SIZE);
     }
 
     /// Returns a reference to the query data.
-    fn data(&self) -> &QueryData {
-        &self.result.data
+    fn data(&self) -> Option<&QueryData> {
+        let Some(result) = &self.result else {
+            return None;
+        };
+
+        Some(&result.data)
     }
 
-    /// Loads a number of rows from the query result's stream, determined by the given size parameter.
-    fn load(&mut self, size: usize) {
+    /// Loads a number of rows from the query result's stream.
+    fn load(&mut self, rows: usize) {
+        let Some(result) = &mut self.result else {
+            return;
+        };
+
         //
         tokio::task::block_in_place(|| {
             Handle::current().block_on(async {
-                if let Some(stream) = &mut self.result.stream {
-                    let mut stream = stream.take(size);
+                if let Some(stream) = &mut result.stream {
+                    let mut stream = stream.take(rows);
 
                     while let Some(row) = stream.next().await {
                         if let Ok(row) = row {
-                            self.result.data.push_row(row);
+                            result.data.push_row(row);
                         }
                     }
                 }
@@ -53,16 +75,16 @@ impl QueryTableDelegate {
 }
 
 impl TableDelegate for QueryTableDelegate {
+    fn column(&self, col_ix: usize, _: &App) -> Column {
+        self.columns[col_ix].clone()
+    }
+
     fn columns_count(&self, _: &App) -> usize {
         self.columns.len()
     }
 
-    fn rows_count(&self, _: &App) -> usize {
-        self.data().rows().len()
-    }
-
-    fn column(&self, col_ix: usize, _: &App) -> Column {
-        self.columns[col_ix].clone()
+    fn loading(&self, _: &App) -> bool {
+        self.data().is_none()
     }
 
     fn render_td(
@@ -72,8 +94,20 @@ impl TableDelegate for QueryTableDelegate {
         _: &mut Window,
         _: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
-        let row = &self.data().rows()[row_ix];
-        row.values[col_ix].to_string()
+        let Some(data) = self.data() else {
+            return div();
+        };
+
+        let row = &data.rows()[row_ix];
+        div().child(row.values[col_ix].to_string())
+    }
+
+    fn rows_count(&self, _: &App) -> usize {
+        let Some(data) = self.data() else {
+            return 0;
+        };
+
+        data.rows().len()
     }
 }
 
@@ -85,18 +119,27 @@ pub struct QueryTableState {
 
 impl QueryTableState {
     /// Creates a new [`QueryTableState`].
-    pub fn new(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
-        let delegate = QueryTableDelegate::new(result);
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let delegate = QueryTableDelegate::new();
         let table = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
-
         Self { table }
     }
 
-    /// Loads a number of rows from the query result's stream, determined by the given size parameter.
-    pub fn load(&mut self, cx: &mut Context<Self>, size: usize) {
-        self.table.update(cx, |table, _| {
-            table.delegate_mut().load(size);
-        })
+    /// Creates a new [`QueryTableState`], initialized with the given [`QueryResult`].
+    pub fn with_result(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
+        let mut delegate = QueryTableDelegate::new();
+        delegate.init(result);
+
+        let table = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
+        Self { table }
+    }
+
+    /// Initializes the table with the given [`QueryResult`].
+    pub fn init(&mut self, cx: &mut Context<Self>, result: QueryResult) {
+        self.table.update(cx, |table, cx| {
+            table.delegate_mut().init(result);
+            table.refresh(cx);
+        });
     }
 }
 

@@ -95,7 +95,7 @@ impl QueryTabState {
             .show_progress()
             .on_result(move |result, window, cx| {
                 this.update(cx, |this, cx| {
-                    let table = cx.new(|cx| QueryTableState::new(window, cx, result));
+                    let table = cx.new(|cx| QueryTableState::with_result(window, cx, result));
                     this.tables.push(table);
                 });
             });

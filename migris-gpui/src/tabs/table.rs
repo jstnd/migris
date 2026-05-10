@@ -1,8 +1,7 @@
 use gpui::{
     App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
-    prelude::FluentBuilder,
 };
-use gpui_component::{ActiveTheme, h_flex, progress::ProgressCircle, v_flex};
+use gpui_component::v_flex;
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
@@ -10,29 +9,24 @@ use crate::{
     events::{Event, EventManager, RunSqlEvent},
 };
 
-const ROW_BATCH_SIZE: usize = 1_000;
-
 /// The state used with a [`TableTab`].
 struct TableTabState {
     /// The state for the data table.
-    table: Option<Entity<QueryTableState>>,
+    table: Entity<QueryTableState>,
 }
 
 impl TableTabState {
     /// Creates a new [`TableTabState`].
-    fn new(_: &mut Window, _: &mut Context<Self>) -> Self {
-        Self { table: None }
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let table = cx.new(|cx| QueryTableState::new(window, cx));
+        Self { table }
     }
 
     /// Loads the given table data into the tab.
-    fn load_data(&mut self, window: &mut Window, cx: &mut Context<Self>, result: QueryResult) {
-        let table = cx.new(|cx| {
-            let mut state = QueryTableState::new(window, cx, result);
-            state.load(cx, ROW_BATCH_SIZE);
-            state
+    fn load_table(&self, cx: &mut Context<Self>, result: QueryResult) {
+        self.table.update(cx, |table, cx| {
+            table.init(cx, result);
         });
-
-        self.table = Some(table);
     }
 }
 
@@ -68,9 +62,9 @@ impl TableTab {
     fn init(&self, window: &mut Window, cx: &mut Context<Self>) {
         let state = self.state.clone();
         let event = RunSqlEvent::stream(migris::sql::select_all(&self.entity)).on_result(
-            move |result, window, cx| {
+            move |result, _, cx| {
                 state.update(cx, |state, cx| {
-                    state.load_data(window, cx, result);
+                    state.load_table(cx, result);
                 });
             },
         );
@@ -90,23 +84,6 @@ impl TableTab {
         v_flex()
             .gap_1()
             .size_full()
-            .when(state.table.is_none(), |this| {
-                this.child(
-                    h_flex()
-                        .gap_2()
-                        .size_full()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            ProgressCircle::new("table-loading")
-                                .color(cx.theme().primary)
-                                .loading(true),
-                        )
-                        .child("Loading..."),
-                )
-            })
-            .when_some(state.table.as_ref(), |this, table| {
-                this.child(QueryTable::new(table))
-            })
+            .child(QueryTable::new(&state.table))
     }
 }
