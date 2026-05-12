@@ -7,6 +7,7 @@ migris = { path = "migris" }
 
 # external dependencies
 clap = { version = "4.5.54", features = ["derive"] }
+futures-util = "0.3.32"
 serde = "1.0.228"
 
 [workspace.lints.clippy]

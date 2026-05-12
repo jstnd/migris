@@ -1,13 +1,18 @@
-use futures_lite::StreamExt;
-use gpui::{App, AppContext, Context, Entity, IntoElement, ParentElement, RenderOnce, Window, div};
+use futures_util::StreamExt;
+use gpui::{
+    App, AppContext, Context, Entity, IntoElement, ParentElement, RenderOnce, Styled, Window, div,
+};
 use gpui_component::{
-    Sizable,
+    ActiveTheme, Sizable,
     table::{Column, DataTable, TableDelegate, TableState},
 };
 use migris::data::{QueryData, QueryResult};
 use tokio::runtime::Handle;
 
+use crate::components::text_ellipsis;
+
 const INIT_BATCH_SIZE: usize = 1_000;
+const LOAD_BATCH_SIZE: usize = 100;
 
 struct QueryTableDelegate {
     /// The query result to display in the table.
@@ -15,6 +20,9 @@ struct QueryTableDelegate {
 
     /// The columns for the table.
     columns: Vec<Column>,
+
+    /// Whether more data is available to load into the table.
+    has_more_data: bool,
 }
 
 impl QueryTableDelegate {
@@ -23,6 +31,7 @@ impl QueryTableDelegate {
         Self {
             result: None,
             columns: Vec::new(),
+            has_more_data: false,
         }
     }
 
@@ -39,6 +48,7 @@ impl QueryTableDelegate {
             .collect();
 
         self.result = Some(result);
+        self.has_more_data = true;
         self.load(INIT_BATCH_SIZE);
     }
 
@@ -61,13 +71,18 @@ impl QueryTableDelegate {
         tokio::task::block_in_place(|| {
             Handle::current().block_on(async {
                 if let Some(stream) = &mut result.stream {
-                    let mut stream = stream.take(rows);
+                    let mut data_stream = stream.take(rows);
 
-                    while let Some(row) = stream.next().await {
+                    while let Some(row) = data_stream.next().await {
                         if let Ok(row) = row {
                             result.data.push_row(row);
                         }
                     }
+
+                    // Determine if the stream has more data to load after.
+                    let peekable = stream.peekable();
+                    futures_util::pin_mut!(peekable);
+                    self.has_more_data = peekable.peek().await.is_some();
                 }
             });
         });
@@ -81,6 +96,18 @@ impl TableDelegate for QueryTableDelegate {
 
     fn columns_count(&self, _: &App) -> usize {
         self.columns.len()
+    }
+
+    fn has_more(&self, _: &App) -> bool {
+        self.has_more_data
+    }
+
+    fn load_more(&mut self, _: &mut Window, _: &mut Context<TableState<Self>>) {
+        self.load(LOAD_BATCH_SIZE);
+    }
+
+    fn load_more_threshold(&self) -> usize {
+        LOAD_BATCH_SIZE
     }
 
     fn loading(&self, _: &App) -> bool {
@@ -99,7 +126,24 @@ impl TableDelegate for QueryTableDelegate {
         };
 
         let row = &data.rows()[row_ix];
-        div().child(row.values[col_ix].to_string())
+
+        div()
+            .w_full()
+            .child(text_ellipsis(row.values[col_ix].to_string()))
+    }
+
+    fn render_th(
+        &mut self,
+        col_ix: usize,
+        _: &mut Window,
+        cx: &mut Context<TableState<Self>>,
+    ) -> impl IntoElement {
+        let column = &self.columns[col_ix];
+
+        div()
+            .w_full()
+            .text_color(cx.theme().foreground)
+            .child(text_ellipsis(column.name.clone()))
     }
 
     fn rows_count(&self, _: &App) -> usize {
@@ -127,11 +171,9 @@ impl QueryTableState {
 
     /// Creates a new [`QueryTableState`], initialized with the given [`QueryResult`].
     pub fn with_result(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
-        let mut delegate = QueryTableDelegate::new();
-        delegate.init(result);
-
-        let table = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
-        Self { table }
+        let mut state = Self::new(window, cx);
+        state.init(cx, result);
+        state
     }
 
     /// Initializes the table with the given [`QueryResult`].

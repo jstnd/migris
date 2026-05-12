@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use futures_lite::Stream;
+use futures_util::Stream;
 
 use crate::{Column, MigrisResult, Row};
 

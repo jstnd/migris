@@ -8,7 +8,7 @@ migris = { workspace = true }
 
 anyhow = "1.0.102"
 directories = "6.0.0"
-futures-lite = "2.6.1"
+futures-util = { workspace = true }
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed" }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", features = ["tree-sitter-sql"] }

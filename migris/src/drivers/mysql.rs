@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use futures_lite::StreamExt;
+use futures_util::StreamExt;
 use sqlx::{
     Column as SqlxColumn, Executor, MySqlPool, TypeInfo,
     mysql::{MySqlColumn, MySqlTypeInfo},
