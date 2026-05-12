@@ -10,6 +10,7 @@ use gpui_component::{
     resizable::{h_resizable, resizable_panel},
     v_flex,
 };
+use migris::Entity as MigrisEntity;
 
 use crate::{
     assets,
@@ -79,11 +80,7 @@ impl Application {
                 self.open_connection(window, cx, *id, event.callbacks.clone())
             }
             EventVariant::OpenEntity(entity) => {
-                let entity = entity.clone();
-                self.tab_panel.update(cx, |tab_panel, cx| {
-                    let variant = TabVariant::Table(entity);
-                    tab_panel.add_tab(window, cx, variant);
-                })
+                self.open_entity(window, cx, entity.clone());
             }
             EventVariant::RunSql(event) => self.run_sql(window, cx, event.clone()),
         }
@@ -131,6 +128,19 @@ impl Application {
             });
         })
         .detach();
+    }
+
+    fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) {
+        self.tab_panel.update(cx, |tab_panel, cx| {
+            let existing_tab = tab_panel.entity_tab(cx, &entity);
+
+            if let Some(tab_idx) = existing_tab {
+                tab_panel.open_tab(tab_idx);
+            } else {
+                let variant = TabVariant::Table(entity);
+                tab_panel.add_tab(window, cx, variant);
+            }
+        })
     }
 
     fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, event: RunSqlEvent) {

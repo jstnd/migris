@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct Entity {
     pub kind: EntityKind,
     pub schema: String,
@@ -10,7 +10,7 @@ impl Entity {
         Self {
             kind: EntityKind::Schema,
             schema: schema.into(),
-            name: String::from(""),
+            name: String::new(),
         }
     }
 

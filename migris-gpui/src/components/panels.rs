@@ -264,6 +264,27 @@ impl TabPanelState {
         self.active_tab = self.tabs.len() - 1;
     }
 
+    /// Returns the index for the tab displaying the given entity, if one is found.
+    pub fn entity_tab(&self, cx: &App, entity: &MigrisEntity) -> Option<usize> {
+        self.tabs
+            .iter()
+            .enumerate()
+            .find(|(_, tab)| {
+                let tab = tab.read(cx);
+
+                match tab.variant() {
+                    TabVariant::Query(_) => false,
+                    TabVariant::Table(tab_entity) => tab_entity == entity,
+                }
+            })
+            .map(|(idx, _)| idx)
+    }
+
+    /// Opens the tab at the given index.
+    pub fn open_tab(&mut self, idx: usize) {
+        self.active_tab = idx;
+    }
+
     /// Returns a reference to the active tab.
     fn active_tab(&self) -> &Entity<TabView> {
         &self.tabs[self.active_tab]
@@ -332,7 +353,7 @@ impl RenderOnce for TabPanel {
                         TabBar::new("panel-tabs")
                             .selected_index(state.active_tab)
                             .on_click(window.listener_for(&self.state, |state, idx, _, _| {
-                                state.active_tab = *idx;
+                                state.open_tab(*idx);
                             }))
                             .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
                                 let tab = tab.read(cx);
