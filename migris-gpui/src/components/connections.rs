@@ -72,7 +72,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                             .justify_end()
                                             .child(
                                                 Button::new("button-new-connection")
-                                                    .icon(Icon::new(cx, IconName::Plus))
+                                                    .icon(Icon::new(cx, IconName::DatabasePlus))
                                                     .tooltip("New Connection")
                                                     .ghost()
                                                     .small()
@@ -403,7 +403,7 @@ fn connection_tree(
                     .separator()
                     .menu_with_icon(
                         "New Connection",
-                        Icon::primary(cx, IconName::Plus),
+                        Icon::primary(cx, IconName::DatabasePlus),
                         Box::new(ConnectionDialogAction::AddConnection(Some(id))),
                     )
                     .menu_with_icon(
