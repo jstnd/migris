@@ -352,6 +352,8 @@ fn connection_tree(
                     .try_folder(&entry.item().id)
                     .map(|folder| folder.id());
 
+                let is_root_item = entry.depth() == 0;
+
                 if let Some(id) = connection_id {
                     menu.menu_with_icon(
                         "Rename",
@@ -368,12 +370,13 @@ fn connection_tree(
                         Icon::danger(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteConnection(id)),
                     )
-                    .separator()
-                    .menu_with_icon(
-                        "Move to Root",
-                        Icon::primary(cx, IconName::Folder),
-                        Box::new(ConnectionDialogAction::MoveConnection(id, None)),
-                    )
+                    .when(!is_root_item, |menu| {
+                        menu.separator().menu_with_icon(
+                            "Move to Root",
+                            Icon::primary(cx, IconName::Folder),
+                            Box::new(ConnectionDialogAction::MoveConnection(id, None)),
+                        )
+                    })
                 } else if let Some(id) = folder_id {
                     menu.menu_with_icon(
                         "Rename",
@@ -390,12 +393,13 @@ fn connection_tree(
                         Icon::danger(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteFolder(id)),
                     )
-                    .separator()
-                    .menu_with_icon(
-                        "Move to Root",
-                        Icon::primary(cx, IconName::Folder),
-                        Box::new(ConnectionDialogAction::MoveFolder(id, None)),
-                    )
+                    .when(!is_root_item, |menu| {
+                        menu.separator().menu_with_icon(
+                            "Move to Root",
+                            Icon::primary(cx, IconName::Folder),
+                            Box::new(ConnectionDialogAction::MoveFolder(id, None)),
+                        )
+                    })
                     .separator()
                     .menu_with_icon(
                         "New Connection",
