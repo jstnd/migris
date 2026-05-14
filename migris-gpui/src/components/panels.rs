@@ -352,28 +352,18 @@ impl RenderOnce for TabPanel {
                     .child(
                         TabBar::new("panel-tabs")
                             .selected_index(state.active_tab)
-                            .on_click(window.listener_for(&self.state, |state, idx, _, _| {
-                                state.open_tab(*idx);
-                            }))
                             .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
                                 let tab = tab.read(cx);
 
                                 Tab::new().child(
                                     h_flex()
-                                        .id(format!("panel-tab-{}", idx))
+                                        .id(("panel-tab", idx))
                                         .gap_1p5()
                                         .items_center()
-                                        .on_hover(window.listener_for(
-                                            &self.state,
-                                            move |state, is_hovered: &bool, _, cx| {
-                                                state.hovered_tab = is_hovered.then_some(idx);
-                                                cx.notify();
-                                            },
-                                        ))
                                         .child(Icon::from(tab.icon()).xsmall())
                                         .child(tab.label(cx))
                                         .child(
-                                            Button::new(format!("button-close-{}", idx))
+                                            Button::new(("button-close", idx))
                                                 .icon(IconName::X)
                                                 .ghost()
                                                 .xsmall()
@@ -385,8 +375,18 @@ impl RenderOnce for TabPanel {
                                                         cx.stop_propagation();
                                                     },
                                                 )),
-                                        ),
+                                        )
+                                        .on_hover(window.listener_for(
+                                            &self.state,
+                                            move |state, is_hovered: &bool, _, cx| {
+                                                state.hovered_tab = is_hovered.then_some(idx);
+                                                cx.notify();
+                                            },
+                                        )),
                                 )
+                            }))
+                            .on_click(window.listener_for(&self.state, |state, idx, _, _| {
+                                state.open_tab(*idx);
                             })),
                     )
                     .child(
