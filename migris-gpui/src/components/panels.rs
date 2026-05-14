@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
-    px,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeystrokeEvent,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Subscription,
+    Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Icon, Sizable, WindowExt,
@@ -24,6 +24,8 @@ use crate::{
     tabs::{TabVariant, TabView},
 };
 
+const CONNECTION_PANEL: &str = "CONNECTION_PANEL";
+
 /// The state used with a [`ConnectionPanel`].
 pub struct ConnectionPanelState {
     /// The state for the search input.
@@ -36,7 +38,7 @@ pub struct ConnectionPanelState {
     entities: Vec<MigrisEntity>,
 
     /// A map of entity id's to the respective indexes in the entities list.
-    entity_id_map: HashMap<SharedString, usize>,
+    entity_map: HashMap<SharedString, usize>,
 
     /// The id's of the expanded entity tree items; needed to
     /// persist expanded items between actions such as searching.
@@ -46,55 +48,115 @@ pub struct ConnectionPanelState {
 }
 
 impl ConnectionPanelState {
+    /// Creates a new [`ConnectionPanelState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
-        let _subscriptions =
-            vec![
-                cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
-                    if let InputEvent::Change = event {
-                        this.load_tree(cx);
-                    }
-                }),
-            ];
+
+        let _subscriptions = Vec::from([
+            cx.observe_keystrokes(|this, event, _, cx| {
+                this.handle_keystroke(cx, event);
+            }),
+            cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
+                if let InputEvent::Change = event {
+                    this.load_tree(cx);
+                }
+            }),
+        ]);
 
         Self {
             search_input,
             tree,
             entities: Vec::new(),
-            entity_id_map: HashMap::new(),
+            entity_map: HashMap::new(),
             expanded: HashSet::new(),
             _subscriptions,
         }
     }
 
+    /// Loads the given entities into the tree.
     pub fn load_entities(&mut self, cx: &mut Context<Self>, entities: Vec<MigrisEntity>) {
         self.entities = entities;
-        self.build_id_map();
+        self.load_maps();
         self.load_tree(cx);
     }
 
-    fn build_id_map(&mut self) {
-        self.entity_id_map.clear();
+    /// Handles keystroke events from inner components.
+    fn handle_keystroke(&mut self, cx: &mut Context<Self>, event: &KeystrokeEvent) {
+        if let Some(action) = &event.action
+            && event
+                .context_stack
+                .iter()
+                .any(|context| context.contains(CONNECTION_PANEL))
+        {
+            match action.name() {
+                "ui::SelectLeft" => {
+                    if let Some(schema) = self.selected_schema(cx) {
+                        let id = SharedString::from(schema.id());
+                        self.expanded.remove(&id);
+                    }
+                }
+                "ui::SelectRight" => {
+                    if let Some(schema) = self.selected_schema(cx) {
+                        let id = SharedString::from(schema.id());
+                        self.expanded.insert(id);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Returns the entity with the given id.
+    fn entity(&self, id: &SharedString) -> &MigrisEntity {
+        let idx = self.entity_map[id];
+        &self.entities[idx]
+    }
+
+    /// Returns whether the entity with the given id is expanded.
+    fn is_expanded(&self, id: &SharedString) -> bool {
+        self.expanded.contains(id)
+    }
+
+    /// Returns the selected entity, if any.
+    fn selected_entity(&self, cx: &App) -> Option<&MigrisEntity> {
+        if let Some(item) = self.tree.read(cx).selected_item() {
+            Some(self.entity(&item.id))
+        } else {
+            None
+        }
+    }
+
+    /// Returns the selected schema entity, if any.
+    fn selected_schema(&self, cx: &App) -> Option<&MigrisEntity> {
+        if let Some(entity) = self.selected_entity(cx)
+            && entity.is_schema()
+        {
+            Some(entity)
+        } else {
+            None
+        }
+    }
+
+    fn load_maps(&mut self) {
+        self.entity_map.clear();
 
         for (idx, entity) in self.entities.iter().enumerate() {
-            self.entity_id_map
-                .insert(SharedString::from(entity.id()), idx);
+            self.entity_map.insert(SharedString::from(entity.id()), idx);
         }
     }
 
     fn load_tree(&mut self, cx: &mut Context<Self>) {
+        let filter = self.search_input.read(cx).value().to_lowercase();
+        let items = self.build_tree_items(&filter);
         self.tree.update(cx, |tree, cx| {
-            let filter = self.search_input.read(cx).value();
-            let items = self.entities_to_items(filter);
             tree.set_items(items, cx);
         });
     }
 
-    fn entities_to_items(&self, filter: SharedString) -> Vec<TreeItem> {
+    fn build_tree_items(&self, filter: &str) -> Vec<TreeItem> {
         let mut items = Vec::new();
-        let filter = filter.to_lowercase();
         let entities_by_schema = self
             .entities
             .iter()
@@ -109,7 +171,7 @@ impl ConnectionPanelState {
         for (schema, entities) in entities_by_schema {
             let mut children: Vec<TreeItem> = entities
                 .into_iter()
-                .filter(|entity| filter.is_empty() || entity.name.to_lowercase().contains(&filter))
+                .filter(|entity| filter.is_empty() || entity.name.to_lowercase().contains(filter))
                 .map(|entity| TreeItem::new(SharedString::from(entity.id()), &entity.name))
                 .collect();
 
@@ -123,15 +185,6 @@ impl ConnectionPanelState {
         }
 
         items
-    }
-
-    fn entity(&self, id: &SharedString) -> &MigrisEntity {
-        let idx = self.entity_id_map[id];
-        &self.entities[idx]
-    }
-
-    fn is_expanded(&self, id: &SharedString) -> bool {
-        self.expanded.contains(id)
     }
 }
 
@@ -155,6 +208,7 @@ impl RenderOnce for ConnectionPanel {
         let state = self.state.read(cx);
 
         v_flex()
+            .key_context(CONNECTION_PANEL)
             .gap_1()
             .p_1()
             .size_full()

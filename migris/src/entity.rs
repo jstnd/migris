@@ -23,6 +23,11 @@ impl Entity {
 
         id
     }
+
+    /// Returns whether the entity is a schema.
+    pub fn is_schema(&self) -> bool {
+        self.kind == EntityKind::Schema
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Decode, sqlx::Encode)]
