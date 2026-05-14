@@ -994,7 +994,7 @@ impl ConnectionDialogState {
     }
 
     fn load_tree(&self, cx: &mut Context<Self>) {
-        let filter = self.search_input.read(cx).value();
+        let filter = self.search_input.read(cx).value().to_lowercase();
         let items = self.build_tree_items(ConnectionManager::global(cx), &filter, None);
         self.tree.update(cx, |tree, cx| {
             let selected = tree.selected_item().cloned();
@@ -1006,7 +1006,7 @@ impl ConnectionDialogState {
     fn build_tree_items(
         &self,
         manager: &ConnectionManager,
-        filter: &SharedString,
+        filter: &String,
         folder_id: Option<ConnectionFolderId>,
     ) -> Vec<TreeItem> {
         let mut items = Vec::new();
@@ -1041,7 +1041,7 @@ impl ConnectionDialogState {
                 let connection = manager.connection(id);
 
                 // Only include connections that match the filter.
-                if filter.is_empty() || connection.name().to_lowercase().contains(filter.as_str()) {
+                if filter.is_empty() || connection.name().to_lowercase().contains(filter) {
                     let item = TreeItem::new(id.to_string(), connection.name());
                     connection_items.push(item);
                 }
