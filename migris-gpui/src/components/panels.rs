@@ -18,7 +18,7 @@ use gpui_component::{
 use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
-    components::{connections, icon::IconName},
+    components::{connections, icon::IconName, text_ellipsis},
     events::{Event, EventManager, EventVariant},
     shared,
     tabs::{TabVariant, TabView},
@@ -139,6 +139,15 @@ impl ConnectionPanelState {
         }
     }
 
+    /// Toggles the expanded state of the entity with the given id.
+    fn toggle_expand(&mut self, id: SharedString) {
+        if self.is_expanded(&id) {
+            self.expanded.remove(&id);
+        } else {
+            self.expanded.insert(id);
+        }
+    }
+
     fn load_maps(&mut self) {
         self.entity_map.clear();
 
@@ -210,12 +219,13 @@ impl RenderOnce for ConnectionPanel {
         v_flex()
             .key_context(CONNECTION_PANEL)
             .gap_1()
-            .p_1()
             .size_full()
             .items_center()
             .child(
                 h_flex()
                     .gap_1()
+                    .pt_1()
+                    .px_1()
                     .w_full()
                     .child(
                         Input::new(&state.search_input)
@@ -238,13 +248,16 @@ impl RenderOnce for ConnectionPanel {
                 let entity = self.state.read(cx).entity(&entry.item().id);
 
                 ListItem::new(idx)
+                    .ml_1()
+                    .mr_4()
                     .p_0()
                     .text_sm()
                     .child(
                         h_flex()
                             .gap_1()
-                            .pl(px(18.0) * entry.depth())
-                            .when(entity.kind == EntityKind::Schema, |this| {
+                            .px_1()
+                            .when(entry.depth() > 0, |this| this.pl(px(22.0) * entry.depth()))
+                            .when(entity.is_schema(), |this| {
                                 this.child(Icon::from(
                                     if self.state.read(cx).is_expanded(&entry.item().id) {
                                         IconName::ChevronDown
@@ -258,7 +271,7 @@ impl RenderOnce for ConnectionPanel {
                                 EntityKind::Table => IconName::Grid3x3,
                                 EntityKind::View => IconName::Eye,
                             }))
-                            .child(entry.item().label.clone()),
+                            .child(text_ellipsis(entry.item().label.clone())),
                     )
                     .on_click(window.listener_for(&self.state, {
                         let entry = entry.clone();
@@ -267,13 +280,7 @@ impl RenderOnce for ConnectionPanel {
                             let entity = state.entity(&id);
 
                             match entity.kind {
-                                EntityKind::Schema => {
-                                    if state.is_expanded(&id) {
-                                        state.expanded.remove(&id);
-                                    } else {
-                                        state.expanded.insert(id);
-                                    }
-                                }
+                                EntityKind::Schema => state.toggle_expand(id),
                                 EntityKind::Table => {
                                     let event =
                                         Event::new(EventVariant::OpenEntity(entity.clone()));
