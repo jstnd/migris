@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeystrokeEvent,
-    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Subscription,
-    Window, prelude::FluentBuilder, px,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding,
+    KeystrokeEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Icon, Sizable, WindowExt,
@@ -25,6 +25,15 @@ use crate::{
 };
 
 const CONNECTION_PANEL: &str = "CONNECTION_PANEL";
+
+/// Initializes configuration for the panel components.
+pub fn init(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new(
+        "enter",
+        ConnectionPanelAction::OpenSelectedEntity,
+        Some(CONNECTION_PANEL),
+    )]);
+}
 
 /// The state used with a [`ConnectionPanel`].
 pub struct ConnectionPanelState {
@@ -82,6 +91,24 @@ impl ConnectionPanelState {
         self.load_tree(cx);
     }
 
+    /// Handles actions originating from the connection panel.
+    fn handle_action(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        action: &ConnectionPanelAction,
+    ) {
+        match action {
+            ConnectionPanelAction::OpenSelectedEntity => {
+                if let Some(entity) = self.selected_entity(cx)
+                    && !entity.is_schema()
+                {
+                    self.open_entity(window, cx, entity);
+                }
+            }
+        }
+    }
+
     /// Handles keystroke events from inner components.
     fn handle_keystroke(&mut self, cx: &mut Context<Self>, event: &KeystrokeEvent) {
         if let Some(action) = &event.action
@@ -117,6 +144,12 @@ impl ConnectionPanelState {
     /// Returns whether the entity with the given id is expanded.
     fn is_expanded(&self, id: &SharedString) -> bool {
         self.expanded.contains(id)
+    }
+
+    /// Emits an event to open the given entity.
+    fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: &MigrisEntity) {
+        let event = Event::new(EventVariant::OpenEntity(entity.clone()));
+        EventManager::emit(window, cx, event);
     }
 
     /// Returns the selected entity, if any.
@@ -197,6 +230,12 @@ impl ConnectionPanelState {
     }
 }
 
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+enum ConnectionPanelAction {
+    OpenSelectedEntity,
+}
+
 #[derive(IntoElement)]
 pub struct ConnectionPanel {
     /// The state for the connection panel.
@@ -213,9 +252,7 @@ impl ConnectionPanel {
 }
 
 impl RenderOnce for ConnectionPanel {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let state = self.state.read(cx);
-
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         v_flex()
             .key_context(CONNECTION_PANEL)
             .gap_1()
@@ -228,7 +265,7 @@ impl RenderOnce for ConnectionPanel {
                     .px_1()
                     .w_full()
                     .child(
-                        Input::new(&state.search_input)
+                        Input::new(&self.state.read(cx).search_input)
                             .cleanable(true)
                             .prefix(Icon::from(IconName::Search)),
                     )
@@ -244,53 +281,59 @@ impl RenderOnce for ConnectionPanel {
                             }),
                     ),
             )
-            .child(tree::tree(&state.tree, move |idx, entry, _, window, cx| {
-                let entity = self.state.read(cx).entity(&entry.item().id);
+            .child({
+                let state = self.state.clone();
+                tree::tree(&state.read(cx).tree, move |idx, entry, _, window, cx| {
+                    let entity = state.read(cx).entity(&entry.item().id);
 
-                ListItem::new(idx)
-                    .ml_1()
-                    .mr_4()
-                    .p_0()
-                    .text_sm()
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .px_1()
-                            .when(entry.depth() > 0, |this| this.pl(px(22.0) * entry.depth()))
-                            .when(entity.is_schema(), |this| {
-                                this.child(Icon::from(
-                                    if self.state.read(cx).is_expanded(&entry.item().id) {
-                                        IconName::ChevronDown
-                                    } else {
-                                        IconName::ChevronRight
-                                    },
-                                ))
-                            })
-                            .child(Icon::from(match entity.kind {
-                                EntityKind::Schema => IconName::Database,
-                                EntityKind::Table => IconName::Grid3x3,
-                                EntityKind::View => IconName::Eye,
-                            }))
-                            .child(text_ellipsis(entry.item().label.clone())),
-                    )
-                    .on_click(window.listener_for(&self.state, {
-                        let entry = entry.clone();
-                        move |state, _, window, cx| {
-                            let id = entry.item().id.clone();
-                            let entity = state.entity(&id);
+                    ListItem::new(idx)
+                        .ml_1()
+                        .mr_4()
+                        .p_0()
+                        .text_sm()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .px_1()
+                                .when(entry.depth() > 0, |this| this.pl(px(22.0) * entry.depth()))
+                                .when(entity.is_schema(), |this| {
+                                    this.child(Icon::from(
+                                        if state.read(cx).is_expanded(&entry.item().id) {
+                                            IconName::ChevronDown
+                                        } else {
+                                            IconName::ChevronRight
+                                        },
+                                    ))
+                                })
+                                .child(Icon::from(match entity.kind {
+                                    EntityKind::Schema => IconName::Database,
+                                    EntityKind::Table => IconName::Grid3x3,
+                                    EntityKind::View => IconName::Eye,
+                                }))
+                                .child(text_ellipsis(entry.item().label.clone())),
+                        )
+                        .on_click(window.listener_for(&state, {
+                            let entry = entry.clone();
+                            move |state, _, window, cx| {
+                                let id = entry.item().id.clone();
+                                let entity = state.entity(&id);
 
-                            match entity.kind {
-                                EntityKind::Schema => state.toggle_expand(id),
-                                EntityKind::Table => {
-                                    let event =
-                                        Event::new(EventVariant::OpenEntity(entity.clone()));
-                                    EventManager::emit(window, cx, event);
+                                match entity.kind {
+                                    EntityKind::Schema => state.toggle_expand(id),
+                                    EntityKind::Table => {
+                                        state.open_entity(window, cx, entity);
+                                    }
+                                    _ => {}
                                 }
-                                _ => {}
                             }
-                        }
-                    }))
-            }))
+                        }))
+                })
+            })
+            .on_action(
+                window.listener_for(&self.state, |state, action, window, cx| {
+                    state.handle_action(window, cx, action);
+                }),
+            )
     }
 }
 

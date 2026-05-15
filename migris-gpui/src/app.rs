@@ -15,6 +15,7 @@ use migris::Entity as MigrisEntity;
 use crate::{
     assets,
     components::{
+        self,
         icon::IconName,
         panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
         settings,
@@ -32,6 +33,7 @@ use crate::{
 /// This should always (and only) be called at the application's entry point.
 pub fn init(window: &mut Window, cx: &mut App) {
     assets::Themes::init(cx);
+    components::init(cx);
 
     // Set globals for use throughout the application.
     cx.set_global(AppSettings::default());
@@ -140,6 +142,8 @@ impl Application {
                 let variant = TabVariant::Table(entity);
                 tab_panel.add_tab(window, cx, variant);
             }
+
+            cx.notify();
         })
     }
 

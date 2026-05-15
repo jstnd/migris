@@ -10,6 +10,11 @@ pub mod panels;
 pub mod settings;
 pub mod table;
 
+/// Initializes configuration for components.
+pub fn init(cx: &mut App) {
+    panels::init(cx);
+}
+
 pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: String) -> AlertDialog {
     dialog
         .title(
