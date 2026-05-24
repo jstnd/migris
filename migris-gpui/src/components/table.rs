@@ -1,6 +1,7 @@
 use futures_util::StreamExt;
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, RenderOnce, Styled, Window, div,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, Pixels, RenderOnce, Styled,
+    Window, div, px,
 };
 use gpui_component::{
     ActiveTheme, Sizable,
@@ -13,6 +14,9 @@ use crate::components::text_ellipsis;
 
 const INIT_BATCH_SIZE: usize = 1_000;
 const LOAD_BATCH_SIZE: usize = 100;
+
+const MIN_COLUMN_WIDTH: Pixels = px(100.0);
+const MAX_COLUMN_WIDTH: Pixels = px(250.0);
 
 struct QueryTableDelegate {
     /// The query result to display in the table.
@@ -36,20 +40,52 @@ impl QueryTableDelegate {
     }
 
     /// Initializes the table with the given [`QueryResult`].
-    fn init(&mut self, result: QueryResult) {
-        self.columns = result
-            .data
+    fn init(&mut self, cx: &mut App, result: QueryResult) {
+        self.result = Some(result);
+        self.has_more_data = true;
+        self.load(INIT_BATCH_SIZE);
+        self.build_columns(cx);
+    }
+
+    /// Builds the columns for the table.
+    fn build_columns(&mut self, cx: &mut App) {
+        let Some(data) = self.data() else {
+            return;
+        };
+
+        let mut columns: Vec<Column> = data
             .columns()
             .iter()
             .map(|column| {
                 let name = column.name().to_owned();
-                Column::new(&name, &name)
+                let width = (name.len() * cx.theme().font_size * 0.60)
+                    .clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
+
+                Column::new(&name, &name).width(width)
             })
             .collect();
 
-        self.result = Some(result);
-        self.has_more_data = true;
-        self.load(INIT_BATCH_SIZE);
+        // Determine default column widths from a small batch of data.
+        for row in data.rows().iter().take(LOAD_BATCH_SIZE) {
+            for (idx, column) in columns.iter_mut().enumerate() {
+                // Skip if column has already reached the max default width.
+                if column.width >= MAX_COLUMN_WIDTH {
+                    continue;
+                }
+
+                // Determine the width from the value's length.
+                let value = row.values[idx].to_string();
+                let width = (value.len() * cx.theme().font_size * 0.60)
+                    .clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
+
+                // Set the column's new width.
+                if width > column.width {
+                    column.width = width;
+                }
+            }
+        }
+
+        self.columns = columns;
     }
 
     /// Returns a reference to the query data.
@@ -67,7 +103,6 @@ impl QueryTableDelegate {
             return;
         };
 
-        //
         tokio::task::block_in_place(|| {
             Handle::current().block_on(async {
                 if let Some(stream) = &mut result.stream {
@@ -96,6 +131,14 @@ impl TableDelegate for QueryTableDelegate {
 
     fn columns_count(&self, _: &App) -> usize {
         self.columns.len()
+    }
+
+    fn rows_count(&self, _: &App) -> usize {
+        let Some(data) = self.data() else {
+            return 0;
+        };
+
+        data.rows().len()
     }
 
     fn has_more(&self, _: &App) -> bool {
@@ -145,14 +188,6 @@ impl TableDelegate for QueryTableDelegate {
             .text_color(cx.theme().foreground)
             .child(text_ellipsis(column.name.clone()))
     }
-
-    fn rows_count(&self, _: &App) -> usize {
-        let Some(data) = self.data() else {
-            return 0;
-        };
-
-        data.rows().len()
-    }
 }
 
 /// The state used with a [`QueryTable`].
@@ -179,7 +214,7 @@ impl QueryTableState {
     /// Initializes the table with the given [`QueryResult`].
     pub fn init(&mut self, cx: &mut Context<Self>, result: QueryResult) {
         self.table.update(cx, |table, cx| {
-            table.delegate_mut().init(result);
+            table.delegate_mut().init(cx, result);
             table.refresh(cx);
         });
     }
