@@ -666,18 +666,28 @@ impl ConnectionDialogState {
     }
 
     /// Adds a new default connection.
-    fn add_connection(&self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
+    fn add_connection(&mut self, cx: &mut Context<Self>, folder: Option<ConnectionFolderId>) {
         let mut connection = Connection::default();
         connection.set_folder(folder);
+
+        // Expand the folder the new connection is being added to.
+        if let Some(folder) = folder {
+            self.expanded.insert(folder);
+        }
 
         ConnectionManager::global_mut(cx).add_connection(connection);
         self.load_tree(cx);
     }
 
     /// Adds a new default folder.
-    fn add_folder(&self, cx: &mut Context<Self>, parent: Option<ConnectionFolderId>) {
+    fn add_folder(&mut self, cx: &mut Context<Self>, parent: Option<ConnectionFolderId>) {
         let mut folder = ConnectionFolder::default();
         folder.set_parent(parent);
+
+        // Expand the parent the new folder is being added to.
+        if let Some(parent) = parent {
+            self.expanded.insert(parent);
+        }
 
         ConnectionManager::global_mut(cx).add_folder(folder);
         self.load_tree(cx);
