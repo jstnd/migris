@@ -15,6 +15,7 @@ use gpui_component::{
     progress::ProgressCircle,
     resizable::{h_resizable, resizable_panel},
     select::SelectState,
+    separator::Separator,
     tree::{self, TreeItem, TreeState},
     v_flex,
 };
@@ -203,7 +204,18 @@ fn connection_tree(
                                 .id(("connection-item", idx))
                                 .gap_1()
                                 .px_1()
-                                .when(entry.depth() > 0, |this| this.pl(px(18.0) * entry.depth()))
+                                .when(entry.depth() > 0, |mut this| {
+                                    for _ in 0..entry.depth() {
+                                        this = this.child(
+                                            Separator::vertical()
+                                                .w_3p5()
+                                                .h(px(23.0))
+                                                .color(cx.theme().foreground.opacity(0.2)),
+                                        );
+                                    }
+
+                                    this
+                                })
                                 .when_some(connection, |this, connection| {
                                     let folder = connection.folder();
 
