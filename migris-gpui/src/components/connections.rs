@@ -918,10 +918,12 @@ impl ConnectionDialogState {
         self.opening = false;
         self.expanded.clear();
         self.close_editor(cx);
-        self.load_tree(cx);
         self.tree.update(cx, |tree, cx| {
             tree.set_selected_item(None, cx);
         });
+
+        // Reload the tree last after resetting state.
+        self.load_tree(cx);
     }
 
     /// Saves the connection that is active within the connection editor.
