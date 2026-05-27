@@ -33,8 +33,12 @@ impl Entity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Decode, sqlx::Encode)]
 #[sqlx(rename_all = "lowercase")]
 pub enum EntityKind {
+    Event,
+    Function,
+    Procedure,
     Schema,
     Table,
+    Trigger,
     View,
 }
 

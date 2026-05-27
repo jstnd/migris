@@ -2,6 +2,7 @@ use gpui::{App, Hsla, IntoElement, RenderOnce, Styled, Window};
 use gpui_component::{ActiveTheme, IconNamed};
 
 pub enum IconName {
+    Calendar,
     ChevronDown,
     ChevronRight,
     CircleX2,
@@ -18,16 +19,20 @@ pub enum IconName {
     Play,
     Plus,
     Save,
+    ScrollText,
     Search,
     Settings,
+    SquareFunction,
     TextCursorInput,
     Trash,
     X,
+    Zap,
 }
 
 impl IconNamed for IconName {
     fn path(self) -> gpui::SharedString {
         match self {
+            Self::Calendar => "icons/calendar.svg",
             Self::ChevronDown => "icons/chevron-down.svg",
             Self::ChevronRight => "icons/chevron-right.svg",
             Self::CircleX2 => "icons/circle-x-2.svg",
@@ -44,11 +49,14 @@ impl IconNamed for IconName {
             Self::Play => "icons/play.svg",
             Self::Plus => "icons/plus.svg",
             Self::Save => "icons/save.svg",
+            Self::ScrollText => "icons/scroll-text.svg",
             Self::Search => "icons/search.svg",
             Self::Settings => "icons/settings.svg",
+            Self::SquareFunction => "icons/square-function.svg",
             Self::TextCursorInput => "icons/text-cursor-input.svg",
             Self::Trash => "icons/trash.svg",
             Self::X => "icons/x.svg",
+            Self::Zap => "icons/zap.svg",
         }
         .into()
     }

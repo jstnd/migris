@@ -6,7 +6,7 @@ use gpui::{
     Subscription, Window, prelude::FluentBuilder, px,
 };
 use gpui_component::{
-    ActiveTheme, Icon, Sizable, WindowExt,
+    ActiveTheme, Sizable, WindowExt,
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputEvent, InputState},
@@ -18,7 +18,11 @@ use gpui_component::{
 use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
-    components::{connections, icon::IconName, text_ellipsis},
+    components::{
+        connections,
+        icon::{Icon, IconName},
+        text_ellipsis,
+    },
     events::{Event, EventManager, EventVariant},
     shared,
     tabs::{TabVariant, TabView},
@@ -267,7 +271,7 @@ impl RenderOnce for ConnectionPanel {
                     .child(
                         Input::new(&self.state.read(cx).search_input)
                             .cleanable(true)
-                            .prefix(Icon::from(IconName::Search)),
+                            .prefix(Icon::new(cx, IconName::Search)),
                     )
                     .child(
                         Button::new("button-add-connection")
@@ -297,7 +301,8 @@ impl RenderOnce for ConnectionPanel {
                                 .px_1()
                                 .when(entry.depth() > 0, |this| this.pl(px(22.0) * entry.depth()))
                                 .when(entity.is_schema(), |this| {
-                                    this.child(Icon::from(
+                                    this.child(Icon::new(
+                                        cx,
                                         if state.read(cx).is_expanded(&entry.item().id) {
                                             IconName::ChevronDown
                                         } else {
@@ -305,11 +310,18 @@ impl RenderOnce for ConnectionPanel {
                                         },
                                     ))
                                 })
-                                .child(Icon::from(match entity.kind {
-                                    EntityKind::Schema => IconName::Database,
-                                    EntityKind::Table => IconName::Grid3x3,
-                                    EntityKind::View => IconName::Eye,
-                                }))
+                                .child(Icon::new(
+                                    cx,
+                                    match entity.kind {
+                                        EntityKind::Event => IconName::Calendar,
+                                        EntityKind::Function => IconName::SquareFunction,
+                                        EntityKind::Procedure => IconName::ScrollText,
+                                        EntityKind::Schema => IconName::Database,
+                                        EntityKind::Table => IconName::Grid3x3,
+                                        EntityKind::Trigger => IconName::Zap,
+                                        EntityKind::View => IconName::Eye,
+                                    },
+                                ))
                                 .child(text_ellipsis(entry.item().label.clone())),
                         )
                         .on_click(window.listener_for(&state, {
@@ -464,7 +476,7 @@ impl RenderOnce for TabPanel {
                                         .id(("panel-tab", idx))
                                         .gap_1p5()
                                         .items_center()
-                                        .child(Icon::from(tab.icon()).xsmall())
+                                        .child(Icon::new(cx, tab.icon()))
                                         .child(tab.label(cx))
                                         .child(
                                             Button::new(("button-close", idx))
