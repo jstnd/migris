@@ -4,7 +4,7 @@ use gpui::{
     Window, div, px,
 };
 use gpui_component::{
-    ActiveTheme, Sizable,
+    ActiveTheme, Sizable, h_flex,
     table::{Column, DataTable, TableDelegate, TableState},
 };
 use migris::data::{QueryData, QueryResult};
@@ -183,9 +183,16 @@ impl TableDelegate for QueryTableDelegate {
     ) -> impl IntoElement {
         let column = &self.columns[col_ix];
 
-        div()
+        h_flex()
             .w_full()
+            .gap_1()
             .text_color(cx.theme().foreground)
+            .child(
+                div()
+                    .text_color(cx.theme().muted_foreground)
+                    .text_xs()
+                    .child((col_ix + 1).to_string()),
+            )
             .child(text_ellipsis(column.name.clone()))
     }
 }
