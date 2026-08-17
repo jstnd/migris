@@ -1,6 +1,6 @@
 use gpui::{
     Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Window, prelude::FluentBuilder,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
     ActiveTheme, Disableable, Sizable,
@@ -15,7 +15,7 @@ use crate::{
     components::{
         editor::{Editor, EditorState},
         icon::{Icon, IconName},
-        table::{QueryTable, QueryTableState},
+        table::{QueryTable, QueryTableEvent, QueryTableState},
     },
     events::{Event, EventManager, RunSqlEvent},
 };
@@ -35,6 +35,11 @@ struct QueryTabState {
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
 
+    /// The subscriptions that handle events originating from the query tables, such as sorting.
+    /// 
+    /// These are saved here since we want to drop the subscriptions when new queries are ran.
+    table_subscriptions: Vec<Subscription>,
+
     /// The index of the active table tab.
     active_table: usize,
 }
@@ -47,6 +52,7 @@ impl QueryTabState {
         Self {
             editor,
             tables: Vec::new(),
+            table_subscriptions: Vec::new(),
             active_table: 0,
         }
     }
@@ -78,6 +84,7 @@ impl QueryTabState {
     /// Clears the results from the tab.
     fn clear_results(&mut self) {
         self.tables.clear();
+        self.table_subscriptions.clear();
         self.active_table = 0;
     }
 
@@ -96,7 +103,20 @@ impl QueryTabState {
             .on_result(move |result, window, cx| {
                 this.update(cx, |this, cx| {
                     let table = cx.new(|cx| QueryTableState::with_result(window, cx, result));
+                    let subscription = cx.subscribe(&table, |_, table, event, cx| {
+                        match event {
+                            QueryTableEvent::Sort => {
+                                // When sorting within a result table on a query tab, we just want to perform the sort in-memory
+                                // as attempting to hit the database again for the sorted data would be quite complex.
+                                table.update(cx, |table, cx| {
+                                    table.sort_data(cx);
+                                });
+                            }
+                        }
+                    });
+
                     this.tables.push(table);
+                    this.table_subscriptions.push(subscription);
                 });
             });
 

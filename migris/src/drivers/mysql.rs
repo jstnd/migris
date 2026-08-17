@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use futures_util::StreamExt;
 use sqlx::{
@@ -98,7 +98,7 @@ impl Driver for MySqlConnection {
             .collect();
 
         Ok(QueryResult {
-            data: QueryData::new(columns, rows?),
+            data: Arc::new(QueryData::new(columns, rows?)),
             execute_time: elapsed.as_millis(),
             stream: None,
         })
@@ -121,7 +121,7 @@ impl Driver for MySqlConnection {
         };
 
         Ok(QueryResult {
-            data: QueryData::new(columns, Vec::new()),
+            data: Arc::new(QueryData::new(columns, Vec::new())),
             execute_time: 0,
             stream: Some(Box::pin(stream)),
         })

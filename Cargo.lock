@@ -3713,6 +3713,7 @@ dependencies = [
  "gpui",
  "gpui-component",
  "gpui_platform",
+ "indexmap",
  "keyring-core",
  "migris",
  "rust-embed",

@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
     Bytes(Vec<u8>),
@@ -21,7 +21,7 @@ pub enum Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let display = match self {
-            Value::Null => String::from(""),
+            Value::Null => String::new(),
             Value::Bytes(value) => String::from_utf8(value.to_vec()).unwrap_or_default(),
             Value::Date(value) => value.to_string(),
             Value::Decimal(value) => value.to_string(),

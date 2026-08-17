@@ -12,6 +12,7 @@ futures-util = { workspace = true }
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed" }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", features = ["tree-sitter-sql"] }
+indexmap = "2.14.0"
 keyring-core = "1.0.0"
 rust-embed = "8.11.0"
 serde = { workspace = true }

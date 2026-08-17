@@ -2,6 +2,8 @@ use gpui::{App, Hsla, IntoElement, RenderOnce, Styled, Window};
 use gpui_component::{ActiveTheme, IconNamed};
 
 pub enum IconName {
+    ArrowDownWideNarrow,
+    ArrowUpNarrowWide,
     Calendar,
     ChevronDown,
     ChevronRight,
@@ -32,6 +34,8 @@ pub enum IconName {
 impl IconNamed for IconName {
     fn path(self) -> gpui::SharedString {
         match self {
+            Self::ArrowDownWideNarrow => "icons/arrow-down-wide-narrow.svg",
+            Self::ArrowUpNarrowWide => "icons/arrow-up-narrow-wide.svg",
             Self::Calendar => "icons/calendar.svg",
             Self::ChevronDown => "icons/chevron-down.svg",
             Self::ChevronRight => "icons/chevron-right.svg",

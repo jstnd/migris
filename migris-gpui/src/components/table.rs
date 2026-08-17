@@ -1,16 +1,21 @@
+use std::{cmp::Ordering, sync::Arc};
+
 use futures_util::StreamExt;
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, Pixels, RenderOnce, Styled,
-    Window, div, px,
+    App, AppContext, Context, DefiniteLength, Entity, EventEmitter, IntoElement, ParentElement,
+    Pixels, RenderOnce, SharedString, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Sizable, h_flex,
-    table::{Column, DataTable, TableDelegate, TableState},
+    table::{Column, ColumnSort, DataTable, TableDelegate, TableEvent, TableState},
 };
+use indexmap::IndexMap;
 use migris::data::{QueryData, QueryResult};
-use tokio::runtime::Handle;
 
-use crate::components::text_ellipsis;
+use crate::components::{
+    icon::{Icon, IconName},
+    text_ellipsis,
+};
 
 const INIT_BATCH_SIZE: usize = 1_000;
 const LOAD_BATCH_SIZE: usize = 100;
@@ -25,8 +30,17 @@ struct QueryTableDelegate {
     /// The columns for the table.
     columns: Vec<Column>,
 
+    /// Tracks the sort direction and order for columns being actively sorted.
+    column_sorts: IndexMap<SharedString, ColumnSort>,
+
     /// Whether more data is available to load into the table.
     has_more_data: bool,
+
+    /// The order to display rows inside the table.
+    ///
+    /// This is used for an efficient way of visually sorting the data within the table without
+    /// having to expensively move row data around, and also to preserve the original data order.
+    row_display_order: Option<Vec<usize>>,
 }
 
 impl QueryTableDelegate {
@@ -35,7 +49,9 @@ impl QueryTableDelegate {
         Self {
             result: None,
             columns: Vec::new(),
+            column_sorts: IndexMap::new(),
             has_more_data: false,
+            row_display_order: None,
         }
     }
 
@@ -104,13 +120,15 @@ impl QueryTableDelegate {
         };
 
         tokio::task::block_in_place(|| {
-            Handle::current().block_on(async {
-                if let Some(stream) = &mut result.stream {
+            tokio::runtime::Handle::current().block_on(async {
+                if let Some(stream) = &mut result.stream
+                    && let Some(data) = Arc::get_mut(&mut result.data)
+                {
                     let mut data_stream = stream.take(rows);
 
                     while let Some(row) = data_stream.next().await {
                         if let Ok(row) = row {
-                            result.data.push_row(row);
+                            data.push_row(row);
                         }
                     }
 
@@ -121,6 +139,34 @@ impl QueryTableDelegate {
                 }
             });
         });
+    }
+
+    /// Sorts the column with the given index.
+    ///
+    /// This will only update the sort direction of the column.
+    fn sort_column(&mut self, column_idx: usize) {
+        let column = &self.columns[column_idx];
+        let current_sort = if let Some(sort) = self.column_sorts.get(&column.key) {
+            *sort
+        } else {
+            ColumnSort::Default
+        };
+
+        match current_sort {
+            ColumnSort::Default => {
+                // Move unsorted (default) column to ascending order.
+                self.column_sorts
+                    .insert(column.key.clone(), ColumnSort::Ascending);
+            }
+            ColumnSort::Ascending => {
+                // Move ascending order column to descending order.
+                self.column_sorts[&column.key] = ColumnSort::Descending;
+            }
+            ColumnSort::Descending => {
+                // Move descending order column to unsorted (default).
+                self.column_sorts.shift_remove(&column.key);
+            }
+        }
     }
 }
 
@@ -168,6 +214,12 @@ impl TableDelegate for QueryTableDelegate {
             return div();
         };
 
+        let row_ix = if let Some(display_order) = &self.row_display_order {
+            display_order[row_ix]
+        } else {
+            row_ix
+        };
+
         let row = &data.rows()[row_ix];
 
         div()
@@ -182,19 +234,60 @@ impl TableDelegate for QueryTableDelegate {
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
         let column = &self.columns[col_ix];
+        let column_sort = self.column_sorts.get_full(&column.key);
 
         h_flex()
             .w_full()
-            .gap_1()
-            .text_color(cx.theme().foreground)
+            .justify_between()
             .child(
-                div()
-                    .text_color(cx.theme().muted_foreground)
-                    .text_xs()
-                    .child((col_ix + 1).to_string()),
+                h_flex()
+                    .w(DefiniteLength::Fraction(0.9))
+                    .gap_1()
+                    .text_color(cx.theme().foreground)
+                    .child(
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .text_xs()
+                            .child((col_ix + 1).to_string()),
+                    )
+                    .child(text_ellipsis(column.name.clone())),
             )
-            .child(text_ellipsis(column.name.clone()))
+            .when_some(column_sort, |this, (idx, _, sort)| {
+                this.child(if *sort == ColumnSort::Ascending {
+                    div()
+                        .relative()
+                        .pt_1()
+                        .child(Icon::new(cx, IconName::ArrowUpNarrowWide))
+                        .child(
+                            div()
+                                .absolute()
+                                .top(px(-4.0))
+                                .right(px(-2.0))
+                                .text_color(cx.theme().muted_foreground)
+                                .text_xs()
+                                .child((idx + 1).to_string()),
+                        )
+                } else {
+                    div()
+                        .relative()
+                        .pb_1()
+                        .child(Icon::new(cx, IconName::ArrowDownWideNarrow))
+                        .child(
+                            div()
+                                .absolute()
+                                .bottom(px(-4.0))
+                                .right(px(-2.0))
+                                .text_color(cx.theme().muted_foreground)
+                                .text_xs()
+                                .child((idx + 1).to_string()),
+                        )
+                })
+            })
     }
+}
+
+pub enum QueryTableEvent {
+    Sort,
 }
 
 /// The state used with a [`QueryTable`].
@@ -203,11 +296,21 @@ pub struct QueryTableState {
     table: Entity<TableState<QueryTableDelegate>>,
 }
 
+impl EventEmitter<QueryTableEvent> for QueryTableState {}
+
 impl QueryTableState {
     /// Creates a new [`QueryTableState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let delegate = QueryTableDelegate::new();
         let table = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
+
+        cx.subscribe(&table, |this, _, event, cx| {
+            if let TableEvent::SelectColumn(column_idx) = event {
+                this.sort_column(cx, *column_idx);
+            }
+        })
+        .detach();
+
         Self { table }
     }
 
@@ -223,6 +326,103 @@ impl QueryTableState {
         self.table.update(cx, |table, cx| {
             table.delegate_mut().init(cx, result);
             table.refresh(cx);
+        });
+    }
+
+    /// Returns an SQL ORDER BY string generated from the currently sorted columns.
+    pub fn order_by(&self, cx: &App) -> String {
+        let column_sorts = &self.table.read(cx).delegate().column_sorts;
+        if column_sorts.is_empty() {
+            return String::new();
+        }
+
+        let mut orders = Vec::new();
+        for (name, sort) in self.table.read(cx).delegate().column_sorts.iter() {
+            orders.push(format!(
+                "{} {}",
+                name,
+                if *sort == ColumnSort::Ascending {
+                    "ASC"
+                } else {
+                    "DESC"
+                }
+            ));
+        }
+
+        format!("ORDER BY {}", orders.join(", "))
+    }
+
+    /// Sorts the column with the given index.
+    ///
+    /// This will handle updating the column's sort direction and
+    /// emit an event for implementers of this component to handle.
+    fn sort_column(&mut self, cx: &mut Context<Self>, column_idx: usize) {
+        self.table.update(cx, |table, _| {
+            table.delegate_mut().sort_column(column_idx);
+        });
+
+        cx.emit(QueryTableEvent::Sort);
+    }
+
+    /// Sorts the data currently loaded within the table using the currently sorted columns.
+    ///
+    /// Note that this function sorts the data in-memory, so slowdowns may be a worry for larger amounts of data.
+    pub fn sort_data(&mut self, cx: &mut Context<Self>) {
+        self.table.update(cx, |table, cx| {
+            let Some(result) = &table.delegate().result else {
+                return;
+            };
+
+            // Remove any saved display order if there are no currently sorted columns.
+            if table.delegate().column_sorts.is_empty() {
+                table.delegate_mut().row_display_order = None;
+                return;
+            }
+
+            let column_sorts = table.delegate().column_sorts.clone();
+            let data = result.data.clone();
+            cx.spawn(async move |table, cx| {
+                let order = tokio::task::spawn_blocking(move || {
+                    let mut order: Vec<usize> = (0..data.rows().len()).collect();
+                    order.sort_unstable_by(|a, b| {
+                        let mut ordering = Ordering::Equal;
+                        let a_row = &data.rows()[*a];
+                        let b_row = &data.rows()[*b];
+
+                        for (name, sort) in column_sorts.iter() {
+                            let column_idx = data.column_index(name);
+                            ordering = ordering.then_with(|| {
+                                let a_value = &a_row.values[column_idx];
+                                let b_value = &b_row.values[column_idx];
+                                let partial_ord = if let ColumnSort::Ascending = sort {
+                                    a_value.partial_cmp(b_value)
+                                } else {
+                                    b_value.partial_cmp(a_value)
+                                };
+
+                                partial_ord.unwrap_or(Ordering::Equal)
+                            });
+
+                            if ordering != Ordering::Equal {
+                                break;
+                            }
+                        }
+
+                        ordering
+                    });
+
+                    order
+                })
+                .await
+                .unwrap();
+
+                _ = table.update(cx, move |table, cx| {
+                    table.delegate_mut().row_display_order = Some(order);
+                    table.refresh(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
         });
     }
 }
