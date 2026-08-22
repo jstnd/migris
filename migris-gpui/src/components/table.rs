@@ -57,10 +57,14 @@ impl QueryTableDelegate {
 
     /// Initializes the table with the given [`QueryResult`].
     fn init(&mut self, cx: &mut App, result: QueryResult) {
+        let is_reinit = self.result.is_some();
         self.result = Some(result);
         self.has_more_data = true;
         self.load(INIT_BATCH_SIZE);
-        self.build_columns(cx);
+
+        if !is_reinit {
+            self.build_columns(cx);
+        }
     }
 
     /// Builds the columns for the table.
