@@ -386,39 +386,33 @@ impl QueryTableState {
             let column_sorts = table.delegate().column_sorts.clone();
             let data = result.data.clone();
             cx.spawn(async move |table, cx| {
-                let order = tokio::task::spawn_blocking(move || {
-                    let mut order: Vec<usize> = (0..data.rows().len()).collect();
-                    order.sort_unstable_by(|a, b| {
-                        let mut ordering = Ordering::Equal;
-                        let a_row = &data.rows()[*a];
-                        let b_row = &data.rows()[*b];
+                let mut order: Vec<usize> = (0..data.rows().len()).collect();
+                order.sort_unstable_by(|a, b| {
+                    let mut ordering = Ordering::Equal;
+                    let a_row = &data.rows()[*a];
+                    let b_row = &data.rows()[*b];
 
-                        for (name, sort) in column_sorts.iter() {
-                            let column_idx = data.column_index(name);
-                            ordering = ordering.then_with(|| {
-                                let a_value = &a_row.values[column_idx];
-                                let b_value = &b_row.values[column_idx];
-                                let partial_ord = if let ColumnSort::Ascending = sort {
-                                    a_value.partial_cmp(b_value)
-                                } else {
-                                    b_value.partial_cmp(a_value)
-                                };
+                    for (name, sort) in column_sorts.iter() {
+                        let column_idx = data.column_index(name);
+                        ordering = ordering.then_with(|| {
+                            let a_value = &a_row.values[column_idx];
+                            let b_value = &b_row.values[column_idx];
+                            let partial_ord = if let ColumnSort::Ascending = sort {
+                                a_value.partial_cmp(b_value)
+                            } else {
+                                b_value.partial_cmp(a_value)
+                            };
 
-                                partial_ord.unwrap_or(Ordering::Equal)
-                            });
+                            partial_ord.unwrap_or(Ordering::Equal)
+                        });
 
-                            if ordering != Ordering::Equal {
-                                break;
-                            }
+                        if ordering != Ordering::Equal {
+                            break;
                         }
+                    }
 
-                        ordering
-                    });
-
-                    order
-                })
-                .await
-                .unwrap();
+                    ordering
+                });
 
                 _ = table.update(cx, move |table, cx| {
                     table.delegate_mut().row_display_order = Some(order);
