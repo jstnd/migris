@@ -24,7 +24,6 @@ pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: String) -> AlertDi
                 .child("Error"),
         )
         .description(error)
-        .overlay_closable(true)
 }
 
 pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> impl IntoElement {

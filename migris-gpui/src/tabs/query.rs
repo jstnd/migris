@@ -36,7 +36,7 @@ struct QueryTabState {
     tables: Vec<Entity<QueryTableState>>,
 
     /// The subscriptions that handle events originating from the query tables, such as sorting.
-    /// 
+    ///
     /// These are saved here since we want to drop the subscriptions when new queries are ran.
     table_subscriptions: Vec<Subscription>,
 
@@ -174,7 +174,6 @@ impl QueryTab {
                             h_flex().pl_1().child(
                                 DropdownButton::new("run-buttons")
                                     .disabled(is_editor_empty)
-                                    .compact()
                                     .small()
                                     .button(
                                         Button::new("run-button")
@@ -213,7 +212,7 @@ impl QueryTab {
                         .child(Editor::new(&state.editor).context_menu(move |menu, _, cx| {
                             menu.menu_with_icon_and_disabled(
                                 "Run",
-                                Icon::primary(cx, IconName::Play).disabled(is_editor_empty),
+                                Icon::danger(cx, IconName::Play).disabled(is_editor_empty),
                                 Box::new(QueryTabAction::RunSql),
                                 is_editor_empty,
                             )

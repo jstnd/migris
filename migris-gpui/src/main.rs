@@ -35,8 +35,8 @@ fn main() -> anyhow::Result<()> {
     let app = gpui_platform::application().with_assets(assets::Assets);
     app.run(|cx| {
         gpui_component::init(cx);
-        gpui_component::Theme::global_mut(cx).scrollbar_show =
-            gpui_component::scroll::ScrollbarShow::Always;
+        gpui_component::Theme::global_mut(cx).scrollbar_mode =
+            gpui_component::scroll::ScrollbarMode::Always;
 
         cx.on_app_quit(|_| {
             keyring_core::unset_default_store();
