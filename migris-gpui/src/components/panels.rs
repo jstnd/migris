@@ -381,7 +381,7 @@ impl TabPanelState {
         self.tabs.push(tab);
 
         // Open the newly added tab.
-        self.open_tab(self.tabs.len() - 1);
+        self.open_tab(window, cx, self.tabs.len() - 1);
     }
 
     /// Returns the index for the tab displaying the given entity, if one is found.
@@ -401,9 +401,14 @@ impl TabPanelState {
     }
 
     /// Opens the tab at the given index.
-    pub fn open_tab(&mut self, idx: usize) {
+    pub fn open_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
         self.active_tab = idx;
         self.scroll_handle.scroll_to_item(idx);
+
+        // Focus the opened tab.
+        self.active_tab().update(cx, |tab, cx| {
+            tab.focus(window, cx);
+        });
     }
 
     /// Returns a reference to the active tab.
@@ -518,8 +523,8 @@ impl RenderOnce for TabPanel {
                                 )),
                         ),
                     )
-                    .on_click(window.listener_for(&self.state, |state, idx, _, _| {
-                        state.open_tab(*idx);
+                    .on_click(window.listener_for(&self.state, |state, idx, window, cx| {
+                        state.open_tab(window, cx, *idx);
                     })),
             )
             .when(!state.tabs.is_empty(), |this| {

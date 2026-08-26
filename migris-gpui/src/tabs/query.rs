@@ -147,6 +147,15 @@ impl QueryTab {
         }
     }
 
+    /// Focuses the content in the tab.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.editor.update(cx, |editor, cx| {
+                editor.focus(window, cx);
+            });
+        });
+    }
+
     /// Returns the label for the tab.
     pub fn label(&self) -> SharedString {
         self.label.clone()

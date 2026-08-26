@@ -30,6 +30,13 @@ impl EditorState {
         Self { editor }
     }
 
+    /// Focuses the editor input.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        self.editor.update(cx, |editor, cx| {
+            editor.focus(window, cx);
+        });
+    }
+
     /// Returns whether the editor is empty, excluding whitespace.
     pub fn is_empty(&self, cx: &App) -> bool {
         self.editor.read(cx).value().trim().is_empty()

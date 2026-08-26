@@ -52,6 +52,16 @@ impl TabView {
         }
     }
 
+    /// Focuses the content in the tab view.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        match &self.tab {
+            TabState::Query(tab) => tab.update(cx, |tab, cx| {
+                tab.focus(window, cx);
+            }),
+            TabState::Table(_) => {}
+        }
+    }
+
     /// Returns the icon for the tab view.
     pub fn icon(&self) -> IconName {
         match self.variant {

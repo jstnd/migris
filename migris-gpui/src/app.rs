@@ -137,7 +137,7 @@ impl Application {
             let existing_tab = tab_panel.entity_tab(cx, &entity);
 
             if let Some(tab_idx) = existing_tab {
-                tab_panel.open_tab(tab_idx);
+                tab_panel.open_tab(window, cx, tab_idx);
             } else {
                 let variant = TabVariant::Table(entity);
                 tab_panel.add_tab(window, cx, variant);
