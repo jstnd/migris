@@ -7,6 +7,7 @@ use gpui::{
 };
 use gpui_component::{
     ActiveTheme, Sizable, h_flex,
+    progress::Progress,
     table::{Column, ColumnSort, DataTable, TableDelegate, TableEvent, TableState},
 };
 use indexmap::IndexMap;
@@ -41,6 +42,9 @@ struct QueryTableDelegate {
     /// Whether more data is available to load into the table.
     has_more_data: bool,
 
+    /// Whether loading work, such as sorting, is being performed.
+    loading: bool,
+
     /// The order to display rows inside the table.
     ///
     /// This is used for an efficient way of visually sorting the data within the table without
@@ -57,6 +61,7 @@ impl QueryTableDelegate {
             columns: Vec::new(),
             column_sorts: IndexMap::new(),
             has_more_data: false,
+            loading: false,
             row_display_order: None,
         }
     }
@@ -149,6 +154,7 @@ impl QueryTableDelegate {
             return;
         };
 
+        self.loading = true;
         cx.spawn(async move |table, cx| {
             let mut stream = stream;
             let mut rows = Vec::with_capacity(num_rows);
@@ -179,6 +185,7 @@ impl QueryTableDelegate {
                 }
 
                 table.delegate_mut().has_more_data = has_more_data;
+                table.delegate_mut().loading = false;
                 cx.notify();
             });
         })
@@ -232,7 +239,7 @@ impl TableDelegate for QueryTableDelegate {
     }
 
     fn has_more(&self, _: &App) -> bool {
-        self.has_more_data
+        !self.loading && self.has_more_data
     }
 
     fn load_more(&mut self, _: &mut Window, cx: &mut Context<TableState<Self>>) {
@@ -408,6 +415,12 @@ impl QueryTableState {
     /// This will handle updating the column's sort direction and
     /// emit an event for implementers of this component to handle.
     fn sort_column(&mut self, cx: &mut Context<Self>, column_idx: usize) {
+        // Only perform the work for sorting the column if the
+        // table is not already doing work that would conflict.
+        if self.table.read(cx).delegate().loading {
+            return;
+        }
+
         self.table.update(cx, |table, _| {
             table.delegate_mut().sort_column(column_idx);
         });
@@ -432,6 +445,8 @@ impl QueryTableState {
 
             let column_sorts = table.delegate().column_sorts.clone();
             let data = result.data.clone();
+            table.delegate_mut().loading = true;
+
             cx.spawn(async move |table, cx| {
                 let order = tokio::task::spawn_blocking(move || {
                     let mut order: Vec<usize> = (0..data.rows().len()).collect();
@@ -468,6 +483,7 @@ impl QueryTableState {
                 .unwrap();
 
                 _ = table.update(cx, move |table, cx| {
+                    table.delegate_mut().loading = false;
                     table.delegate_mut().row_display_order = Some(order);
                     table.refresh(cx);
                     cx.notify();
@@ -496,7 +512,28 @@ impl QueryTable {
 impl RenderOnce for QueryTable {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
+        let table = state.table.read(cx);
 
-        DataTable::new(&state.table).bordered(false).small()
+        div()
+            .relative()
+            .size_full()
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .child(DataTable::new(&state.table).bordered(false).small()),
+            )
+            .when(table.delegate().loading, |this| {
+                this.child(
+                    div().absolute().top_0().left_0().w_full().child(
+                        Progress::new("table-loading")
+                            .color(cx.theme().primary)
+                            .loading(true)
+                            .xsmall(),
+                    ),
+                )
+            })
     }
 }
