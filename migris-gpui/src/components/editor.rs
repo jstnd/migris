@@ -4,7 +4,10 @@ use gpui::{
     App, AppContext, Context, Entity, IntoElement, RenderOnce, SharedString, Styled, Window,
     prelude::FluentBuilder,
 };
-use gpui_component::{input, native_menu::NativeMenu};
+use gpui_component::{
+    input::{self, TabSize},
+    native_menu::NativeMenu,
+};
 
 /// The state used with an [`Editor`].
 pub struct EditorState {
@@ -15,7 +18,15 @@ pub struct EditorState {
 impl EditorState {
     /// Creates a new [`EditorState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let editor = cx.new(|cx| input::EditorState::new(window, cx).language("sql"));
+        let editor = cx.new(|cx| {
+            input::EditorState::new(window, cx)
+                .language("sql")
+                .tab_size(TabSize {
+                    tab_size: 4,
+                    hard_tabs: false,
+                })
+        });
+
         Self { editor }
     }
 
