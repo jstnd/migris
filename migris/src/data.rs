@@ -40,10 +40,6 @@ impl QueryData {
     pub fn rows(&self) -> &Vec<Row> {
         &self.rows
     }
-
-    pub fn push_row(&mut self, row: Row) {
-        self.rows.push(row);
-    }
 }
 
 pub struct QueryResult {
@@ -55,4 +51,13 @@ pub struct QueryResult {
 
     /// The optional stream where the data will be sourced from.
     pub stream: Option<Pin<Box<dyn Stream<Item = MigrisResult<Row>> + Send>>>,
+}
+
+impl QueryResult {
+    /// Extends the data stored in the result with the given rows.
+    pub fn extend(&mut self, rows: Vec<Row>) {
+        if let Some(data) = Arc::get_mut(&mut self.data) {
+            data.rows.extend(rows);
+        }
+    }
 }

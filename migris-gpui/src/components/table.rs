@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::cmp::Ordering;
 
 use futures_util::StreamExt;
 use gpui::{
@@ -27,6 +27,11 @@ struct QueryTableDelegate {
     /// The query result to display in the table.
     result: Option<QueryResult>,
 
+    /// The buffered query result to initialize before displaying in the table.
+    ///
+    /// This will be moved to [`Self::result`] after it is initialized with data.
+    result_buffer: Option<QueryResult>,
+
     /// The columns for the table.
     columns: Vec<Column>,
 
@@ -48,6 +53,7 @@ impl QueryTableDelegate {
     fn new() -> Self {
         Self {
             result: None,
+            result_buffer: None,
             columns: Vec::new(),
             column_sorts: IndexMap::new(),
             has_more_data: false,
@@ -56,14 +62,24 @@ impl QueryTableDelegate {
     }
 
     /// Initializes the table with the given [`QueryResult`].
-    fn init(&mut self, cx: &mut App, result: QueryResult) {
-        let is_reinit = self.result.is_some();
-        self.result = Some(result);
-        self.has_more_data = true;
-        self.load(INIT_BATCH_SIZE);
+    fn init(&mut self, cx: &mut Context<TableState<Self>>, result: QueryResult) {
+        let is_first_load = self.result.is_none();
+        let is_result_stream = result.stream.is_some();
 
-        if !is_reinit {
-            self.build_columns(cx);
+        if is_result_stream {
+            // For results using a stream, we need to load initial data to show in the table.
+            // We place the result into a buffer here so the data loading can be performed
+            // before we show the result inside the table.
+            self.result_buffer = Some(result);
+            self.has_more_data = true;
+            self.load(cx, INIT_BATCH_SIZE, is_first_load);
+        } else {
+            // Results without a stream can be shown directly inside the table without pre-loading.
+            self.result = Some(result);
+
+            if is_first_load {
+                self.build_columns(cx);
+            }
         }
     }
 
@@ -118,31 +134,55 @@ impl QueryTableDelegate {
     }
 
     /// Loads a number of rows from the query result's stream.
-    fn load(&mut self, rows: usize) {
-        let Some(result) = &mut self.result else {
+    ///
+    /// This will prioritize loading from the buffered result if one exists.
+    fn load(&mut self, cx: &mut Context<TableState<Self>>, num_rows: usize, is_first_load: bool) {
+        let result = if let Some(result) = &mut self.result_buffer {
+            result
+        } else if let Some(result) = &mut self.result {
+            result
+        } else {
             return;
         };
 
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                if let Some(stream) = &mut result.stream
-                    && let Some(data) = Arc::get_mut(&mut result.data)
-                {
-                    let mut data_stream = stream.take(rows);
+        let Some(stream) = result.stream.take() else {
+            return;
+        };
 
-                    while let Some(row) = data_stream.next().await {
-                        if let Ok(row) = row {
-                            data.push_row(row);
-                        }
-                    }
+        cx.spawn(async move |table, cx| {
+            let mut stream = stream;
+            let mut rows = Vec::with_capacity(num_rows);
 
-                    // Determine if the stream has more data to load after.
-                    let peekable = stream.peekable();
-                    futures_util::pin_mut!(peekable);
-                    self.has_more_data = peekable.peek().await.is_some();
+            for _ in 0..num_rows {
+                if let Some(Ok(row)) = stream.next().await {
+                    rows.push(row);
                 }
+            }
+
+            // Determine if the stream has more data to load after.
+            let mut peekable = Box::pin(stream.peekable());
+            let has_more_data = peekable.as_mut().peek().await.is_some();
+
+            _ = table.update(cx, move |table, cx| {
+                if let Some(mut result) = table.delegate_mut().result_buffer.take() {
+                    result.extend(rows);
+                    result.stream = Some(peekable);
+                    table.delegate_mut().result = Some(result);
+                } else if let Some(result) = &mut table.delegate_mut().result {
+                    result.extend(rows);
+                    result.stream = Some(peekable);
+                }
+
+                if is_first_load {
+                    table.delegate_mut().build_columns(cx);
+                    table.refresh(cx);
+                }
+
+                table.delegate_mut().has_more_data = has_more_data;
+                cx.notify();
             });
-        });
+        })
+        .detach();
     }
 
     /// Sorts the column with the given index.
@@ -195,8 +235,8 @@ impl TableDelegate for QueryTableDelegate {
         self.has_more_data
     }
 
-    fn load_more(&mut self, _: &mut Window, _: &mut Context<TableState<Self>>) {
-        self.load(LOAD_BATCH_SIZE);
+    fn load_more(&mut self, _: &mut Window, cx: &mut Context<TableState<Self>>) {
+        self.load(cx, LOAD_BATCH_SIZE, false);
     }
 
     fn load_more_threshold(&self) -> usize {
@@ -328,8 +368,15 @@ impl QueryTableState {
     /// Initializes the table with the given [`QueryResult`].
     pub fn init(&mut self, cx: &mut Context<Self>, result: QueryResult) {
         self.table.update(cx, |table, cx| {
+            let is_result_stream = result.stream.is_some();
             table.delegate_mut().init(cx, result);
-            table.refresh(cx);
+
+            // If the query result is not using a stream for its data, we want to refresh
+            // the table here after initialization. Otherwise, the table refresh is delegated
+            // to after initial data is loaded from the stream inside the table delegate.
+            if !is_result_stream {
+                table.refresh(cx);
+            }
         });
     }
 
@@ -386,33 +433,39 @@ impl QueryTableState {
             let column_sorts = table.delegate().column_sorts.clone();
             let data = result.data.clone();
             cx.spawn(async move |table, cx| {
-                let mut order: Vec<usize> = (0..data.rows().len()).collect();
-                order.sort_unstable_by(|a, b| {
-                    let mut ordering = Ordering::Equal;
-                    let a_row = &data.rows()[*a];
-                    let b_row = &data.rows()[*b];
+                let order = tokio::task::spawn_blocking(move || {
+                    let mut order: Vec<usize> = (0..data.rows().len()).collect();
+                    order.sort_unstable_by(|a, b| {
+                        let mut ordering = Ordering::Equal;
+                        let a_row = &data.rows()[*a];
+                        let b_row = &data.rows()[*b];
 
-                    for (name, sort) in column_sorts.iter() {
-                        let column_idx = data.column_index(name);
-                        ordering = ordering.then_with(|| {
-                            let a_value = &a_row.values[column_idx];
-                            let b_value = &b_row.values[column_idx];
-                            let partial_ord = if let ColumnSort::Ascending = sort {
-                                a_value.partial_cmp(b_value)
-                            } else {
-                                b_value.partial_cmp(a_value)
-                            };
+                        for (name, sort) in column_sorts.iter() {
+                            let column_idx = data.column_index(name);
+                            ordering = ordering.then_with(|| {
+                                let a_value = &a_row.values[column_idx];
+                                let b_value = &b_row.values[column_idx];
+                                let partial_ord = if let ColumnSort::Ascending = sort {
+                                    a_value.partial_cmp(b_value)
+                                } else {
+                                    b_value.partial_cmp(a_value)
+                                };
 
-                            partial_ord.unwrap_or(Ordering::Equal)
-                        });
+                                partial_ord.unwrap_or(Ordering::Equal)
+                            });
 
-                        if ordering != Ordering::Equal {
-                            break;
+                            if ordering != Ordering::Equal {
+                                break;
+                            }
                         }
-                    }
 
-                    ordering
-                });
+                        ordering
+                    });
+
+                    order
+                })
+                .await
+                .unwrap();
 
                 _ = table.update(cx, move |table, cx| {
                     table.delegate_mut().row_display_order = Some(order);
