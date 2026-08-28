@@ -3,20 +3,23 @@ use migris::Entity as MigrisEntity;
 
 use crate::{
     components::icon::IconName,
-    tabs::{query::QueryTab, table::TableTab},
+    tabs::{query::QueryTab, table::TableTab, view::ViewTab},
 };
 
 pub mod query;
 pub mod table;
+pub mod view;
 
 enum TabState {
     Query(Entity<QueryTab>),
     Table(Entity<TableTab>),
+    View(Entity<ViewTab>),
 }
 
 pub enum TabVariant {
     Query(usize),
     Table(MigrisEntity),
+    View(MigrisEntity),
 }
 
 pub struct TabView {
@@ -39,6 +42,10 @@ impl TabView {
                 let tab = cx.new(|cx| TableTab::new(window, cx, entity.clone()));
                 TabState::Table(tab)
             }
+            TabVariant::View(entity) => {
+                let tab = cx.new(|cx| ViewTab::new(window, cx, entity.clone()));
+                TabState::View(tab)
+            }
         };
 
         Self { tab, variant }
@@ -49,6 +56,7 @@ impl TabView {
         match &self.tab {
             TabState::Query(tab) => tab.read(cx).content(window, cx).into_any_element(),
             TabState::Table(tab) => tab.read(cx).content(window, cx).into_any_element(),
+            TabState::View(tab) => tab.read(cx).content(window, cx).into_any_element(),
         }
     }
 
@@ -59,6 +67,7 @@ impl TabView {
                 tab.focus(window, cx);
             }),
             TabState::Table(_) => {}
+            TabState::View(_) => {}
         }
     }
 
@@ -67,6 +76,7 @@ impl TabView {
         match self.variant {
             TabVariant::Query(_) => IconName::Code,
             TabVariant::Table(_) => IconName::Grid3x3,
+            TabVariant::View(_) => IconName::Eye,
         }
     }
 
@@ -75,6 +85,7 @@ impl TabView {
         match &self.tab {
             TabState::Query(tab) => tab.read(cx).label(),
             TabState::Table(tab) => tab.read(cx).label(),
+            TabState::View(tab) => tab.read(cx).label(),
         }
     }
 

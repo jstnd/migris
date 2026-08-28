@@ -332,7 +332,7 @@ impl RenderOnce for ConnectionPanel {
 
                                 match entity.kind {
                                     EntityKind::Schema => state.toggle_expand(id),
-                                    EntityKind::Table => {
+                                    EntityKind::Table | EntityKind::View => {
                                         state.open_entity(window, cx, entity);
                                     }
                                     _ => {}
@@ -395,6 +395,7 @@ impl TabPanelState {
                 match tab.variant() {
                     TabVariant::Query(_) => false,
                     TabVariant::Table(tab_entity) => tab_entity == entity,
+                    TabVariant::View(tab_entity) => tab_entity == entity,
                 }
             })
             .map(|(idx, _)| idx)

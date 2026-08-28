@@ -10,7 +10,7 @@ use gpui_component::{
     resizable::{h_resizable, resizable_panel},
     v_flex,
 };
-use migris::Entity as MigrisEntity;
+use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
     assets,
@@ -139,7 +139,12 @@ impl Application {
             if let Some(tab_idx) = existing_tab {
                 tab_panel.open_tab(window, cx, tab_idx);
             } else {
-                let variant = TabVariant::Table(entity);
+                let variant = match entity.kind {
+                    EntityKind::Table => TabVariant::Table(entity),
+                    EntityKind::View => TabVariant::View(entity),
+                    _ => unreachable!(),
+                };
+
                 tab_panel.add_tab(window, cx, variant);
             }
 
