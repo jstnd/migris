@@ -17,6 +17,7 @@ pub enum IconName {
     FolderOpen,
     FolderPlus,
     Grid3x3,
+    KeyRound,
     MousePointer2,
     Play,
     Plus,
@@ -49,6 +50,7 @@ impl IconNamed for IconName {
             Self::FolderOpen => "icons/folder-open.svg",
             Self::FolderPlus => "icons/folder-plus.svg",
             Self::Grid3x3 => "icons/grid-3x3.svg",
+            Self::KeyRound => "icons/key-round.svg",
             Self::MousePointer2 => "icons/mouse-pointer-2.svg",
             Self::Play => "icons/play.svg",
             Self::Plus => "icons/plus.svg",
@@ -74,31 +76,38 @@ pub struct Icon {
 }
 
 impl Icon {
-    /// Creates a new [`Icon`].
+    /// Creates a new [`Icon`] with the default color.
     pub fn new(cx: &App, icon: IconName) -> Self {
+        Self::colored(icon, cx.theme().foreground)
+    }
+
+    /// Creates a new [`Icon`] with the given color.
+    pub fn colored(icon: IconName, color: Hsla) -> Self {
         Self {
             icon,
-            color: cx.theme().foreground,
+            color,
             disabled: false,
         }
     }
 
-    /// Creates a new [`Icon`] with the danger color.
-    pub fn danger(cx: &App, icon: IconName) -> Self {
-        Self {
-            icon,
-            color: cx.theme().danger,
-            disabled: false,
-        }
-    }
-
-    /// Creates a new [`Icon`] with the primary color.
+    /// Creates a new [`Icon`] with the theme's primary color.
     pub fn primary(cx: &App, icon: IconName) -> Self {
-        Self {
-            icon,
-            color: cx.theme().button_primary,
-            disabled: false,
-        }
+        Self::colored(icon, cx.theme().button_primary)
+    }
+
+    /// Creates a new [`Icon`] with the theme's green color.
+    pub fn green(cx: &App, icon: IconName) -> Self {
+        Self::colored(icon, cx.theme().green)
+    }
+
+    /// Creates a new [`Icon`] with the theme's red color.
+    pub fn red(cx: &App, icon: IconName) -> Self {
+        Self::colored(icon, cx.theme().red)
+    }
+
+    /// Creates a new [`Icon`] with the theme's yellow color.
+    pub fn yellow(cx: &App, icon: IconName) -> Self {
+        Self::colored(icon, cx.theme().yellow)
     }
 
     /// Sets the disabled state for the icon.

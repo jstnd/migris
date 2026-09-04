@@ -21,7 +21,10 @@ use crate::{
         settings,
     },
     connections::{ConnectionId, ConnectionManager},
-    events::{EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, RunSqlEvent},
+    events::{
+        EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent,
+        RunSqlEvent,
+    },
     settings::AppSettings,
     state::AppState,
     tabs::TabVariant,
@@ -78,6 +81,9 @@ impl Application {
         };
 
         match &event.variant {
+            EventVariant::LoadEntity(inner_event) => {
+                self.load_entity(window, cx, inner_event.clone(), event.callbacks.clone());
+            }
             EventVariant::OpenConnection(id) => {
                 self.open_connection(window, cx, *id, event.callbacks.clone())
             }
@@ -88,6 +94,31 @@ impl Application {
         }
 
         EventManager::global_mut(cx).complete(id);
+    }
+
+    fn load_entity(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        event: LoadEntityEvent,
+        callbacks: EventCallbacks,
+    ) {
+        // TODO: remove this unwrap
+        let driver = self.connection.as_ref().unwrap().driver.clone();
+
+        cx.spawn_in(window, async move |_, cx| {
+            let result = driver.entity_data(&event.entity).await;
+            _ = cx.update(|window, cx| match result {
+                Ok(data) => {
+                    (event.on_result)(window, cx, data);
+                    callbacks.on_complete(window, cx);
+                }
+                Err(err) => {
+                    callbacks.on_error(window, cx, &err.to_string());
+                }
+            })
+        })
+        .detach();
     }
 
     fn open_connection(
@@ -104,7 +135,7 @@ impl Application {
                 Ok(driver) => driver,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(&err.to_string(), window, cx);
+                        callbacks.on_error(window, cx, &err.to_string());
                     });
                     return;
                 }
@@ -114,7 +145,7 @@ impl Application {
                 Ok(entities) => entities,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(&err.to_string(), window, cx);
+                        callbacks.on_error(window, cx, &err.to_string());
                     });
                     return;
                 }
@@ -177,7 +208,7 @@ impl Application {
                     Ok(result) => {
                         _ = this.update_in(cx, |this, window, cx| {
                             if let Some(on_result) = event.on_result.clone() {
-                                on_result(result, window, cx)
+                                on_result(result, window, cx);
                             }
 
                             if event.show_progress {

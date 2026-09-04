@@ -1,15 +1,17 @@
-use std::{sync::Arc, time::Instant};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Instant};
 
 use futures_util::StreamExt;
 use sqlx::{
-    Column as SqlxColumn, Executor, MySqlPool, TypeInfo,
+    Column as SqlxColumn, Executor, MySqlPool, Row as SqlxRow, TypeInfo,
     mysql::{MySqlColumn, MySqlTypeInfo},
 };
 
 use crate::{
-    Column, ColumnType, Driver, Entity, MigrisError, MigrisResult, Row,
+    Column, ColumnType, Driver, Entity, EntityKind, MigrisError, MigrisResult, Row,
     data::{QueryData, QueryResult},
+    entity::{EntityData, TableData},
     mysql::MySqlDataType,
+    schema::{Index, IndexKind},
 };
 
 pub struct MySqlConnection {
@@ -81,6 +83,63 @@ impl Driver for MySqlConnection {
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
 
         Ok(entities)
+    }
+
+    async fn entity_data(&self, entity: &Entity) -> MigrisResult<EntityData> {
+        let data = match entity.kind {
+            EntityKind::Table => EntityData::Table(TableData {
+                indexes: self.indexes(entity).await?,
+            }),
+            _ => {
+                return Err(MigrisError::GeneralError(
+                    "attempted to retrieve data for unsupported entity kind".to_string(),
+                ));
+            }
+        };
+
+        Ok(data)
+    }
+
+    async fn indexes(&self, entity: &Entity) -> MigrisResult<Vec<Index>> {
+        let query = r#"
+            SELECT
+                INDEX_NAME,
+                COLUMN_NAME,
+                CASE
+                    WHEN INDEX_NAME = 'PRIMARY' THEN 'PRIMARY'
+                    WHEN NON_UNIQUE = 0 THEN 'UNIQUE'
+                    ELSE 'REGULAR'
+                END AS INDEX_KIND
+            FROM information_schema.STATISTICS
+            WHERE
+                TABLE_SCHEMA = ? AND
+                TABLE_NAME = ?
+            ORDER BY
+                INDEX_NAME,
+                SEQ_IN_INDEX
+        "#;
+
+        let mut indexes: HashMap<String, Index> = HashMap::new();
+        let mut stream = sqlx::query(query)
+            .bind(&entity.schema)
+            .bind(&entity.name)
+            .fetch(&self.pool);
+
+        while let Some(row) = stream.next().await {
+            let row = row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+            let index_name: String = row.get("INDEX_NAME");
+
+            indexes
+                .entry(index_name.clone())
+                .or_insert(Index::new(
+                    IndexKind::from_str(row.get("INDEX_KIND"))?,
+                    index_name,
+                ))
+                .columns
+                .push(row.get("COLUMN_NAME"));
+        }
+
+        Ok(indexes.into_values().collect())
     }
 
     async fn query(&self, query: &str) -> MigrisResult<QueryResult> {

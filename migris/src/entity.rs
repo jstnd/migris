@@ -1,7 +1,14 @@
+use crate::schema::Index;
+
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct Entity {
+    /// The type of database object represented by the entity.
     pub kind: EntityKind,
+
+    /// The schema containing the entity.
     pub schema: String,
+
+    /// The name of the entity within its schema.
     pub name: String,
 }
 
@@ -30,6 +37,11 @@ impl Entity {
     }
 }
 
+#[derive(Debug)]
+pub enum EntityData {
+    Table(TableData),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Decode, sqlx::Encode)]
 #[sqlx(rename_all = "lowercase")]
 pub enum EntityKind {
@@ -53,5 +65,19 @@ where
 
     fn type_info() -> <DB as sqlx::Database>::TypeInfo {
         <String as sqlx::Type<DB>>::type_info()
+    }
+}
+
+// TODO: migrate this into Table struct inside schema.rs
+#[derive(Debug)]
+pub struct TableData {
+    /// The indexes associated with the table.
+    pub(crate) indexes: Vec<Index>,
+}
+
+impl TableData {
+    /// Returns the indexes associated with the table.
+    pub fn indexes(&self) -> &[Index] {
+        &self.indexes
     }
 }

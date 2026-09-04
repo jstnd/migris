@@ -221,7 +221,7 @@ impl QueryTab {
                         .child(Editor::new(&state.editor).context_menu(move |menu, _, cx| {
                             menu.menu_with_icon_and_disabled(
                                 "Run",
-                                Icon::danger(cx, IconName::Play).disabled(is_editor_empty),
+                                Icon::primary(cx, IconName::Play).disabled(is_editor_empty),
                                 Box::new(QueryTabAction::RunSql),
                                 is_editor_empty,
                             )

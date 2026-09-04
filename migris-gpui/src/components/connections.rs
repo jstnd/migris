@@ -379,7 +379,7 @@ fn connection_tree(
                     )
                     .menu_with_icon(
                         "Delete",
-                        Icon::danger(cx, IconName::Trash),
+                        Icon::red(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteConnection(id)),
                     )
                     .when(!is_root_item, |menu| {
@@ -402,7 +402,7 @@ fn connection_tree(
                     )
                     .menu_with_icon(
                         "Delete",
-                        Icon::danger(cx, IconName::Trash),
+                        Icon::red(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteFolder(id)),
                     )
                     .when(!is_root_item, |menu| {
@@ -858,7 +858,7 @@ impl ConnectionDialogState {
                 })
                 .on_error({
                     let this = this.clone();
-                    move |error, window, cx| {
+                    move |window, cx, error| {
                         let error = error.to_owned();
                         window.open_alert_dialog(cx, move |dialog, _, cx| {
                             components::error_dialog(dialog, cx, error.clone())

@@ -1,4 +1,6 @@
-use crate::{Value, csv::CsvDataType, mysql::MySqlDataType};
+use std::str::FromStr;
+
+use crate::{MigrisError, Value, csv::CsvDataType, mysql::MySqlDataType};
 
 #[derive(Clone, Debug)]
 pub struct Column {
@@ -59,6 +61,65 @@ impl ColumnType {
             },
             ColumnType::MySql(data_type) => data_type.clone(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct Index {
+    /// The names of the columns included in the index.
+    pub(crate) columns: Vec<String>,
+
+    /// The type of the index.
+    pub(crate) kind: IndexKind,
+
+    /// The name of the index.
+    pub(crate) name: String,
+}
+
+impl Index {
+    /// Creates a new [`Index`].
+    pub fn new(kind: IndexKind, name: impl Into<String>) -> Self {
+        Self {
+            columns: Vec::new(),
+            kind,
+            name: name.into(),
+        }
+    }
+
+    /// Returns the names of the columns included in the index.
+    pub fn columns(&self) -> &[String] {
+        &self.columns
+    }
+
+    /// Returns the type of the index.
+    pub fn kind(&self) -> IndexKind {
+        self.kind
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum IndexKind {
+    Primary,
+    Unique,
+    #[default]
+    Regular,
+}
+
+impl FromStr for IndexKind {
+    type Err = MigrisError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "PRIMARY" => Self::Primary,
+            "REGULAR" => Self::Regular,
+            "UNIQUE" => Self::Unique,
+            _ => {
+                return Err(MigrisError::GeneralError(format!(
+                    "failed to convert '{}' to index kind",
+                    s
+                )));
+            }
+        })
     }
 }
 

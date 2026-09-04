@@ -1,9 +1,9 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 
 use futures_util::StreamExt;
 use gpui::{
-    App, AppContext, Context, DefiniteLength, Entity, EventEmitter, IntoElement, ParentElement,
-    Pixels, RenderOnce, SharedString, Styled, Window, div, prelude::FluentBuilder, px,
+    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, Pixels, RenderOnce,
+    SharedString, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Sizable, h_flex,
@@ -11,7 +11,10 @@ use gpui_component::{
     table::{Column, ColumnSort, DataTable, TableDelegate, TableEvent, TableState},
 };
 use indexmap::IndexMap;
-use migris::data::{QueryData, QueryResult};
+use migris::{
+    Index, IndexKind,
+    data::{QueryData, QueryResult},
+};
 
 use crate::components::{
     icon::{Icon, IconName},
@@ -36,6 +39,9 @@ struct QueryTableDelegate {
     /// The columns for the table.
     columns: Vec<Column>,
 
+    /// Tracks the index kind to display for columns.
+    column_index_map: HashMap<SharedString, IndexKind>,
+
     /// Tracks the sort direction and order for columns being actively sorted.
     column_sorts: IndexMap<SharedString, ColumnSort>,
 
@@ -59,6 +65,7 @@ impl QueryTableDelegate {
             result: None,
             result_buffer: None,
             columns: Vec::new(),
+            column_index_map: HashMap::new(),
             column_sorts: IndexMap::new(),
             has_more_data: false,
             loading: false,
@@ -127,6 +134,24 @@ impl QueryTableDelegate {
         }
 
         self.columns = columns;
+    }
+
+    /// Builds the column index map using the given indexes.
+    fn build_column_index_map(&mut self, indexes: &[Index]) {
+        // Retrieve all index kinds for each column.
+        let column_indexes: HashMap<&str, Vec<IndexKind>> =
+            indexes.iter().fold(HashMap::new(), |mut map, index| {
+                for column in index.columns() {
+                    map.entry(column).or_default().push(index.kind());
+                }
+                map
+            });
+
+        // Using the previous map, find the highest-priority index kind to display for each column.
+        self.column_index_map = column_indexes
+            .iter()
+            .map(|(key, value)| (SharedString::new(key), *value.iter().min().unwrap()))
+            .collect();
     }
 
     /// Returns a reference to the query data.
@@ -285,15 +310,18 @@ impl TableDelegate for QueryTableDelegate {
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
         let column = &self.columns[col_ix];
+        let column_index_kind = self.column_index_map.get(&column.key);
         let column_sort = self.column_sorts.get_full(&column.key);
 
         h_flex()
             .w_full()
+            .items_center()
             .justify_between()
             .child(
                 h_flex()
-                    .w(DefiniteLength::Fraction(0.9))
                     .gap_1()
+                    .min_w_0()
+                    .items_center()
                     .text_color(cx.theme().foreground)
                     .child(
                         div()
@@ -303,37 +331,50 @@ impl TableDelegate for QueryTableDelegate {
                     )
                     .child(text_ellipsis(column.name.clone())),
             )
-            .when_some(column_sort, |this, (idx, _, sort)| {
-                this.child(if *sort == ColumnSort::Ascending {
-                    div()
-                        .relative()
-                        .pt_1()
-                        .child(Icon::new(cx, IconName::ArrowUpNarrowWide))
-                        .child(
+            .child(
+                h_flex()
+                    .gap_1()
+                    .pl_0p5()
+                    .items_center()
+                    .when_some(column_index_kind, |this, kind| {
+                        this.child(match kind {
+                            IndexKind::Primary => Icon::yellow(cx, IconName::KeyRound),
+                            IndexKind::Regular => Icon::green(cx, IconName::KeyRound),
+                            IndexKind::Unique => Icon::red(cx, IconName::KeyRound),
+                        })
+                    })
+                    .when_some(column_sort, |this, (idx, _, sort)| {
+                        this.child(if *sort == ColumnSort::Ascending {
                             div()
-                                .absolute()
-                                .top(px(-4.0))
-                                .right(px(-2.0))
-                                .text_color(cx.theme().muted_foreground)
-                                .text_xs()
-                                .child((idx + 1).to_string()),
-                        )
-                } else {
-                    div()
-                        .relative()
-                        .pb_1()
-                        .child(Icon::new(cx, IconName::ArrowDownWideNarrow))
-                        .child(
+                                .relative()
+                                .pt_1()
+                                .child(Icon::new(cx, IconName::ArrowUpNarrowWide))
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .top(px(-4.0))
+                                        .right(px(-2.0))
+                                        .text_color(cx.theme().muted_foreground)
+                                        .text_xs()
+                                        .child((idx + 1).to_string()),
+                                )
+                        } else {
                             div()
-                                .absolute()
-                                .bottom(px(-4.0))
-                                .right(px(-2.0))
-                                .text_color(cx.theme().muted_foreground)
-                                .text_xs()
-                                .child((idx + 1).to_string()),
-                        )
-                })
-            })
+                                .relative()
+                                .pb_1()
+                                .child(Icon::new(cx, IconName::ArrowDownWideNarrow))
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .bottom(px(-4.0))
+                                        .right(px(-2.0))
+                                        .text_color(cx.theme().muted_foreground)
+                                        .text_xs()
+                                        .child((idx + 1).to_string()),
+                                )
+                        })
+                    }),
+            )
     }
 }
 
@@ -384,6 +425,14 @@ impl QueryTableState {
             if !is_result_stream {
                 table.refresh(cx);
             }
+        });
+    }
+
+    /// Builds the column index map from the given indexes.
+    pub fn build_column_index_map(&mut self, cx: &mut Context<Self>, indexes: &[Index]) {
+        self.table.update(cx, |table, cx| {
+            table.delegate_mut().build_column_index_map(indexes);
+            cx.notify();
         });
     }
 
@@ -523,7 +572,7 @@ impl RenderOnce for QueryTable {
                     .top_0()
                     .left_0()
                     .size_full()
-                    .child(DataTable::new(&state.table).bordered(false).small()),
+                    .child(DataTable::new(&state.table).bordered(false).xsmall()),
             )
             .when(table.delegate().loading, |this| {
                 this.child(

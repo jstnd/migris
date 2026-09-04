@@ -20,7 +20,7 @@ pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: String) -> AlertDi
         .title(
             h_flex()
                 .gap_2()
-                .child(Icon::danger(cx, IconName::CircleX2))
+                .child(Icon::red(cx, IconName::CircleX2))
                 .child("Error"),
         )
         .description(error)
@@ -36,9 +36,5 @@ pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> imp
 }
 
 pub fn text_ellipsis(element: impl IntoElement) -> impl IntoElement {
-    div()
-        .overflow_hidden()
-        .text_ellipsis()
-        .whitespace_nowrap()
-        .child(element)
+    div().truncate().child(element)
 }

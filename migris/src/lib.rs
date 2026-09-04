@@ -14,9 +14,9 @@ use std::sync::Arc;
 
 pub use connectors::{Connector, ConnectorData, ConnectorKind};
 pub use drivers::Driver;
-pub use entity::{Entity, EntityKind};
+pub use entity::{Entity, EntityData, EntityKind};
 pub use options::{ReadOptions, WriteOptions};
-pub use schema::{Column, ColumnFlag, ColumnType, Row, Schema, Table};
+pub use schema::{Column, ColumnFlag, ColumnType, Index, IndexKind, Row, Schema, Table};
 pub use value::Value;
 
 use crate::{connection::ConnectionOptions, mysql::MySqlConnection};
