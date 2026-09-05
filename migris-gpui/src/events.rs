@@ -89,7 +89,7 @@ impl Event {
     }
 
     /// Sets the callback used when the event errors.
-    pub fn on_error(mut self, f: impl Fn(&mut Window, &mut App, &str) + 'static) -> Self {
+    pub fn on_error(mut self, f: impl Fn(&mut Window, &mut App, String) + 'static) -> Self {
         self.callbacks.on_error = Some(Rc::new(f));
         self
     }
@@ -101,7 +101,7 @@ pub struct EventCallbacks {
     on_complete: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 
     /// An optional callback used when the event errors.
-    on_error: Option<Rc<dyn Fn(&mut Window, &mut App, &str) + 'static>>,
+    on_error: Option<Rc<dyn Fn(&mut Window, &mut App, String) + 'static>>,
 }
 
 impl EventCallbacks {
@@ -121,7 +121,7 @@ impl EventCallbacks {
     }
 
     /// Calls the callback used when the event errors, if one exists.
-    pub fn on_error(&self, window: &mut Window, cx: &mut App, error: &str) {
+    pub fn on_error(&self, window: &mut Window, cx: &mut App, error: String) {
         if let Some(on_error) = self.on_error.clone() {
             on_error(window, cx, error);
         }

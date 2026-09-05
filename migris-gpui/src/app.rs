@@ -116,7 +116,7 @@ impl Application {
                     callbacks.on_complete(window, cx);
                 }
                 Err(err) => {
-                    callbacks.on_error(window, cx, &err.to_string());
+                    callbacks.on_error(window, cx, err.to_string());
                 }
             })
         })
@@ -137,7 +137,7 @@ impl Application {
                 Ok(driver) => driver,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(window, cx, &err.to_string());
+                        callbacks.on_error(window, cx, err.to_string());
                     });
                     return;
                 }
@@ -147,7 +147,7 @@ impl Application {
                 Ok(entities) => entities,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(window, cx, &err.to_string());
+                        callbacks.on_error(window, cx, err.to_string());
                     });
                     return;
                 }
@@ -221,7 +221,7 @@ impl Application {
                         }
                     }
                     Err(err) => {
-                        callbacks.on_error(window, cx, &err.to_string());
+                        callbacks.on_error(window, cx, err.to_string());
                     }
                 });
             }

@@ -83,9 +83,8 @@ impl ViewTabState {
             },
         ))
         .on_error(|window, cx, error| {
-            let error = error.to_owned();
             window.open_alert_dialog(cx, move |dialog, _, cx| {
-                components::error_dialog(dialog, cx, error.clone())
+                components::error_dialog(dialog, cx, &error)
             });
         });
 

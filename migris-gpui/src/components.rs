@@ -15,7 +15,7 @@ pub fn init(cx: &mut App) {
     panels::init(cx);
 }
 
-pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: String) -> AlertDialog {
+pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: &str) -> AlertDialog {
     dialog
         .title(
             h_flex()
@@ -23,7 +23,7 @@ pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: String) -> AlertDi
                 .child(Icon::red(cx, IconName::CircleX2))
                 .child("Error"),
         )
-        .description(error)
+        .description(SharedString::new(error))
 }
 
 pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> impl IntoElement {
