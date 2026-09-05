@@ -1,8 +1,12 @@
 use gpui::{App, AppContext, Context, Entity, IntoElement, SharedString, Window};
+use gpui_component::WindowExt;
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
-    components::table::{QueryTable, QueryTableEvent, QueryTableState},
+    components::{
+        self,
+        table::{QueryTable, QueryTableEvent, QueryTableState},
+    },
     events::{Event, EventManager, RunSqlEvent},
 };
 
@@ -70,16 +74,21 @@ impl ViewTabState {
     /// Refreshes the data inside the tab.
     fn refresh(&self, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity();
-        let event = RunSqlEvent::stream(migris::sql::select_all(
-            &self.entity,
-            &self.table.read(cx).order_by(cx),
+        let event = Event::new(RunSqlEvent::stream(
+            migris::sql::select_all(&self.entity, &self.table.read(cx).order_by(cx)),
+            move |_, cx, result| {
+                this.update(cx, |this, cx| {
+                    this.load_table(cx, result);
+                });
+            },
         ))
-        .on_result(move |result, _, cx| {
-            this.update(cx, |this, cx| {
-                this.load_table(cx, result);
+        .on_error(|window, cx, error| {
+            let error = error.to_owned();
+            window.open_alert_dialog(cx, move |dialog, _, cx| {
+                components::error_dialog(dialog, cx, error.clone())
             });
         });
 
-        EventManager::emit(window, cx, Event::new(event));
+        EventManager::emit(window, cx, event);
     }
 }

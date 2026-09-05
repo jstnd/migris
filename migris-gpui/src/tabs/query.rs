@@ -3,7 +3,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
 };
 use gpui_component::{
-    ActiveTheme, Disableable, Sizable,
+    ActiveTheme, Disableable, Sizable, WindowExt,
     button::{Button, DropdownButton},
     h_flex, input,
     resizable::{resizable_panel, v_resizable},
@@ -13,6 +13,7 @@ use gpui_component::{
 
 use crate::{
     components::{
+        self,
         editor::{Editor, EditorState},
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableEvent, QueryTableState},
@@ -98,9 +99,8 @@ impl QueryTabState {
         };
 
         let this = cx.entity();
-        let event = RunSqlEvent::new(sql)
-            .show_progress()
-            .on_result(move |result, window, cx| {
+        let event = Event::new(
+            RunSqlEvent::new(sql, move |window, cx, result| {
                 this.update(cx, |this, cx| {
                     let table = cx.new(|cx| QueryTableState::with_result(window, cx, result));
                     let subscription = cx.subscribe(&table, |_, table, event, cx| {
@@ -118,9 +118,17 @@ impl QueryTabState {
                     this.tables.push(table);
                     this.table_subscriptions.push(subscription);
                 });
+            })
+            .show_progress(),
+        )
+        .on_error(|window, cx, error| {
+            let error = error.to_owned();
+            window.open_alert_dialog(cx, move |dialog, _, cx| {
+                components::error_dialog(dialog, cx, error.clone())
             });
+        });
 
-        EventManager::emit(window, cx, Event::new(event));
+        EventManager::emit(window, cx, event);
     }
 }
 

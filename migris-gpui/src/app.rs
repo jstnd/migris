@@ -81,8 +81,8 @@ impl Application {
         };
 
         match &event.variant {
-            EventVariant::LoadEntity(inner_event) => {
-                self.load_entity(window, cx, inner_event.clone(), event.callbacks.clone());
+            EventVariant::LoadEntity(inner) => {
+                self.load_entity(window, cx, inner.clone(), event.callbacks.clone());
             }
             EventVariant::OpenConnection(id) => {
                 self.open_connection(window, cx, *id, event.callbacks.clone())
@@ -90,7 +90,9 @@ impl Application {
             EventVariant::OpenEntity(entity) => {
                 self.open_entity(window, cx, entity.clone());
             }
-            EventVariant::RunSql(event) => self.run_sql(window, cx, event.clone()),
+            EventVariant::RunSql(inner) => {
+                self.run_sql(window, cx, inner.clone(), event.callbacks.clone());
+            }
         }
 
         EventManager::global_mut(cx).complete(id);
@@ -183,7 +185,13 @@ impl Application {
         })
     }
 
-    fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, event: RunSqlEvent) {
+    fn run_sql(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        event: RunSqlEvent,
+        callbacks: EventCallbacks,
+    ) {
         // TODO: remove this unwrap
         let driver = self.connection.as_ref().unwrap().driver.clone();
 
@@ -204,24 +212,18 @@ impl Application {
                     driver.query(&statement.sql).await
                 };
 
-                match result {
+                _ = this.update_in(cx, |this, window, cx| match result {
                     Ok(result) => {
-                        _ = this.update_in(cx, |this, window, cx| {
-                            if let Some(on_result) = event.on_result.clone() {
-                                on_result(result, window, cx);
-                            }
+                        (event.on_result)(window, cx, result);
 
-                            if event.show_progress {
-                                this.update_query_progress(idx + 1);
-                            }
-
-                            cx.notify();
-                        });
+                        if event.show_progress {
+                            this.update_query_progress(idx + 1);
+                        }
                     }
-                    Err(e) => {
-                        println!("QUERY ERROR: {}", e);
+                    Err(err) => {
+                        callbacks.on_error(window, cx, &err.to_string());
                     }
-                }
+                });
             }
 
             // Remove the query progress as the statements have finished running.

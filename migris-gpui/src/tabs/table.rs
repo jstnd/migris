@@ -92,17 +92,22 @@ impl TableTabState {
     /// Refreshes the table data inside the tab.
     fn refresh_data(&self, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity();
-        let event = RunSqlEvent::stream(migris::sql::select_all(
-            &self.entity,
-            &self.table.read(cx).order_by(cx),
+        let event = Event::new(RunSqlEvent::stream(
+            migris::sql::select_all(&self.entity, &self.table.read(cx).order_by(cx)),
+            move |_, cx, result| {
+                this.update(cx, |this, cx| {
+                    this.load_table(cx, result);
+                });
+            },
         ))
-        .on_result(move |result, _, cx| {
-            this.update(cx, |this, cx| {
-                this.load_table(cx, result);
+        .on_error(|window, cx, error| {
+            let error = error.to_owned();
+            window.open_alert_dialog(cx, move |dialog, _, cx| {
+                components::error_dialog(dialog, cx, error.clone())
             });
         });
 
-        EventManager::emit(window, cx, Event::new(event));
+        EventManager::emit(window, cx, event);
     }
 
     /// Refreshes the entity data inside the tab.

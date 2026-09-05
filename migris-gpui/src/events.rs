@@ -174,40 +174,40 @@ pub struct RunSqlEvent {
     /// Whether the results should be returned as a stream.
     pub stream: bool,
 
-    /// An optional callback used when a query result is retrieved.
-    pub on_result: Option<Rc<dyn Fn(QueryResult, &mut Window, &mut App) + 'static>>,
+    /// The callback used when a query result is retrieved.
+    pub on_result: Rc<dyn Fn(&mut Window, &mut App, QueryResult) + 'static>,
 }
 
 impl RunSqlEvent {
     /// Creates a new [`RunSqlEvent`].
-    pub fn new(sql: impl Into<SharedString>) -> Self {
+    pub fn new(
+        sql: impl Into<SharedString>,
+        on_result: impl Fn(&mut Window, &mut App, QueryResult) + 'static,
+    ) -> Self {
         Self {
             sql: sql.into(),
             show_progress: false,
             stream: false,
-            on_result: None,
+            on_result: Rc::new(on_result),
         }
     }
 
     /// Creates a new [`RunSqlEvent`] that will return results as streams.
-    pub fn stream(sql: impl Into<SharedString>) -> Self {
+    pub fn stream(
+        sql: impl Into<SharedString>,
+        on_result: impl Fn(&mut Window, &mut App, QueryResult) + 'static,
+    ) -> Self {
         Self {
             sql: sql.into(),
             show_progress: false,
             stream: true,
-            on_result: None,
+            on_result: Rc::new(on_result),
         }
     }
 
     /// Sets the event to show progress.
     pub fn show_progress(mut self) -> Self {
         self.show_progress = true;
-        self
-    }
-
-    /// Sets the callback used when a query result is retrieved.
-    pub fn on_result(mut self, f: impl Fn(QueryResult, &mut Window, &mut App) + 'static) -> Self {
-        self.on_result = Some(Rc::new(f));
         self
     }
 }
