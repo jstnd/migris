@@ -95,6 +95,62 @@ impl ConnectionPanelState {
         self.load_tree(cx);
     }
 
+    fn load_maps(&mut self) {
+        self.entity_map.clear();
+
+        for (idx, entity) in self.entities.iter().enumerate() {
+            self.entity_map.insert(SharedString::from(entity.id()), idx);
+        }
+    }
+
+    fn load_tree(&mut self, cx: &mut Context<Self>) {
+        let filter = self.search_input.read(cx).value().to_lowercase();
+        let filters: Vec<&str> = filter.split('|').filter(|s| !s.is_empty()).collect();
+        let items = self.build_tree_items(&filters);
+        self.tree.update(cx, |tree, cx| {
+            tree.set_items(items, cx);
+        });
+    }
+
+    fn build_tree_items(&self, filters: &[&str]) -> Vec<TreeItem> {
+        let mut items = Vec::new();
+        let entities_by_schema = self
+            .entities
+            .iter()
+            .filter(|entity| entity.kind != EntityKind::Schema)
+            .fold(BTreeMap::new(), |mut map, entity| {
+                map.entry(entity.schema.clone())
+                    .or_insert(Vec::new())
+                    .push(entity);
+                map
+            });
+
+        for (schema, entities) in entities_by_schema {
+            let mut children: Vec<TreeItem> = entities
+                .into_iter()
+                .filter(|entity| {
+                    if filters.is_empty() {
+                        return true;
+                    }
+
+                    let name = entity.name.to_lowercase();
+                    filters.iter().any(|f| name.contains(f))
+                })
+                .map(|entity| TreeItem::new(SharedString::from(entity.id()), &entity.name))
+                .collect();
+
+            children.sort_unstable_by(|a, b| a.label.cmp(&b.label));
+            let schema_id = SharedString::from(MigrisEntity::schema(&schema).id());
+            let item = TreeItem::new(&schema_id, &schema)
+                .expanded(self.is_expanded(&schema_id))
+                .children(children);
+
+            items.push(item);
+        }
+
+        items
+    }
+
     /// Handles actions originating from the connection panel.
     fn handle_action(
         &mut self,
@@ -183,54 +239,6 @@ impl ConnectionPanelState {
         } else {
             self.expanded.insert(id);
         }
-    }
-
-    fn load_maps(&mut self) {
-        self.entity_map.clear();
-
-        for (idx, entity) in self.entities.iter().enumerate() {
-            self.entity_map.insert(SharedString::from(entity.id()), idx);
-        }
-    }
-
-    fn load_tree(&mut self, cx: &mut Context<Self>) {
-        let filter = self.search_input.read(cx).value().to_lowercase();
-        let items = self.build_tree_items(&filter);
-        self.tree.update(cx, |tree, cx| {
-            tree.set_items(items, cx);
-        });
-    }
-
-    fn build_tree_items(&self, filter: &str) -> Vec<TreeItem> {
-        let mut items = Vec::new();
-        let entities_by_schema = self
-            .entities
-            .iter()
-            .filter(|entity| entity.kind != EntityKind::Schema)
-            .fold(BTreeMap::new(), |mut map, entity| {
-                map.entry(entity.schema.clone())
-                    .or_insert(Vec::new())
-                    .push(entity);
-                map
-            });
-
-        for (schema, entities) in entities_by_schema {
-            let mut children: Vec<TreeItem> = entities
-                .into_iter()
-                .filter(|entity| filter.is_empty() || entity.name.to_lowercase().contains(filter))
-                .map(|entity| TreeItem::new(SharedString::from(entity.id()), &entity.name))
-                .collect();
-
-            children.sort_unstable_by(|a, b| a.label.cmp(&b.label));
-            let schema_id = SharedString::from(MigrisEntity::schema(&schema).id());
-            let item = TreeItem::new(&schema_id, &schema)
-                .expanded(self.is_expanded(&schema_id))
-                .children(children);
-
-            items.push(item);
-        }
-
-        items
     }
 }
 
