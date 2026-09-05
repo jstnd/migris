@@ -12,7 +12,7 @@ use gpui_component::{
 };
 use indexmap::IndexMap;
 use migris::{
-    Index, IndexKind,
+    Index, IndexKind, Value,
     data::{QueryData, QueryResult},
 };
 
@@ -539,7 +539,7 @@ impl TableDelegate for QueryTableDelegate {
                 .w_full()
                 .pr_1p5()
                 .border_r_1()
-                .border_color(cx.theme().primary)
+                .border_color(cx.theme().foreground)
                 .text_color(cx.theme().muted_foreground)
                 .text_right()
                 .child((row_ix + 1).to_string());
@@ -552,11 +552,29 @@ impl TableDelegate for QueryTableDelegate {
         };
 
         let row = &data.rows()[row_ix];
-        let value_idx = col_ix - 1;
+        let value = &row.values[col_ix - 1];
+        let color = match value {
+            Value::Bytes(_) => cx.theme().magenta,
+            Value::Date(_) | Value::Time(_) => cx.theme().red,
+            Value::Decimal(_)
+            | Value::F32(_)
+            | Value::F64(_)
+            | Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::U8(_)
+            | Value::U16(_)
+            | Value::U32(_)
+            | Value::U64(_) => cx.theme().blue,
+            Value::String(_) => cx.theme().green,
+            _ => cx.theme().foreground,
+        };
 
         div()
             .w_full()
-            .child(text_ellipsis(row.values[value_idx].to_string()))
+            .text_color(color)
+            .child(text_ellipsis(value.to_string()))
     }
 
     fn render_th(
