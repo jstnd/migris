@@ -30,6 +30,219 @@ const MAX_COLUMN_WIDTH: Pixels = px(250.0);
 const ROW_NUMBER_COLUMN_IDX: usize = 0;
 const ROW_NUMBER_COLUMN_KEY: SharedString = SharedString::new_static("#");
 
+#[derive(IntoElement)]
+pub struct QueryTable {
+    /// The state for the query table.
+    state: Entity<QueryTableState>,
+}
+
+impl QueryTable {
+    /// Creates a new [`QueryTable`].
+    pub fn new(state: &Entity<QueryTableState>) -> Self {
+        Self {
+            state: state.clone(),
+        }
+    }
+}
+
+impl RenderOnce for QueryTable {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let state = self.state.read(cx);
+        let table = state.table.read(cx);
+
+        div()
+            .relative()
+            .size_full()
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .child(DataTable::new(&state.table).bordered(false).xsmall()),
+            )
+            .when(table.delegate().loading, |this| {
+                this.child(
+                    div().absolute().top_0().left_0().w_full().child(
+                        Progress::new("table-loading")
+                            .color(cx.theme().primary)
+                            .loading(true)
+                            .xsmall(),
+                    ),
+                )
+            })
+    }
+}
+
+pub enum QueryTableEvent {
+    Sort,
+}
+
+/// The state used with a [`QueryTable`].
+pub struct QueryTableState {
+    /// The state for the table.
+    table: Entity<TableState<QueryTableDelegate>>,
+}
+
+impl EventEmitter<QueryTableEvent> for QueryTableState {}
+
+impl QueryTableState {
+    /// Creates a new [`QueryTableState`].
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let delegate = QueryTableDelegate::new();
+        let table = cx.new(|cx| {
+            TableState::new(delegate, window, cx)
+                .cell_selectable(true)
+                .row_header(false)
+        });
+
+        cx.subscribe(&table, |this, _, event, cx| {
+            if let TableEvent::SelectColumn(column_idx) = event {
+                this.sort_column(cx, *column_idx);
+            }
+        })
+        .detach();
+
+        Self { table }
+    }
+
+    /// Creates a new [`QueryTableState`], initialized with the given [`QueryResult`].
+    pub fn with_result(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
+        let mut state = Self::new(window, cx);
+        state.init(cx, result);
+        state
+    }
+
+    /// Initializes the table with the given [`QueryResult`].
+    pub fn init(&mut self, cx: &mut Context<Self>, result: QueryResult) {
+        self.table.update(cx, |table, cx| {
+            let is_result_stream = result.stream.is_some();
+            table.delegate_mut().init(cx, result);
+
+            // If the query result is not using a stream for its data, we want to refresh
+            // the table here after initialization. Otherwise, the table refresh is delegated
+            // to after initial data is loaded from the stream inside the table delegate.
+            if !is_result_stream {
+                table.refresh(cx);
+            }
+        });
+    }
+
+    /// Builds the column index map from the given indexes.
+    pub fn build_column_index_map(&mut self, cx: &mut Context<Self>, indexes: &[Index]) {
+        self.table.update(cx, |table, cx| {
+            table.delegate_mut().build_column_index_map(indexes);
+            cx.notify();
+        });
+    }
+
+    /// Returns an SQL ORDER BY string generated from the currently sorted columns.
+    pub fn order_by(&self, cx: &App) -> String {
+        let column_sorts = &self.table.read(cx).delegate().column_sorts;
+        if column_sorts.is_empty() {
+            return String::new();
+        }
+
+        let mut orders = Vec::new();
+        for (name, sort) in self.table.read(cx).delegate().column_sorts.iter() {
+            orders.push(format!(
+                "{} {}",
+                name,
+                if *sort == ColumnSort::Ascending {
+                    "ASC"
+                } else {
+                    "DESC"
+                }
+            ));
+        }
+
+        format!("ORDER BY {}", orders.join(", "))
+    }
+
+    /// Sorts the column with the given index.
+    ///
+    /// This will handle updating the column's sort direction and
+    /// emit an event for implementers of this component to handle.
+    fn sort_column(&mut self, cx: &mut Context<Self>, column_idx: usize) {
+        // Only perform the work for sorting the column if the
+        // table is not already doing work that would conflict.
+        if self.table.read(cx).delegate().loading {
+            return;
+        }
+
+        self.table.update(cx, |table, _| {
+            table.delegate_mut().sort_column(column_idx);
+        });
+
+        cx.emit(QueryTableEvent::Sort);
+    }
+
+    /// Sorts the data currently loaded within the table using the currently sorted columns.
+    ///
+    /// Note that this function sorts the data in-memory, so slowdowns may be a worry for larger amounts of data.
+    pub fn sort_data(&mut self, cx: &mut Context<Self>) {
+        self.table.update(cx, |table, cx| {
+            let Some(result) = &table.delegate().result else {
+                return;
+            };
+
+            // Remove any saved display order if there are no currently sorted columns.
+            if table.delegate().column_sorts.is_empty() {
+                table.delegate_mut().row_display_order = None;
+                return;
+            }
+
+            let column_sorts = table.delegate().column_sorts.clone();
+            let data = result.data.clone();
+            table.delegate_mut().loading = true;
+
+            cx.spawn(async move |table, cx| {
+                let order = tokio::task::spawn_blocking(move || {
+                    let mut order: Vec<usize> = (0..data.rows().len()).collect();
+                    order.sort_unstable_by(|a, b| {
+                        let mut ordering = Ordering::Equal;
+                        let a_row = &data.rows()[*a];
+                        let b_row = &data.rows()[*b];
+
+                        for (name, sort) in column_sorts.iter() {
+                            let column_idx = data.column_index(name);
+                            ordering = ordering.then_with(|| {
+                                let a_value = &a_row.values[column_idx];
+                                let b_value = &b_row.values[column_idx];
+                                let partial_ord = if let ColumnSort::Ascending = sort {
+                                    a_value.partial_cmp(b_value)
+                                } else {
+                                    b_value.partial_cmp(a_value)
+                                };
+
+                                partial_ord.unwrap_or(Ordering::Equal)
+                            });
+
+                            if ordering != Ordering::Equal {
+                                break;
+                            }
+                        }
+
+                        ordering
+                    });
+
+                    order
+                })
+                .await
+                .unwrap();
+
+                _ = table.update(cx, move |table, cx| {
+                    table.delegate_mut().loading = false;
+                    table.delegate_mut().row_display_order = Some(order);
+                    table.refresh(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+        });
+    }
+}
+
 struct QueryTableDelegate {
     /// The query result to display in the table.
     result: Option<QueryResult>,
@@ -425,218 +638,5 @@ impl TableDelegate for QueryTableDelegate {
                         })
                     }),
             )
-    }
-}
-
-pub enum QueryTableEvent {
-    Sort,
-}
-
-/// The state used with a [`QueryTable`].
-pub struct QueryTableState {
-    /// The state for the table.
-    table: Entity<TableState<QueryTableDelegate>>,
-}
-
-impl EventEmitter<QueryTableEvent> for QueryTableState {}
-
-impl QueryTableState {
-    /// Creates a new [`QueryTableState`].
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let delegate = QueryTableDelegate::new();
-        let table = cx.new(|cx| {
-            TableState::new(delegate, window, cx)
-                .cell_selectable(true)
-                .row_header(false)
-        });
-
-        cx.subscribe(&table, |this, _, event, cx| {
-            if let TableEvent::SelectColumn(column_idx) = event {
-                this.sort_column(cx, *column_idx);
-            }
-        })
-        .detach();
-
-        Self { table }
-    }
-
-    /// Creates a new [`QueryTableState`], initialized with the given [`QueryResult`].
-    pub fn with_result(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
-        let mut state = Self::new(window, cx);
-        state.init(cx, result);
-        state
-    }
-
-    /// Initializes the table with the given [`QueryResult`].
-    pub fn init(&mut self, cx: &mut Context<Self>, result: QueryResult) {
-        self.table.update(cx, |table, cx| {
-            let is_result_stream = result.stream.is_some();
-            table.delegate_mut().init(cx, result);
-
-            // If the query result is not using a stream for its data, we want to refresh
-            // the table here after initialization. Otherwise, the table refresh is delegated
-            // to after initial data is loaded from the stream inside the table delegate.
-            if !is_result_stream {
-                table.refresh(cx);
-            }
-        });
-    }
-
-    /// Builds the column index map from the given indexes.
-    pub fn build_column_index_map(&mut self, cx: &mut Context<Self>, indexes: &[Index]) {
-        self.table.update(cx, |table, cx| {
-            table.delegate_mut().build_column_index_map(indexes);
-            cx.notify();
-        });
-    }
-
-    /// Returns an SQL ORDER BY string generated from the currently sorted columns.
-    pub fn order_by(&self, cx: &App) -> String {
-        let column_sorts = &self.table.read(cx).delegate().column_sorts;
-        if column_sorts.is_empty() {
-            return String::new();
-        }
-
-        let mut orders = Vec::new();
-        for (name, sort) in self.table.read(cx).delegate().column_sorts.iter() {
-            orders.push(format!(
-                "{} {}",
-                name,
-                if *sort == ColumnSort::Ascending {
-                    "ASC"
-                } else {
-                    "DESC"
-                }
-            ));
-        }
-
-        format!("ORDER BY {}", orders.join(", "))
-    }
-
-    /// Sorts the column with the given index.
-    ///
-    /// This will handle updating the column's sort direction and
-    /// emit an event for implementers of this component to handle.
-    fn sort_column(&mut self, cx: &mut Context<Self>, column_idx: usize) {
-        // Only perform the work for sorting the column if the
-        // table is not already doing work that would conflict.
-        if self.table.read(cx).delegate().loading {
-            return;
-        }
-
-        self.table.update(cx, |table, _| {
-            table.delegate_mut().sort_column(column_idx);
-        });
-
-        cx.emit(QueryTableEvent::Sort);
-    }
-
-    /// Sorts the data currently loaded within the table using the currently sorted columns.
-    ///
-    /// Note that this function sorts the data in-memory, so slowdowns may be a worry for larger amounts of data.
-    pub fn sort_data(&mut self, cx: &mut Context<Self>) {
-        self.table.update(cx, |table, cx| {
-            let Some(result) = &table.delegate().result else {
-                return;
-            };
-
-            // Remove any saved display order if there are no currently sorted columns.
-            if table.delegate().column_sorts.is_empty() {
-                table.delegate_mut().row_display_order = None;
-                return;
-            }
-
-            let column_sorts = table.delegate().column_sorts.clone();
-            let data = result.data.clone();
-            table.delegate_mut().loading = true;
-
-            cx.spawn(async move |table, cx| {
-                let order = tokio::task::spawn_blocking(move || {
-                    let mut order: Vec<usize> = (0..data.rows().len()).collect();
-                    order.sort_unstable_by(|a, b| {
-                        let mut ordering = Ordering::Equal;
-                        let a_row = &data.rows()[*a];
-                        let b_row = &data.rows()[*b];
-
-                        for (name, sort) in column_sorts.iter() {
-                            let column_idx = data.column_index(name);
-                            ordering = ordering.then_with(|| {
-                                let a_value = &a_row.values[column_idx];
-                                let b_value = &b_row.values[column_idx];
-                                let partial_ord = if let ColumnSort::Ascending = sort {
-                                    a_value.partial_cmp(b_value)
-                                } else {
-                                    b_value.partial_cmp(a_value)
-                                };
-
-                                partial_ord.unwrap_or(Ordering::Equal)
-                            });
-
-                            if ordering != Ordering::Equal {
-                                break;
-                            }
-                        }
-
-                        ordering
-                    });
-
-                    order
-                })
-                .await
-                .unwrap();
-
-                _ = table.update(cx, move |table, cx| {
-                    table.delegate_mut().loading = false;
-                    table.delegate_mut().row_display_order = Some(order);
-                    table.refresh(cx);
-                    cx.notify();
-                });
-            })
-            .detach();
-        });
-    }
-}
-
-#[derive(IntoElement)]
-pub struct QueryTable {
-    /// The state for the query table.
-    state: Entity<QueryTableState>,
-}
-
-impl QueryTable {
-    /// Creates a new [`QueryTable`].
-    pub fn new(state: &Entity<QueryTableState>) -> Self {
-        Self {
-            state: state.clone(),
-        }
-    }
-}
-
-impl RenderOnce for QueryTable {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let state = self.state.read(cx);
-        let table = state.table.read(cx);
-
-        div()
-            .relative()
-            .size_full()
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .child(DataTable::new(&state.table).bordered(false).xsmall()),
-            )
-            .when(table.delegate().loading, |this| {
-                this.child(
-                    div().absolute().top_0().left_0().w_full().child(
-                        Progress::new("table-loading")
-                            .color(cx.theme().primary)
-                            .loading(true)
-                            .xsmall(),
-                    ),
-                )
-            })
     }
 }
