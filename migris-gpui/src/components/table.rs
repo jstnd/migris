@@ -27,6 +27,9 @@ const LOAD_BATCH_SIZE: usize = 100;
 const MIN_COLUMN_WIDTH: Pixels = px(100.0);
 const MAX_COLUMN_WIDTH: Pixels = px(250.0);
 
+const ROW_NUMBER_COLUMN_IDX: usize = 0;
+const ROW_NUMBER_COLUMN_KEY: SharedString = SharedString::new_static("#");
+
 struct QueryTableDelegate {
     /// The query result to display in the table.
     result: Option<QueryResult>,
@@ -134,6 +137,7 @@ impl QueryTableDelegate {
         }
 
         self.columns = columns;
+        self.build_row_number_column(cx);
     }
 
     /// Builds the column index map using the given indexes.
@@ -152,6 +156,33 @@ impl QueryTableDelegate {
             .iter()
             .map(|(key, value)| (SharedString::new(key), *value.iter().min().unwrap()))
             .collect();
+    }
+
+    /// Builds the row number column for the table.
+    fn build_row_number_column(&mut self, cx: &mut App) {
+        let Some(data) = self.data() else {
+            return;
+        };
+
+        if self.columns.is_empty() {
+            return;
+        }
+
+        let data_len = data.rows().len().to_string();
+        let width = (data_len.len() * cx.theme().font_size * 0.65)
+            .clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH / 2.0);
+
+        if self.columns[ROW_NUMBER_COLUMN_IDX].key == ROW_NUMBER_COLUMN_KEY {
+            self.columns[ROW_NUMBER_COLUMN_IDX].width = width;
+        } else {
+            let column = Column::new(ROW_NUMBER_COLUMN_KEY, ROW_NUMBER_COLUMN_KEY)
+                .movable(false)
+                .resizable(false)
+                .selectable(false)
+                .width(width);
+
+            self.columns.insert(ROW_NUMBER_COLUMN_IDX, column);
+        }
     }
 
     /// Returns a reference to the query data.
@@ -206,12 +237,12 @@ impl QueryTableDelegate {
 
                 if is_first_load {
                     table.delegate_mut().build_columns(cx);
-                    table.refresh(cx);
                 }
 
+                table.delegate_mut().build_row_number_column(cx);
                 table.delegate_mut().has_more_data = has_more_data;
                 table.delegate_mut().loading = false;
-                cx.notify();
+                table.refresh(cx);
             });
         })
         .detach();
@@ -284,11 +315,22 @@ impl TableDelegate for QueryTableDelegate {
         row_ix: usize,
         col_ix: usize,
         _: &mut Window,
-        _: &mut Context<TableState<Self>>,
+        cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
         let Some(data) = self.data() else {
             return div();
         };
+
+        if col_ix == ROW_NUMBER_COLUMN_IDX {
+            return div()
+                .w_full()
+                .pr_1p5()
+                .border_r_1()
+                .border_color(cx.theme().primary)
+                .text_color(cx.theme().muted_foreground)
+                .text_right()
+                .child((row_ix + 1).to_string());
+        }
 
         let row_ix = if let Some(display_order) = &self.row_display_order {
             display_order[row_ix]
@@ -297,10 +339,11 @@ impl TableDelegate for QueryTableDelegate {
         };
 
         let row = &data.rows()[row_ix];
+        let value_idx = col_ix - 1;
 
         div()
             .w_full()
-            .child(text_ellipsis(row.values[col_ix].to_string()))
+            .child(text_ellipsis(row.values[value_idx].to_string()))
     }
 
     fn render_th(
@@ -309,6 +352,13 @@ impl TableDelegate for QueryTableDelegate {
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
+        if col_ix == ROW_NUMBER_COLUMN_IDX {
+            return div()
+                .w_full()
+                .text_color(cx.theme().muted_foreground)
+                .child("#");
+        }
+
         let column = &self.columns[col_ix];
         let column_index_kind = self.column_index_map.get(&column.key);
         let column_sort = self.column_sorts.get_full(&column.key);
@@ -327,7 +377,7 @@ impl TableDelegate for QueryTableDelegate {
                         div()
                             .text_color(cx.theme().muted_foreground)
                             .text_xs()
-                            .child((col_ix + 1).to_string()),
+                            .child(col_ix.to_string()),
                     )
                     .child(text_ellipsis(column.name.clone())),
             )
@@ -343,7 +393,7 @@ impl TableDelegate for QueryTableDelegate {
                             IndexKind::Unique => Icon::red(cx, IconName::KeyRound),
                         })
                     })
-                    .when_some(column_sort, |this, (idx, _, sort)| {
+                    .when_some(column_sort, |this, (sort_idx, _, sort)| {
                         this.child(if *sort == ColumnSort::Ascending {
                             div()
                                 .relative()
@@ -356,7 +406,7 @@ impl TableDelegate for QueryTableDelegate {
                                         .right(px(-2.0))
                                         .text_color(cx.theme().muted_foreground)
                                         .text_xs()
-                                        .child((idx + 1).to_string()),
+                                        .child((sort_idx + 1).to_string()),
                                 )
                         } else {
                             div()
@@ -370,7 +420,7 @@ impl TableDelegate for QueryTableDelegate {
                                         .right(px(-2.0))
                                         .text_color(cx.theme().muted_foreground)
                                         .text_xs()
-                                        .child((idx + 1).to_string()),
+                                        .child((sort_idx + 1).to_string()),
                                 )
                         })
                     }),
@@ -394,7 +444,11 @@ impl QueryTableState {
     /// Creates a new [`QueryTableState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let delegate = QueryTableDelegate::new();
-        let table = cx.new(|cx| TableState::new(delegate, window, cx).cell_selectable(true));
+        let table = cx.new(|cx| {
+            TableState::new(delegate, window, cx)
+                .cell_selectable(true)
+                .row_header(false)
+        });
 
         cx.subscribe(&table, |this, _, event, cx| {
             if let TableEvent::SelectColumn(column_idx) = event {
