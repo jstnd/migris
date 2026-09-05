@@ -456,6 +456,7 @@ impl QueryTableDelegate {
                 table.delegate_mut().has_more_data = has_more_data;
                 table.delegate_mut().loading = false;
                 table.refresh(cx);
+                cx.notify();
             });
         })
         .detach();
