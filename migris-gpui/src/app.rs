@@ -25,7 +25,7 @@ use crate::{
         EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent,
         RunSqlEvent,
     },
-    settings::AppSettings,
+    settings::SettingsManager,
     state::AppState,
     tabs::TabVariant,
     types::{OpenConnection, QueryProgress},
@@ -39,12 +39,14 @@ pub fn init(window: &mut Window, cx: &mut App) {
     components::init(cx);
 
     // Set globals for use throughout the application.
-    cx.set_global(AppSettings::default());
     cx.set_global(ConnectionManager::load());
     cx.set_global(EventManager::new());
 
     let app_state = AppState::new(window, cx);
     cx.set_global(app_state);
+
+    let settings = SettingsManager::load(cx);
+    cx.set_global(settings);
 }
 
 pub struct Application {

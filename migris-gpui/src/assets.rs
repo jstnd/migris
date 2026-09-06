@@ -57,6 +57,11 @@ impl Themes {
         }
     }
 
+    /// Returns whether the given theme is contained in the registry.
+    pub fn contains(cx: &App, theme: &SharedString) -> bool {
+        ThemeRegistry::global(cx).themes().contains_key(theme)
+    }
+
     /// Returns the default theme for the given [`ThemeMode`].
     pub fn default(mode: ThemeMode) -> SharedString {
         match mode {
@@ -66,7 +71,7 @@ impl Themes {
     }
 
     /// Returns a list of themes matching the given [`ThemeMode`].
-    /// 
+    ///
     /// Intended for use with dropdown components.
     pub fn options(cx: &App, mode: ThemeMode) -> Vec<(SharedString, SharedString)> {
         ThemeRegistry::global(cx)

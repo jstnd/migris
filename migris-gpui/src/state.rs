@@ -1,7 +1,7 @@
 use gpui::{App, AppContext, BorrowAppContext, Entity, Global, Window};
 use gpui_component::{Theme, ThemeMode};
 
-use crate::{components::connections::ConnectionDialogState, settings::AppSettings};
+use crate::{components::connections::ConnectionDialogState, settings::SettingsManager};
 
 pub struct AppState {
     /// The state for the application's connection dialog.
@@ -23,7 +23,7 @@ impl AppState {
 
         Self {
             connection_dialog,
-            system_theme_mode: ThemeMode::default(),
+            system_theme_mode: ThemeMode::from(window.appearance()),
         }
     }
 
@@ -41,7 +41,7 @@ impl AppState {
                 cx.update_global(|state: &mut AppState, cx| {
                     state.system_theme_mode = ThemeMode::from(window.appearance());
 
-                    if AppSettings::global(cx).theme_mode.is_system() {
+                    if SettingsManager::app_theme_mode(cx).is_system() {
                         Theme::change(state.system_theme_mode, None, cx);
                         cx.refresh_windows();
                     }

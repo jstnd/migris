@@ -9,7 +9,7 @@ use gpui_component::{
 
 use crate::{
     assets::Themes,
-    settings::{AppSettings, AppThemeMode},
+    settings::{AppThemeMode, SettingsManager},
     shared,
 };
 
@@ -27,6 +27,7 @@ pub fn settings_dialog(dialog: Dialog, _: &mut Window, cx: &mut App) -> Dialog {
                     .gap_2()
                     .child(Button::new("settings-cancel").label("Cancel").on_click(
                         |_, window, cx| {
+                            SettingsManager::reload(cx);
                             window.close_dialog(cx);
                         },
                     ))
@@ -34,11 +35,19 @@ pub fn settings_dialog(dialog: Dialog, _: &mut Window, cx: &mut App) -> Dialog {
                         Button::new("settings-save")
                             .label("Save")
                             .on_click(|_, window, cx| {
+                                SettingsManager::save(cx);
                                 window.close_dialog(cx);
                             }),
                     ),
             ),
         )
+        .on_close(|_, _, cx| {
+            SettingsManager::reload(cx);
+        })
+        .on_ok(|_, _, cx| {
+            SettingsManager::save(cx);
+            true
+        })
 }
 
 fn appearance_group(cx: &mut App) -> SettingGroup {
@@ -48,29 +57,20 @@ fn appearance_group(cx: &mut App) -> SettingGroup {
             "Theme Mode",
             SettingField::dropdown(
                 AppThemeMode::options(),
-                |cx| SharedString::from(AppSettings::global(cx).theme_mode.to_string()),
+                |cx| SharedString::from(SettingsManager::app_theme_mode(cx).to_string()),
                 |value, cx| {
-                    AppSettings::global_mut(cx).theme_mode = AppThemeMode::from(value);
-                    Theme::change(AppSettings::global(cx).theme_mode(cx), None, cx);
+                    SettingsManager::set_app_theme_mode(cx, AppThemeMode::from(value));
+                    Theme::change(SettingsManager::theme_mode(cx), None, cx);
                 },
             ),
         ))
         .item(SettingItem::new("Theme", {
-            let options = Themes::options(cx, cx.theme().mode);
-            let theme = AppSettings::global(cx).theme(cx);
-
-            // If the theme saved in the settings does not match any themes in the current theme mode,
-            // we want to change the saved theme to the default for the current theme mode.
-            // TODO: move this to happen on settings load when implemented
-            if !options.iter().any(|option| option.0 == theme) {
-                shared::apply_theme(cx, Themes::default(cx.theme().mode));
-            }
-
             SettingField::scrollable_dropdown(
-                options,
-                |cx| AppSettings::global(cx).theme(cx),
+                Themes::options(cx, cx.theme().mode),
+                SettingsManager::theme,
                 |value, cx| {
-                    shared::apply_theme(cx, value);
+                    SettingsManager::set_theme(cx, value.clone());
+                    Themes::apply(cx, value);
                 },
             )
         }))
