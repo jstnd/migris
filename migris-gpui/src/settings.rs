@@ -70,12 +70,12 @@ impl SettingsManager {
         Ok(())
     }
 
-    /// Returns a reference to the global [`AppSettings`].
+    /// Returns a reference to the global [`SettingsManager`].
     pub fn global(cx: &App) -> &Self {
         cx.global::<Self>()
     }
 
-    /// Returns a mutable reference to the global [`AppSettings`].
+    /// Returns a mutable reference to the global [`SettingsManager`].
     pub fn global_mut(cx: &mut App) -> &mut Self {
         cx.global_mut::<Self>()
     }
@@ -85,7 +85,7 @@ impl SettingsManager {
         Self::global(cx).settings.appearance.theme_mode
     }
 
-    /// Returns the saved [`Size`] for the editor.
+    /// Returns the saved [`Size`] for the editor component.
     pub fn editor_size(cx: &App) -> Size {
         Self::global(cx).settings.appearance.editor_size
     }
@@ -95,9 +95,14 @@ impl SettingsManager {
         Self::global_mut(cx).settings.appearance.theme_mode = mode;
     }
 
-    /// Sets the saved [`Size`] for the editor.
+    /// Sets the saved [`Size`] for the editor component.
     pub fn set_editor_size(cx: &mut App, size: Size) {
         Self::global_mut(cx).settings.appearance.editor_size = size;
+    }
+
+    /// Sets the saved [`Size`] for the table component.
+    pub fn set_table_size(cx: &mut App, size: Size) {
+        Self::global_mut(cx).settings.appearance.table_size = size;
     }
 
     /// Sets the saved theme for the current [`ThemeMode`].
@@ -109,6 +114,11 @@ impl SettingsManager {
             ThemeMode::Dark => manager.settings.appearance.theme_dark = theme,
             ThemeMode::Light => manager.settings.appearance.theme_light = theme,
         }
+    }
+
+    /// Returns the saved [`Size`] for the table component.
+    pub fn table_size(cx: &App) -> Size {
+        Self::global(cx).settings.appearance.table_size
     }
 
     /// Returns the saved theme for the current [`ThemeMode`].
@@ -167,8 +177,11 @@ impl Settings {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct AppearanceSettings {
-    /// The size of the editor.
+    /// The size used for the editor component.
     editor_size: Size,
+
+    /// The size used for the table component.
+    table_size: Size,
 
     /// The theme to use when dark mode is enabled.
     theme_dark: SharedString,

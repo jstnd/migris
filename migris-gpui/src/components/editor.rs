@@ -10,7 +10,7 @@ use gpui_component::{
     native_menu::NativeMenu,
 };
 
-use crate::{settings::SettingsManager, size::Size};
+use crate::settings::SettingsManager;
 
 const EDITOR_ID: &str = "EDITOR";
 
@@ -61,7 +61,6 @@ impl Editor {
 
 impl RenderOnce for Editor {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let size = SettingsManager::editor_size(cx);
         let state = self.state.read(cx);
 
         // Handle scrolling events within the editor for the purpose of zoom in/out.
@@ -98,15 +97,7 @@ impl RenderOnce for Editor {
                     .p_0()
                     .h_full()
                     .appearance(false)
-                    .map(|this| match size {
-                        Size::XSmall => this.text_xs(),
-                        Size::Small => this.text_sm(),
-                        Size::Medium => this.text_base(),
-                        Size::Large => this.text_lg(),
-                        Size::XLarge => this.text_xl(),
-                        Size::XXLarge => this.text_2xl(),
-                        Size::XXXLarge => this.text_3xl(),
-                    })
+                    .map(|this| SettingsManager::editor_size(cx).text_size(this))
                     .when_some(self.context_menu_builder, |this, context_menu_builder| {
                         this.context_menu(move |menu, window, cx| {
                             context_menu_builder(menu, window, cx)
@@ -157,7 +148,19 @@ impl EditorState {
     /// Handles actions originating from the editor.
     fn handle_action(&mut self, _: &mut Window, cx: &mut Context<Self>, action: &EditorAction) {
         match action {
-            EditorAction::DecreaseSize | EditorAction::IncreaseSize => self.update_size(cx, action),
+            EditorAction::DecreaseSize | EditorAction::IncreaseSize => {
+                let current_size = SettingsManager::editor_size(cx);
+                let new_size = match action {
+                    EditorAction::DecreaseSize => current_size.decrease(),
+                    EditorAction::IncreaseSize => current_size.increase(),
+                };
+
+                if current_size != new_size {
+                    SettingsManager::set_editor_size(cx, new_size);
+                    SettingsManager::save(cx);
+                    cx.notify();
+                }
+            }
         }
     }
 
@@ -176,21 +179,6 @@ impl EditorState {
     /// Returns the selected content within the editor.
     pub fn selected_value(&self, cx: &App) -> SharedString {
         self.editor.read(cx).selected_value()
-    }
-
-    /// Updates the editor size saved in settings.
-    fn update_size(&self, cx: &mut Context<Self>, action: &EditorAction) {
-        let current_size = SettingsManager::editor_size(cx);
-        let new_size = match action {
-            EditorAction::DecreaseSize => current_size.decrease(),
-            EditorAction::IncreaseSize => current_size.increase(),
-        };
-
-        if current_size != new_size {
-            SettingsManager::set_editor_size(cx, new_size);
-            SettingsManager::save(cx);
-            cx.notify();
-        }
     }
 
     /// Returns the content within the editor.

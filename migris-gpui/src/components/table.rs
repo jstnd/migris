@@ -2,8 +2,9 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use futures_util::StreamExt;
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, Pixels, RenderOnce,
-    SharedString, Styled, Window, div, prelude::FluentBuilder, px,
+    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, InteractiveElement,
+    IntoElement, KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Sizable, h_flex,
@@ -16,10 +17,16 @@ use migris::{
     data::{QueryData, QueryResult},
 };
 
-use crate::components::{
-    icon::{Icon, IconName},
-    text_ellipsis,
+use crate::{
+    components::{
+        icon::{Icon, IconName},
+        text_ellipsis,
+    },
+    settings::SettingsManager,
+    size::Size,
 };
+
+const TABLE_ID: &str = "QUERY_TABLE";
 
 const INIT_BATCH_SIZE: usize = 1_000;
 const LOAD_BATCH_SIZE: usize = 100;
@@ -29,6 +36,14 @@ const MAX_COLUMN_WIDTH: Pixels = px(250.0);
 
 const ROW_NUMBER_COLUMN_IDX: usize = 0;
 const ROW_NUMBER_COLUMN_KEY: SharedString = SharedString::new_static("#");
+
+/// Initializes configuration for the table component.
+pub fn init(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("ctrl--", QueryTableAction::DecreaseSize, Some(TABLE_ID)),
+        KeyBinding::new("ctrl-=", QueryTableAction::IncreaseSize, Some(TABLE_ID)),
+    ]);
+}
 
 #[derive(IntoElement)]
 pub struct QueryTable {
@@ -46,21 +61,50 @@ impl QueryTable {
 }
 
 impl RenderOnce for QueryTable {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
         let table = state.table.read(cx);
 
+        // Handle scrolling events within the table for the purpose of zoom in/out.
+        window.on_mouse_event({
+            let state = self.state.clone();
+            move |event: &ScrollWheelEvent, phase, window, cx| {
+                if phase != DispatchPhase::Capture
+                    || !event.secondary()
+                    || !state.read(cx).is_hovered
+                {
+                    return;
+                }
+
+                let delta_y = event.delta.pixel_delta(px(1.0)).y;
+                let action = if delta_y < Pixels::ZERO {
+                    QueryTableAction::DecreaseSize
+                } else {
+                    QueryTableAction::IncreaseSize
+                };
+
+                state.update(cx, |state, cx| {
+                    state.handle_action(window, cx, &action);
+                });
+                cx.stop_propagation();
+            }
+        });
+
         div()
+            .id(TABLE_ID)
+            .key_context(TABLE_ID)
             .relative()
             .size_full()
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .child(DataTable::new(&state.table).bordered(false).xsmall()),
-            )
+            .child(div().absolute().top_0().left_0().size_full().child(
+                DataTable::new(&state.table).bordered(false).map(|this| {
+                    match SettingsManager::table_size(cx) {
+                        Size::XSmall | Size::Small | Size::Medium => this.xsmall(),
+                        Size::Large | Size::XLarge => this.small(),
+                        Size::XXLarge => this,
+                        Size::XXXLarge => this.large(),
+                    }
+                }),
+            ))
             .when(table.delegate().loading, |this| {
                 this.child(
                     div().absolute().top_0().left_0().w_full().child(
@@ -71,7 +115,25 @@ impl RenderOnce for QueryTable {
                     ),
                 )
             })
+            .on_action(
+                window.listener_for(&self.state, |state, action, window, cx| {
+                    state.handle_action(window, cx, action);
+                }),
+            )
+            .on_hover(
+                window.listener_for(&self.state, |state, is_hovered, _, cx| {
+                    state.is_hovered = *is_hovered;
+                    cx.notify();
+                }),
+            )
     }
+}
+
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+enum QueryTableAction {
+    DecreaseSize,
+    IncreaseSize,
 }
 
 pub enum QueryTableEvent {
@@ -82,6 +144,9 @@ pub enum QueryTableEvent {
 pub struct QueryTableState {
     /// The state for the table.
     table: Entity<TableState<QueryTableDelegate>>,
+
+    /// Whether the table is hovered over.
+    is_hovered: bool,
 }
 
 impl EventEmitter<QueryTableEvent> for QueryTableState {}
@@ -103,14 +168,36 @@ impl QueryTableState {
         })
         .detach();
 
-        Self { table }
+        Self {
+            table,
+            is_hovered: false,
+        }
     }
 
-    /// Creates a new [`QueryTableState`], initialized with the given [`QueryResult`].
+    /// Creates a new [`QueryTableState`] initialized with the given [`QueryResult`].
     pub fn with_result(window: &mut Window, cx: &mut Context<Self>, result: QueryResult) -> Self {
         let mut state = Self::new(window, cx);
         state.init(cx, result);
         state
+    }
+
+    /// Handles actions originating from the table.
+    fn handle_action(&mut self, _: &mut Window, cx: &mut Context<Self>, action: &QueryTableAction) {
+        match action {
+            QueryTableAction::DecreaseSize | QueryTableAction::IncreaseSize => {
+                let current_size = SettingsManager::table_size(cx);
+                let new_size = match action {
+                    QueryTableAction::DecreaseSize => current_size.decrease(),
+                    QueryTableAction::IncreaseSize => current_size.increase(),
+                };
+
+                if current_size != new_size {
+                    SettingsManager::set_table_size(cx, new_size);
+                    SettingsManager::save(cx);
+                    cx.notify();
+                }
+            }
+        }
     }
 
     /// Initializes the table with the given [`QueryResult`].
@@ -535,14 +622,17 @@ impl TableDelegate for QueryTableDelegate {
             return div();
         };
 
+        let table_size = SettingsManager::table_size(cx);
         if col_ix == ROW_NUMBER_COLUMN_IDX {
             return div()
-                .w_full()
+                .size_full()
                 .pr_1p5()
                 .border_r_1()
                 .border_color(cx.theme().foreground)
+                .content_center()
                 .text_color(cx.theme().muted_foreground)
                 .text_right()
+                .map(|this| table_size.text_size(this))
                 .child((row_ix + 1).to_string());
         }
 
@@ -573,8 +663,10 @@ impl TableDelegate for QueryTableDelegate {
         };
 
         div()
-            .w_full()
+            .size_full()
+            .content_center()
             .text_color(color)
+            .map(|this| table_size.text_size(this))
             .child(text_ellipsis(value.to_string()))
     }
 
@@ -584,10 +676,12 @@ impl TableDelegate for QueryTableDelegate {
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
+        let table_size = SettingsManager::table_size(cx);
         if col_ix == ROW_NUMBER_COLUMN_IDX {
             return div()
                 .w_full()
                 .text_color(cx.theme().muted_foreground)
+                .map(|this| table_size.text_size(this))
                 .child("#");
         }
 
@@ -599,6 +693,7 @@ impl TableDelegate for QueryTableDelegate {
             .w_full()
             .items_center()
             .justify_between()
+            .map(|this| table_size.text_size(this))
             .child(
                 h_flex()
                     .gap_1()
@@ -608,7 +703,6 @@ impl TableDelegate for QueryTableDelegate {
                     .child(
                         div()
                             .text_color(cx.theme().muted_foreground)
-                            .text_xs()
                             .child(col_ix.to_string()),
                     )
                     .child(text_ellipsis(column.name.clone())),
@@ -637,7 +731,15 @@ impl TableDelegate for QueryTableDelegate {
                                         .top(px(-4.0))
                                         .right(px(-2.0))
                                         .text_color(cx.theme().muted_foreground)
-                                        .text_xs()
+                                        .map(|this| match table_size {
+                                            Size::XSmall | Size::Small | Size::Medium => {
+                                                this.text_xs()
+                                            }
+                                            Size::Large => this.text_sm(),
+                                            Size::XLarge => this.text_base(),
+                                            Size::XXLarge => this.text_lg(),
+                                            Size::XXXLarge => this.text_xl(),
+                                        })
                                         .child((sort_idx + 1).to_string()),
                                 )
                         } else {
@@ -651,7 +753,15 @@ impl TableDelegate for QueryTableDelegate {
                                         .bottom(px(-4.0))
                                         .right(px(-2.0))
                                         .text_color(cx.theme().muted_foreground)
-                                        .text_xs()
+                                        .map(|this| match table_size {
+                                            Size::XSmall | Size::Small | Size::Medium => {
+                                                this.text_xs()
+                                            }
+                                            Size::Large => this.text_sm(),
+                                            Size::XLarge => this.text_base(),
+                                            Size::XXLarge => this.text_lg(),
+                                            Size::XXXLarge => this.text_xl(),
+                                        })
                                         .child((sort_idx + 1).to_string()),
                                 )
                         })
