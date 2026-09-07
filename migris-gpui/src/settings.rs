@@ -7,14 +7,16 @@ use std::{
 
 use anyhow::anyhow;
 use directories::BaseDirs;
-use gpui::{App, Global, SharedString};
-use gpui_component::{ActiveTheme, Theme, ThemeMode};
+use gpui::{
+    App, AppContext, BorrowAppContext, Entity, EventEmitter, Global, SharedString, Subscription,
+};
+use gpui_component::{Theme, ThemeMode};
 use serde::{Deserialize, Serialize};
 
 use crate::{assets::Themes, shared, size::Size, state::AppState};
 
 pub struct SettingsManager {
-    settings: Settings,
+    settings: Entity<Settings>,
 }
 
 impl Global for SettingsManager {}
@@ -32,17 +34,19 @@ impl SettingsManager {
         Self::global_mut(cx).settings = Self::load_settings(cx);
     }
 
-    fn load_settings(cx: &mut App) -> Settings {
-        let mut settings = Self::try_load().unwrap_or_else(|_| Settings::default());
-        settings.verify_themes(cx);
-        settings.apply(cx);
-        settings
+    fn load_settings(cx: &mut App) -> Entity<Settings> {
+        cx.new(|cx| {
+            let mut settings = Self::try_load().unwrap_or_else(|_| Settings::default());
+            settings.verify_themes(cx);
+            settings.apply(cx);
+            settings
+        })
     }
 
     /// Saves to the settings file.
     pub fn save(cx: &App) {
         // TODO: log errors with saving
-        _ = Self::global(cx).try_save();
+        _ = Self::global(cx).try_save(cx);
     }
 
     /// Retrieves the path for the settings file.
@@ -63,10 +67,10 @@ impl SettingsManager {
         Ok(serde_json::from_reader(reader)?)
     }
 
-    fn try_save(&self) -> Result<(), anyhow::Error> {
+    fn try_save(&self, cx: &App) -> Result<(), anyhow::Error> {
         let path = Self::settings_path()?;
         let writer = BufWriter::new(File::create(path)?);
-        serde_json::to_writer_pretty(writer, &self.settings)?;
+        serde_json::to_writer_pretty(writer, &self.settings.read(cx))?;
         Ok(())
     }
 
@@ -80,63 +84,97 @@ impl SettingsManager {
         cx.global_mut::<Self>()
     }
 
+    /// Subscribes to any changes in settings values.
+    ///
+    /// The given callback only receives the setting that was changed, not its value.
+    pub fn subscribe(cx: &mut App, on_event: impl Fn(&mut App, Setting) + 'static) -> Subscription {
+        let settings = Self::global(cx).settings.clone();
+        cx.subscribe(&settings, move |_, event, cx| (on_event)(cx, event.0))
+    }
+
     /// Returns the saved [`AppThemeMode`].
     pub fn app_theme_mode(cx: &App) -> AppThemeMode {
-        Self::global(cx).settings.appearance.theme_mode
+        Self::global(cx).settings.read(cx).appearance.theme_mode
     }
 
     /// Returns the saved [`Size`] for the editor component.
     pub fn editor_size(cx: &App) -> Size {
-        Self::global(cx).settings.appearance.editor_size
+        Self::global(cx).settings.read(cx).appearance.editor_size
     }
 
     /// Sets the saved [`AppThemeMode`].
     pub fn set_app_theme_mode(cx: &mut App, mode: AppThemeMode) {
-        Self::global_mut(cx).settings.appearance.theme_mode = mode;
+        cx.update_global(|manager: &mut Self, cx| {
+            manager.settings.update(cx, |settings, _| {
+                settings.appearance.theme_mode = mode;
+            });
+        });
     }
 
     /// Sets the saved [`Size`] for the editor component.
     pub fn set_editor_size(cx: &mut App, size: Size) {
-        Self::global_mut(cx).settings.appearance.editor_size = size;
+        cx.update_global(|manager: &mut Self, cx| {
+            manager.settings.update(cx, |settings, cx| {
+                settings.appearance.editor_size = size;
+                cx.emit(SettingUpdated(Setting::EditorSize));
+            });
+        });
     }
 
     /// Sets the saved [`Size`] for the table component.
     pub fn set_table_size(cx: &mut App, size: Size) {
-        Self::global_mut(cx).settings.appearance.table_size = size;
+        cx.update_global(|manager: &mut Self, cx| {
+            manager.settings.update(cx, |settings, cx| {
+                settings.appearance.table_size = size;
+                cx.emit(SettingUpdated(Setting::TableSize));
+            });
+        });
     }
 
     /// Sets the saved theme for the current [`ThemeMode`].
     pub fn set_theme(cx: &mut App, theme: SharedString) {
-        let mode = cx.theme().mode;
-        let manager = Self::global_mut(cx);
-
-        match mode {
-            ThemeMode::Dark => manager.settings.appearance.theme_dark = theme,
-            ThemeMode::Light => manager.settings.appearance.theme_light = theme,
-        }
+        cx.update_global(|manager: &mut Self, cx| {
+            manager
+                .settings
+                .update(cx, |settings, cx| match settings.theme_mode(cx) {
+                    ThemeMode::Dark => settings.appearance.theme_dark = theme,
+                    ThemeMode::Light => settings.appearance.theme_light = theme,
+                });
+        });
     }
 
     /// Returns the saved [`Size`] for the table component.
     pub fn table_size(cx: &App) -> Size {
-        Self::global(cx).settings.appearance.table_size
+        Self::global(cx).settings.read(cx).appearance.table_size
     }
 
     /// Returns the saved theme for the current [`ThemeMode`].
     pub fn theme(cx: &App) -> SharedString {
-        Self::global(cx).settings.theme(cx)
+        Self::global(cx).settings.read(cx).theme(cx)
     }
 
     /// Returns the matching [`ThemeMode`] for the saved [`AppThemeMode`].
     pub fn theme_mode(cx: &App) -> ThemeMode {
-        Self::global(cx).settings.theme_mode(cx)
+        Self::global(cx).settings.read(cx).theme_mode(cx)
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum Setting {
+    EditorSize,
+    TableSize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SettingUpdated(Setting);
 
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct Settings {
     appearance: AppearanceSettings,
 }
+
+impl EventEmitter<SettingUpdated> for Settings {}
 
 impl Settings {
     /// Applies the saved values to the application.
