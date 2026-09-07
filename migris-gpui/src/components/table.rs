@@ -4,7 +4,7 @@ use futures_util::StreamExt;
 use gpui::{
     Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, InteractiveElement,
     IntoElement, KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    StatefulInteractiveElement, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Sizable, h_flex,
@@ -22,7 +22,7 @@ use crate::{
         icon::{Icon, IconName},
         text_ellipsis,
     },
-    settings::SettingsManager,
+    settings::{Setting, SettingsManager},
     size::Size,
 };
 
@@ -147,6 +147,9 @@ pub struct QueryTableState {
 
     /// Whether the table is hovered over.
     is_hovered: bool,
+
+    /// The subscription used to listen to any settings updates.
+    _settings_subscription: Subscription,
 }
 
 impl EventEmitter<QueryTableEvent> for QueryTableState {}
@@ -159,6 +162,19 @@ impl QueryTableState {
             TableState::new(delegate, window, cx)
                 .cell_selectable(true)
                 .row_header(false)
+        });
+
+        let _settings_subscription = SettingsManager::subscribe(cx, {
+            let table = table.clone();
+            move |cx, setting| {
+                if let Setting::TableSize = setting {
+                    // Resize row number column after table resize.
+                    table.update(cx, |table, cx| {
+                        table.delegate_mut().build_row_number_column(cx);
+                        table.refresh(cx);
+                    });
+                }
+            }
         });
 
         cx.subscribe(&table, |this, _, event, cx| match event {
@@ -175,6 +191,7 @@ impl QueryTableState {
         Self {
             table,
             is_hovered: false,
+            _settings_subscription,
         }
     }
 
@@ -198,13 +215,6 @@ impl QueryTableState {
                 if current_size != new_size {
                     SettingsManager::set_table_size(cx, new_size);
                     SettingsManager::save(cx);
-
-                    // Resize row number column after table resize.
-                    self.table.update(cx, |table, cx| {
-                        table.delegate_mut().build_row_number_column(cx);
-                        table.refresh(cx);
-                    });
-
                     cx.notify();
                 }
             }
@@ -482,8 +492,8 @@ impl QueryTableDelegate {
 
         let data_len = data.rows().len().to_string();
         let font_size = SettingsManager::table_size(cx).font_size(cx);
-        let width = (data_len.len() * font_size * 0.75)
-            .clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH);
+        let width =
+            (data_len.len() * font_size * 0.75).clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH);
 
         if self.columns[ROW_NUMBER_COLUMN_IDX].key == ROW_NUMBER_COLUMN_KEY {
             self.columns[ROW_NUMBER_COLUMN_IDX].width = width;
