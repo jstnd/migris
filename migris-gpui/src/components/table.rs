@@ -408,13 +408,14 @@ impl QueryTableDelegate {
             return;
         };
 
+        let font_size = SettingsManager::table_size(cx).font_size(cx);
         let mut columns: Vec<Column> = data
             .columns()
             .iter()
             .map(|column| {
                 let name = column.name().to_owned();
-                let width = (name.len() * cx.theme().font_size * 0.60)
-                    .clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
+                let width =
+                    (name.len() * font_size * 0.60).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
 
                 Column::new(&name, &name).width(width)
             })
@@ -430,8 +431,8 @@ impl QueryTableDelegate {
 
                 // Determine the width from the value's length.
                 let value = row.values[idx].to_string();
-                let width = (value.len() * cx.theme().font_size * 0.60)
-                    .clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
+                let width =
+                    (value.len() * font_size * 0.60).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
 
                 // Set the column's new width.
                 if width > column.width {
@@ -473,7 +474,8 @@ impl QueryTableDelegate {
         }
 
         let data_len = data.rows().len().to_string();
-        let width = (data_len.len() * cx.theme().font_size * 0.65)
+        let font_size = SettingsManager::table_size(cx).font_size(cx);
+        let width = (data_len.len() * font_size * 0.70)
             .clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH / 2.0);
 
         if self.columns[ROW_NUMBER_COLUMN_IDX].key == ROW_NUMBER_COLUMN_KEY {
@@ -633,7 +635,7 @@ impl TableDelegate for QueryTableDelegate {
             return div();
         };
 
-        let table_size = SettingsManager::table_size(cx);
+        let font_size = SettingsManager::table_size(cx).font_size(cx);
         if col_ix == ROW_NUMBER_COLUMN_IDX {
             return div()
                 .size_full()
@@ -643,7 +645,7 @@ impl TableDelegate for QueryTableDelegate {
                 .content_center()
                 .text_color(cx.theme().muted_foreground)
                 .text_right()
-                .map(|this| table_size.text_size(this))
+                .text_size(font_size)
                 .child((row_ix + 1).to_string());
         }
 
@@ -677,7 +679,7 @@ impl TableDelegate for QueryTableDelegate {
             .size_full()
             .content_center()
             .text_color(color)
-            .map(|this| table_size.text_size(this))
+            .text_size(font_size)
             .child(text_ellipsis(value.to_string()))
     }
 
@@ -688,11 +690,12 @@ impl TableDelegate for QueryTableDelegate {
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
         let table_size = SettingsManager::table_size(cx);
+        let font_size = table_size.font_size(cx);
         if col_ix == ROW_NUMBER_COLUMN_IDX {
             return div()
                 .w_full()
                 .text_color(cx.theme().muted_foreground)
-                .map(|this| table_size.text_size(this))
+                .text_size(font_size)
                 .child("#");
         }
 
@@ -704,7 +707,7 @@ impl TableDelegate for QueryTableDelegate {
             .w_full()
             .items_center()
             .justify_between()
-            .map(|this| table_size.text_size(this))
+            .text_size(font_size)
             .child(
                 h_flex()
                     .gap_1()

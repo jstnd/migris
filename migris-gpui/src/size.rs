@@ -1,4 +1,5 @@
-use gpui::Styled;
+use gpui::{App, Pixels};
+use gpui_component::ActiveTheme;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -28,6 +29,20 @@ impl Size {
         }
     }
 
+    /// Returns the corresponding font size for the current size.
+    pub fn font_size(&self, cx: &App) -> Pixels {
+        let font_size = cx.theme().font_size;
+        match self {
+            Self::XSmall => font_size * 0.75,
+            Self::Small => font_size * 0.875,
+            Self::Medium => font_size,
+            Self::Large => font_size * 1.125,
+            Self::XLarge => font_size * 1.25,
+            Self::XXLarge => font_size * 1.5,
+            Self::XXXLarge => font_size * 1.875,
+        }
+    }
+
     /// Returns the size one level larger than the current size.
     pub fn increase(&self) -> Self {
         match self {
@@ -38,19 +53,6 @@ impl Size {
             Self::XLarge => Self::XXLarge,
             Self::XXLarge => Self::XXXLarge,
             Self::XXXLarge => Self::XXXLarge,
-        }
-    }
-
-    /// Applies the corresponding text size to the given element.
-    pub fn text_size<T: Styled>(&self, element: T) -> T {
-        match self {
-            Self::XSmall => element.text_xs(),
-            Self::Small => element.text_sm(),
-            Self::Medium => element.text_base(),
-            Self::Large => element.text_lg(),
-            Self::XLarge => element.text_xl(),
-            Self::XXLarge => element.text_2xl(),
-            Self::XXXLarge => element.text_3xl(),
         }
     }
 }

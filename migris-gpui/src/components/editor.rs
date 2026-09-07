@@ -97,7 +97,7 @@ impl RenderOnce for Editor {
                     .p_0()
                     .h_full()
                     .appearance(false)
-                    .map(|this| SettingsManager::editor_size(cx).text_size(this))
+                    .text_size(SettingsManager::editor_size(cx).font_size(cx))
                     .when_some(self.context_menu_builder, |this, context_menu_builder| {
                         this.context_menu(move |menu, window, cx| {
                             context_menu_builder(menu, window, cx)
