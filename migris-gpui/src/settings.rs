@@ -11,7 +11,7 @@ use gpui::{App, Global, SharedString};
 use gpui_component::{ActiveTheme, Theme, ThemeMode};
 use serde::{Deserialize, Serialize};
 
-use crate::{assets::Themes, shared, state::AppState};
+use crate::{assets::Themes, shared, size::Size, state::AppState};
 
 pub struct SettingsManager {
     settings: Settings,
@@ -85,9 +85,19 @@ impl SettingsManager {
         Self::global(cx).settings.appearance.theme_mode
     }
 
+    /// Returns the saved [`Size`] for the editor.
+    pub fn editor_size(cx: &App) -> Size {
+        Self::global(cx).settings.appearance.editor_size
+    }
+
     /// Sets the saved [`AppThemeMode`].
     pub fn set_app_theme_mode(cx: &mut App, mode: AppThemeMode) {
         Self::global_mut(cx).settings.appearance.theme_mode = mode;
+    }
+
+    /// Sets the saved [`Size`] for the editor.
+    pub fn set_editor_size(cx: &mut App, size: Size) {
+        Self::global_mut(cx).settings.appearance.editor_size = size;
     }
 
     /// Sets the saved theme for the current [`ThemeMode`].
@@ -157,6 +167,9 @@ impl Settings {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct AppearanceSettings {
+    /// The size of the editor.
+    editor_size: Size,
+
     /// The theme to use when dark mode is enabled.
     theme_dark: SharedString,
 

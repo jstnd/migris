@@ -6,6 +6,7 @@ mod events;
 mod secrets;
 mod settings;
 mod shared;
+mod size;
 mod state;
 mod tabs;
 mod types;

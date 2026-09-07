@@ -12,6 +12,7 @@ pub mod table;
 
 /// Initializes configuration for components.
 pub fn init(cx: &mut App) {
+    editor::init(cx);
     panels::init(cx);
 }
 
