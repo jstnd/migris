@@ -198,6 +198,13 @@ impl QueryTableState {
                 if current_size != new_size {
                     SettingsManager::set_table_size(cx, new_size);
                     SettingsManager::save(cx);
+
+                    // Resize row number column after table resize.
+                    self.table.update(cx, |table, cx| {
+                        table.delegate_mut().build_row_number_column(cx);
+                        table.refresh(cx);
+                    });
+
                     cx.notify();
                 }
             }
@@ -475,8 +482,8 @@ impl QueryTableDelegate {
 
         let data_len = data.rows().len().to_string();
         let font_size = SettingsManager::table_size(cx).font_size(cx);
-        let width = (data_len.len() * font_size * 0.70)
-            .clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH / 2.0);
+        let width = (data_len.len() * font_size * 0.75)
+            .clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH);
 
         if self.columns[ROW_NUMBER_COLUMN_IDX].key == ROW_NUMBER_COLUMN_KEY {
             self.columns[ROW_NUMBER_COLUMN_IDX].width = width;
