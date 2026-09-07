@@ -161,10 +161,14 @@ impl QueryTableState {
                 .row_header(false)
         });
 
-        cx.subscribe(&table, |this, _, event, cx| {
-            if let TableEvent::SelectColumn(column_idx) = event {
-                this.sort_column(cx, *column_idx);
+        cx.subscribe(&table, |this, _, event, cx| match event {
+            TableEvent::ColumnWidthsChanged(widths) => {
+                this.table.update(cx, |table, _| {
+                    table.delegate_mut().resize_columns(widths);
+                });
             }
+            TableEvent::SelectColumn(column_idx) => this.sort_column(cx, *column_idx),
+            _ => {}
         })
         .detach();
 
@@ -547,6 +551,13 @@ impl QueryTableDelegate {
             });
         })
         .detach();
+    }
+
+    /// Resizes the columns with the given widths.
+    fn resize_columns(&mut self, widths: &[Pixels]) {
+        for (idx, width) in widths.iter().enumerate() {
+            self.columns[idx].width = *width;
+        }
     }
 
     /// Sorts the column with the given index.
