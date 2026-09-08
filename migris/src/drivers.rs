@@ -12,6 +12,6 @@ pub trait Driver: Send + Sync {
     /// Returns the indexes associated with the given entity.
     async fn indexes(&self, entity: &Entity) -> MigrisResult<Vec<Index>>;
 
-    async fn query(&self, query: &str) -> MigrisResult<QueryResult>;
+    async fn query(&self, query: String) -> MigrisResult<QueryResult>;
     async fn query_stream(&self, query: String) -> MigrisResult<QueryResult>;
 }

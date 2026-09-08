@@ -4,7 +4,8 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use futures_util::StreamExt;
 use rust_decimal::Decimal;
 use sqlx::{
-    Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type, ValueRef,
+    AssertSqlSafe, Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type,
+    ValueRef,
     mysql::{MySqlArguments, MySqlConnectOptions, MySqlRow, MySqlValueRef},
     query::Query,
 };
@@ -64,12 +65,15 @@ impl Connector for MySqlConnector {
         let query = options
             .query
             .as_ref()
-            .ok_or(MigrisError::DatabaseReadFailed("no query given".into()))?;
+            .ok_or(MigrisError::DatabaseReadFailed("no query given".into()))?
+            .clone();
 
-        let stream = sqlx::query(query).fetch(pool).map(move |row| {
-            row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
-                .and_then(|row| Row::from_mysql(&row, &stream_columns))
-        });
+        let stream = sqlx::query(AssertSqlSafe(query))
+            .fetch(pool)
+            .map(move |row| {
+                row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+                    .and_then(|row| Row::from_mysql(&row, &stream_columns))
+            });
 
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
@@ -215,7 +219,7 @@ impl Connector for MySqlConnector {
 
 async fn create_table(table: &Table, columns: &[Column], pool: &MySqlPool) -> MigrisResult<()> {
     let query = format!("CREATE SCHEMA IF NOT EXISTS `{}`", table.schema);
-    execute_query(sqlx::query(&query), pool).await?;
+    execute_query(sqlx::query(AssertSqlSafe(query)), pool).await?;
 
     let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
         "CREATE TABLE IF NOT EXISTS `{}`.`{}` (",
@@ -247,7 +251,7 @@ async fn create_table(table: &Table, columns: &[Column], pool: &MySqlPool) -> Mi
 
 async fn truncate_table(table: &Table, pool: &MySqlPool) -> MigrisResult<()> {
     let query = format!("TRUNCATE `{}`.`{}`", table.schema, table.name);
-    execute_query(sqlx::query(&query), pool).await?;
+    execute_query(sqlx::query(AssertSqlSafe(query)), pool).await?;
 
     Ok(())
 }
@@ -727,7 +731,7 @@ impl Value {
 impl Encode<'_, MySql> for Value {
     fn encode_by_ref(
         &self,
-        buf: &mut <MySql as sqlx::Database>::ArgumentBuffer<'_>,
+        buf: &mut <MySql as sqlx::Database>::ArgumentBuffer,
     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
         match self {
             Value::Null => Ok(sqlx::encode::IsNull::Yes),

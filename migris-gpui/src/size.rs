@@ -1,5 +1,4 @@
-use gpui::{App, Pixels};
-use gpui_component::ActiveTheme;
+use gpui_kit::{App, Pixels, component::ActiveTheme};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]

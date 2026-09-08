@@ -7,10 +7,10 @@ use std::{
 
 use anyhow::anyhow;
 use directories::BaseDirs;
-use gpui::{
+use gpui_kit::{
     App, AppContext, BorrowAppContext, Entity, EventEmitter, Global, SharedString, Subscription,
+    component::{Theme, ThemeMode},
 };
-use gpui_component::{Theme, ThemeMode};
 use serde::{Deserialize, Serialize};
 
 use crate::{assets::Themes, shared, size::Size, state::AppState};

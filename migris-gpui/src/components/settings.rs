@@ -1,10 +1,12 @@
-use gpui::{App, ParentElement, SharedString, Styled, Window};
-use gpui_component::{
-    ActiveTheme, Theme, WindowExt,
-    button::Button,
-    dialog::{Dialog, DialogFooter},
-    h_flex,
-    setting::{SettingField, SettingGroup, SettingItem, SettingPage, Settings},
+use gpui_kit::{
+    App, ParentElement, SharedString, Styled, Window,
+    base::h_flex,
+    component::{
+        ActiveTheme, Theme, WindowExt,
+        button::Button,
+        dialog::{Dialog, DialogFooter},
+        setting::{SettingField, SettingGroup, SettingItem, SettingPage, Settings},
+    },
 };
 
 use crate::{

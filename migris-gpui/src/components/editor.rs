@@ -1,13 +1,14 @@
 use std::rc::Rc;
 
-use gpui::{
+use gpui_kit::{
     Action, App, AppContext, Context, DispatchPhase, Entity, InteractiveElement, IntoElement,
     KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
-};
-use gpui_component::{
-    input::{self, TabSize},
-    native_menu::NativeMenu,
+    StatefulInteractiveElement, Styled, Window,
+    base::input::TabSize,
+    component::{input, native_menu::NativeMenu},
+    div,
+    prelude::FluentBuilder,
+    px,
 };
 
 use crate::settings::SettingsManager;

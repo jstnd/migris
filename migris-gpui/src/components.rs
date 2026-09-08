@@ -1,5 +1,9 @@
-use gpui::{App, IntoElement, ParentElement, SharedString, Styled, div};
-use gpui_component::{dialog::AlertDialog, h_flex, v_flex};
+use gpui_kit::{
+    App, IntoElement, ParentElement, SharedString, Styled,
+    base::{h_flex, v_flex},
+    component::dialog::AlertDialog,
+    div,
+};
 
 use crate::components::icon::{Icon, IconName};
 

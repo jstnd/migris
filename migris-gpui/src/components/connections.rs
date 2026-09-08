@@ -1,23 +1,28 @@
 use std::{collections::HashSet, time::Duration};
 
-use gpui::{
+use gpui_kit::{
     Action, App, AppContext, ClickEvent, Context, Div, Entity, InteractiveElement, IntoElement,
     KeystrokeEvent, MouseButton, ParentElement, Pixels, Render, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
-};
-use gpui_component::{
-    ActiveTheme, Disableable, Sizable, WindowExt,
-    button::{Button, ButtonVariants},
-    dialog::{Dialog, DialogFooter},
-    h_flex,
-    input::{Input, InputEvent, InputState, MaskPattern},
-    list::ListItem,
-    progress::ProgressCircle,
-    resizable::{h_resizable, resizable_panel},
-    select::SelectState,
-    separator::Separator,
-    tree::{self, TreeItem, TreeState},
-    v_flex,
+    StatefulInteractiveElement, Styled, Subscription, Window,
+    base::{
+        Disableable, TreeItem, TreeState, h_flex, h_resizable,
+        input::{InputEvent, InputState, MaskPattern},
+        resizable_panel, v_flex,
+    },
+    component::{
+        ActiveTheme, Sizable, WindowExt,
+        button::{Button, ButtonVariants},
+        dialog::{Dialog, DialogFooter},
+        input::Input,
+        list::ListItem,
+        progress::ProgressCircle,
+        select::SelectState,
+        separator::Separator,
+        tree,
+    },
+    div,
+    prelude::FluentBuilder,
+    px,
 };
 use migris::connection::{ConnectionOptions, MySqlOptions};
 

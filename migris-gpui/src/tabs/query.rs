@@ -1,14 +1,14 @@
-use gpui::{
+use gpui_kit::{
     Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder,
-};
-use gpui_component::{
-    ActiveTheme, Disableable, Sizable, WindowExt,
-    button::{Button, DropdownButton},
-    h_flex, input,
-    resizable::{resizable_panel, v_resizable},
-    tab::{Tab, TabBar},
-    v_flex,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
+    component::{
+        ActiveTheme, Sizable, WindowExt,
+        button::{Button, DropdownButton},
+        input,
+        tab::{Tab, TabBar},
+    },
+    prelude::FluentBuilder,
 };
 
 use crate::{

@@ -1,5 +1,7 @@
-use gpui::{App, Hsla, IntoElement, RenderOnce, Styled, Window};
-use gpui_component::{ActiveTheme, IconNamed};
+use gpui_kit::{
+    App, Hsla, IntoElement, RenderOnce, SharedString, Styled, Window, assets::IconNamed,
+    component::ActiveTheme,
+};
 
 pub enum IconName {
     ArrowDownWideNarrow,
@@ -34,7 +36,7 @@ pub enum IconName {
 }
 
 impl IconNamed for IconName {
-    fn path(self) -> gpui::SharedString {
+    fn path(self) -> SharedString {
         match self {
             Self::ArrowDownWideNarrow => "icons/arrow-down-wide-narrow.svg",
             Self::ArrowUpNarrowWide => "icons/arrow-up-narrow-wide.svg",
@@ -119,15 +121,15 @@ impl Icon {
     }
 
     /// Returns the element to render for the icon.
-    fn render(self) -> gpui_component::Icon {
-        gpui_component::Icon::from(self.icon).text_color({
+    fn render(self) -> gpui_kit::component::Icon {
+        gpui_kit::component::Icon::from(self.icon).text_color({
             let opacity = if self.disabled { 0.25 } else { 1.0 };
             self.color.opacity(opacity)
         })
     }
 }
 
-impl From<Icon> for gpui_component::Icon {
+impl From<Icon> for gpui_kit::component::Icon {
     fn from(icon: Icon) -> Self {
         icon.render()
     }

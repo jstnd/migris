@@ -1,7 +1,9 @@
-use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window, div,
+use gpui_kit::{
+    App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
+    base::{h_flex, v_flex},
+    component::{ActiveTheme, Sizable, WindowExt, button::Button},
+    div,
 };
-use gpui_component::{ActiveTheme, Sizable, WindowExt, button::Button, h_flex, v_flex};
 use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
 
 use crate::{

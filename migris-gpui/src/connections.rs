@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::anyhow;
 use directories::BaseDirs;
-use gpui::{App, Global, SharedString};
+use gpui_kit::{App, Global, SharedString};
 use migris::connection::ConnectionOptions;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

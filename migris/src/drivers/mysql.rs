@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc, time::Instant};
 
 use futures_util::StreamExt;
 use sqlx::{
-    Column as SqlxColumn, Executor, MySqlPool, Row as SqlxRow, TypeInfo,
+    AssertSqlSafe, Column as SqlxColumn, Executor, MySqlPool, Row as SqlxRow, SqlSafeStr, TypeInfo,
     mysql::{MySqlColumn, MySqlTypeInfo},
 };
 
@@ -30,9 +30,9 @@ impl MySqlConnection {
         Ok(Self { url, pool })
     }
 
-    async fn columns_from_query(&self, query: &str) -> MigrisResult<Vec<Column>> {
+    async fn columns_from_query(&self, query: Arc<str>) -> MigrisResult<Vec<Column>> {
         self.pool
-            .describe(query)
+            .describe(AssertSqlSafe(query).into_sql_str())
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?
             .columns()
@@ -142,10 +142,11 @@ impl Driver for MySqlConnection {
         Ok(indexes.into_values().collect())
     }
 
-    async fn query(&self, query: &str) -> MigrisResult<QueryResult> {
-        let columns = self.columns_from_query(query).await?;
+    async fn query(&self, query: String) -> MigrisResult<QueryResult> {
+        let query: Arc<str> = Arc::from(query);
+        let columns = self.columns_from_query(query.clone()).await?;
         let instant = Instant::now();
-        let rows = sqlx::query(query)
+        let rows = sqlx::query(AssertSqlSafe(query))
             .fetch_all(&self.pool)
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
@@ -164,11 +165,12 @@ impl Driver for MySqlConnection {
     }
 
     async fn query_stream(&self, query: String) -> MigrisResult<QueryResult> {
+        let query: Arc<str> = Arc::from(query);
         let pool = self.pool.clone();
-        let columns = self.columns_from_query(&query).await?;
+        let columns = self.columns_from_query(query.clone()).await?;
         let stream_columns = columns.clone();
         let stream = async_stream::stream! {
-            let mut stream = sqlx::query(&query).fetch(&pool);
+            let mut stream = sqlx::query(AssertSqlSafe(query)).fetch(&pool);
 
             while let Some(row) = stream.next().await {
                 let row = row

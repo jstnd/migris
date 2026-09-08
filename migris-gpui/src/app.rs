@@ -1,14 +1,14 @@
-use gpui::{
+use gpui_kit::{
     App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
-    Styled, Window, prelude::FluentBuilder, px,
-};
-use gpui_component::{
-    ActiveTheme, Root, Sizable, WindowExt,
-    button::{Button, ButtonVariants},
-    h_flex,
-    progress::ProgressCircle,
-    resizable::{h_resizable, resizable_panel},
-    v_flex,
+    Styled, Window,
+    base::{h_flex, h_resizable, resizable_panel, v_flex},
+    component::{
+        ActiveTheme, Root, Sizable, WindowExt,
+        button::{Button, ButtonVariants},
+        progress::ProgressCircle,
+    },
+    prelude::FluentBuilder,
+    px,
 };
 use migris::{Entity as MigrisEntity, EntityKind};
 
@@ -208,10 +208,11 @@ impl Application {
             }
 
             for (idx, statement) in statements.iter().enumerate() {
+                let query = statement.sql.clone();
                 let result = if event.stream {
-                    driver.query_stream(statement.sql.clone()).await
+                    driver.query_stream(query).await
                 } else {
-                    driver.query(&statement.sql).await
+                    driver.query(query).await
                 };
 
                 _ = this.update_in(cx, |this, window, cx| match result {

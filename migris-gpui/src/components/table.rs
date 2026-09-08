@@ -1,16 +1,19 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use futures_util::StreamExt;
-use gpui::{
+use gpui_kit::{
     Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable,
     InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels, RenderOnce,
-    ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div,
-    prelude::FluentBuilder, px,
-};
-use gpui_component::{
-    ActiveTheme, Sizable, h_flex,
-    progress::Progress,
-    table::{Column, ColumnSort, DataTable, TableDelegate, TableEvent, TableState},
+    ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    base::h_flex,
+    component::{
+        ActiveTheme, Sizable,
+        progress::Progress,
+        table::{Column, ColumnSort, DataTable, TableDelegate, TableEvent, TableState},
+    },
+    div,
+    prelude::FluentBuilder,
+    px,
 };
 use indexmap::IndexMap;
 use migris::{

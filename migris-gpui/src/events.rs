@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use gpui::{Action, App, Global, SharedString, Window};
+use gpui_kit::{Action, App, Global, SharedString, Window};
 use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
 use uuid::Uuid;
 

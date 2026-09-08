@@ -1,6 +1,8 @@
 use anyhow::anyhow;
-use gpui::{App, AssetSource, SharedString};
-use gpui_component::{Theme, ThemeMode, ThemeRegistry};
+use gpui_kit::{
+    App, AssetSource, SharedString,
+    component::{Theme, ThemeMode, ThemeRegistry},
+};
 
 #[derive(rust_embed::RustEmbed)]
 #[folder = "assets"]
@@ -8,7 +10,7 @@ use gpui_component::{Theme, ThemeMode, ThemeRegistry};
 pub struct Assets;
 
 impl AssetSource for Assets {
-    fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+    fn load(&self, path: &str) -> anyhow::Result<Option<std::borrow::Cow<'static, [u8]>>> {
         if path.is_empty() {
             return Ok(None);
         }
@@ -18,7 +20,7 @@ impl AssetSource for Assets {
             .ok_or_else(|| anyhow!("could not find asset at path: {path}"))
     }
 
-    fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
+    fn list(&self, path: &str) -> anyhow::Result<Vec<SharedString>> {
         Ok(Self::iter()
             .filter_map(|p| p.starts_with(path).then(|| p.into()))
             .collect())

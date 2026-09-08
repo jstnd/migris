@@ -1,5 +1,7 @@
-use gpui::{App, AppContext, BorrowAppContext, Entity, Global, Window};
-use gpui_component::{Theme, ThemeMode};
+use gpui_kit::{
+    App, AppContext, BorrowAppContext, Entity, Global, Window,
+    component::{Theme, ThemeMode},
+};
 
 use crate::{components::connections::ConnectionDialogState, settings::SettingsManager};
 

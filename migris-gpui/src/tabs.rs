@@ -1,4 +1,4 @@
-use gpui::{AnyElement, App, AppContext, Context, Entity, IntoElement, SharedString, Window};
+use gpui_kit::{AnyElement, App, AppContext, Context, Entity, IntoElement, SharedString, Window};
 use migris::Entity as MigrisEntity;
 
 use crate::{

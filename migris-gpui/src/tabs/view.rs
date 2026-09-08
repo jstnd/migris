@@ -1,5 +1,6 @@
-use gpui::{App, AppContext, Context, Entity, IntoElement, SharedString, Window};
-use gpui_component::WindowExt;
+use gpui_kit::{
+    App, AppContext, Context, Entity, IntoElement, SharedString, Window, component::WindowExt,
+};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{

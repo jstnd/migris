@@ -11,8 +11,11 @@ mod state;
 mod tabs;
 mod types;
 
-use gpui::{AppContext, WindowOptions};
-use gpui_component::Root;
+use gpui_kit::{
+    AppContext, WindowOptions,
+    base::ScrollbarMode,
+    component::{Root, Theme},
+};
 
 #[cfg(target_os = "windows")]
 use windows_native_keyring_store::Store;
@@ -33,11 +36,10 @@ fn main() -> anyhow::Result<()> {
     // Set keyring store for storing secrets
     keyring_core::set_default_store(Store::new()?);
 
-    let app = gpui_platform::application().with_assets(assets::Assets);
+    let app = gpui_kit::platform::application().with_assets(assets::Assets);
     app.run(|cx| {
-        gpui_component::init(cx);
-        gpui_component::Theme::global_mut(cx).scrollbar_mode =
-            gpui_component::scroll::ScrollbarMode::Always;
+        gpui_kit::init(cx);
+        Theme::global_mut(cx).scrollbar_mode = ScrollbarMode::Always;
 
         cx.on_app_quit(|_| {
             keyring_core::unset_default_store();

@@ -1,19 +1,24 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use gpui::{
+use gpui_kit::{
     Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding,
     KeystrokeEvent, ParentElement, RenderOnce, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, prelude::FluentBuilder, px,
-};
-use gpui_component::{
-    ActiveTheme, Sizable, WindowExt,
-    button::{Button, ButtonVariants},
-    h_flex,
-    input::{Input, InputEvent, InputState},
-    list::ListItem,
-    tab::{Tab, TabBar},
-    tree::{self, TreeItem, TreeState},
-    v_flex,
+    StatefulInteractiveElement, Styled, Subscription, Window,
+    base::{
+        TreeItem, TreeState, h_flex,
+        input::{InputEvent, InputState},
+        v_flex,
+    },
+    component::{
+        ActiveTheme, Sizable, WindowExt,
+        button::{Button, ButtonVariants},
+        input::Input,
+        list::ListItem,
+        tab::{Tab, TabBar},
+        tree,
+    },
+    prelude::FluentBuilder,
+    px,
 };
 use migris::{Entity as MigrisEntity, EntityKind};
 
