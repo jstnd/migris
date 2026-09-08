@@ -414,7 +414,20 @@ impl QueryTableDelegate {
             // before we show the result inside the table.
             self.result_buffer = Some(result);
             self.has_more_data = true;
-            self.load(cx, INIT_BATCH_SIZE, is_first_load);
+
+            // Retrieve the number of loaded rows here as we'll want
+            // to initialize the result with that same number of rows.
+            let loaded_rows = self
+                .result
+                .as_ref()
+                .map(|result| result.data.rows().len())
+                .unwrap_or_default();
+
+            self.load(
+                cx,
+                std::cmp::max(loaded_rows, INIT_BATCH_SIZE),
+                is_first_load,
+            );
         } else {
             // Results without a stream can be shown directly inside the table without pre-loading.
             self.result = Some(result);
