@@ -66,7 +66,9 @@ impl TabView {
             TabState::Query(tab) => tab.update(cx, |tab, cx| {
                 tab.focus(window, cx);
             }),
-            TabState::Table(_) => {}
+            TabState::Table(tab) => tab.update(cx, |tab, cx| {
+                tab.focus(window, cx);
+            }),
             TabState::View(_) => {}
         }
     }

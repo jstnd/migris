@@ -2,9 +2,10 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use futures_util::StreamExt;
 use gpui::{
-    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, InteractiveElement,
-    IntoElement, KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, prelude::FluentBuilder, px,
+    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable,
+    InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels, RenderOnce,
+    ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled, Subscription, Window, div,
+    prelude::FluentBuilder, px,
 };
 use gpui_component::{
     ActiveTheme, Sizable, h_flex,
@@ -242,6 +243,11 @@ impl QueryTableState {
             table.delegate_mut().build_column_index_map(indexes);
             cx.notify();
         });
+    }
+
+    /// Focuses the table content.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        self.table.read(cx).focus_handle(cx).focus(window, cx);
     }
 
     /// Returns an SQL ORDER BY string generated from the currently sorted columns.

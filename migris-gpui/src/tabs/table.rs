@@ -1,12 +1,13 @@
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window, div,
 };
-use gpui_component::{WindowExt, v_flex};
+use gpui_component::{ActiveTheme, Sizable, WindowExt, button::Button, h_flex, v_flex};
 use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
 
 use crate::{
     components::{
         self,
+        icon::IconName,
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
     events::{Event, EventManager, LoadEntityEvent, RunSqlEvent},
@@ -33,13 +34,39 @@ impl TableTab {
     }
 
     /// Returns the content for the tab.
-    pub fn content(&self, _: &mut Window, cx: &App) -> impl IntoElement {
+    pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
         let state = self.state.read(cx);
 
         v_flex()
-            .gap_1()
             .size_full()
-            .child(QueryTable::new(&state.table))
+            .gap_1()
+            .child(
+                h_flex().pt_1().px_1().justify_end().child(
+                    Button::new("table-refresh")
+                        .icon(IconName::RefreshCw)
+                        .tooltip("Refresh")
+                        .small()
+                        .on_click(window.listener_for(&self.state, |state, _, window, cx| {
+                            state.refresh(window, cx);
+                        })),
+                ),
+            )
+            .child(
+                div()
+                    .size_full()
+                    .border_t_1()
+                    .border_color(cx.theme().border)
+                    .child(QueryTable::new(&state.table)),
+            )
+    }
+
+    /// Focuses the content in the tab.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.table.update(cx, |table, cx| {
+                table.focus(window, cx);
+            });
+        });
     }
 
     /// Returns the label for the tab.
