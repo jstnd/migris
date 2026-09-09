@@ -1,6 +1,7 @@
 use crate::{Entity, MigrisResult, data::QueryResult, entity::EntityData, schema::Index};
 
 pub(crate) mod mysql;
+pub(crate) mod sqlite;
 
 #[async_trait::async_trait]
 pub trait Driver: Send + Sync {

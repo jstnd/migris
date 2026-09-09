@@ -19,7 +19,7 @@ pub use options::{ReadOptions, WriteOptions};
 pub use schema::{Column, ColumnFlag, ColumnType, Index, IndexKind, Row, Schema, Table};
 pub use value::Value;
 
-use crate::{connection::ConnectionOptions, mysql::MySqlConnection};
+use crate::{connection::ConnectionOptions, mysql::MySqlConnection, sqlite::SqliteConnection};
 
 pub mod csv {
     pub use crate::connectors::csv::{CsvConnector, CsvDataType};
@@ -28,6 +28,10 @@ pub mod csv {
 pub mod mysql {
     pub use crate::connectors::mysql::{MySqlConnector, MySqlDataType};
     pub use crate::drivers::mysql::MySqlConnection;
+}
+
+pub mod sqlite {
+    pub use crate::drivers::sqlite::*;
 }
 
 type MigrisResult<T> = Result<T, MigrisError>;
@@ -90,6 +94,9 @@ pub async fn driver(options: &ConnectionOptions) -> MigrisResult<Arc<dyn Driver>
     match options {
         ConnectionOptions::MySql(options) => {
             Ok(Arc::new(MySqlConnection::new(options.url()).await?))
+        }
+        ConnectionOptions::Sqlite(options) => {
+            Ok(Arc::new(SqliteConnection::new(&options.path).await?))
         }
     }
 }

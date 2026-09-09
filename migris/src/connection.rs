@@ -6,11 +6,24 @@ use crate::shared;
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ConnectionOptions {
     MySql(MySqlOptions),
+    Sqlite(SqliteOptions),
 }
 
 impl Default for ConnectionOptions {
     fn default() -> Self {
         Self::MySql(MySqlOptions::default())
+    }
+}
+
+impl From<MySqlOptions> for ConnectionOptions {
+    fn from(value: MySqlOptions) -> Self {
+        Self::MySql(value)
+    }
+}
+
+impl From<SqliteOptions> for ConnectionOptions {
+    fn from(value: SqliteOptions) -> Self {
+        Self::Sqlite(value)
     }
 }
 
@@ -41,4 +54,10 @@ impl Default for MySqlOptions {
             password: String::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SqliteOptions {
+    /// The path to the database file.
+    pub path: String,
 }

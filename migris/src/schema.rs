@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::{MigrisError, Value, csv::CsvDataType, mysql::MySqlDataType};
+use crate::{MigrisError, Value, csv::CsvDataType, mysql::MySqlDataType, sqlite::SqliteDataType};
 
 #[derive(Clone, Debug)]
 pub struct Column {
@@ -34,6 +34,7 @@ pub enum ColumnFlag {
 pub enum ColumnType {
     Csv(CsvDataType),
     MySql(MySqlDataType),
+    Sqlite(SqliteDataType),
 }
 
 impl ColumnType {
@@ -60,6 +61,10 @@ impl ColumnType {
                 }
             },
             ColumnType::MySql(data_type) => data_type.clone(),
+            ColumnType::Sqlite(_) => {
+                // TODO: TEMPORARY PLACEHOLDER UNTIL ACTUALLY NEEDED
+                MySqlDataType::BIGINT
+            }
         }
     }
 }

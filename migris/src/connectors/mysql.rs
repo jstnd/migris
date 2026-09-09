@@ -648,7 +648,6 @@ impl Schema {
 
 impl Value {
     fn from_mysql(value: MySqlValueRef, column: &Column) -> MigrisResult<Self> {
-        // Check if the value is null first.
         if value.is_null() {
             return Ok(Value::Null);
         }
@@ -656,7 +655,7 @@ impl Value {
         match column.column_type.as_mysql() {
             MySqlDataType::BIGINT => {
                 if column.is_unsigned() {
-                    Ok(Value::U64(decode_sqlx(value)?))
+                    Ok(Value::U64(decode_sqlx::<_, MySql, _>(value)?))
                 } else {
                     Ok(Value::I64(decode_sqlx::<_, MySql, _>(value)?))
                 }
@@ -667,7 +666,7 @@ impl Value {
             | MySqlDataType::MEDIUMBLOB
             | MySqlDataType::TINYBLOB
             | MySqlDataType::VARBINARY(_) => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlDataType::BIT(_) => Ok(Value::U64(decode_sqlx(value)?)),
+            MySqlDataType::BIT(_) => Ok(Value::U64(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::CHAR(_)
             | MySqlDataType::JSON
             | MySqlDataType::LONGTEXT
@@ -676,7 +675,7 @@ impl Value {
             | MySqlDataType::TINYTEXT
             | MySqlDataType::VARCHAR(_) => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::DATE => {
-                let date: NaiveDate = decode_sqlx(value)?;
+                let date: NaiveDate = decode_sqlx::<_, MySql, _>(value)?;
                 let date: NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
                     MigrisError::ValueError("failed to convert date to datetime".into()),
                 )?;
@@ -684,7 +683,7 @@ impl Value {
                 Ok(Value::Date(Utc.from_utc_datetime(&date)))
             }
             MySqlDataType::DATETIME => {
-                let date: NaiveDateTime = decode_sqlx(value)?;
+                let date: NaiveDateTime = decode_sqlx::<_, MySql, _>(value)?;
                 Ok(Value::Date(Utc.from_utc_datetime(&date)))
             }
             MySqlDataType::DECIMAL(_, _) => Ok(Value::Decimal(decode_sqlx(value)?)),
@@ -701,7 +700,7 @@ impl Value {
             | MySqlDataType::POLYGON => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::INT | MySqlDataType::MEDIUMINT => {
                 if column.is_unsigned() {
-                    Ok(Value::U32(decode_sqlx(value)?))
+                    Ok(Value::U32(decode_sqlx::<_, MySql, _>(value)?))
                 } else {
                     Ok(Value::I32(decode_sqlx::<_, MySql, _>(value)?))
                 }
@@ -709,21 +708,21 @@ impl Value {
             MySqlDataType::SET(_) => Ok(Value::Bytes(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::SMALLINT => {
                 if column.is_unsigned() {
-                    Ok(Value::U16(decode_sqlx(value)?))
+                    Ok(Value::U16(decode_sqlx::<_, MySql, _>(value)?))
                 } else {
                     Ok(Value::I16(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlDataType::TIME => Ok(Value::Time(decode_sqlx(value)?)),
-            MySqlDataType::TIMESTAMP => Ok(Value::Date(decode_sqlx(value)?)),
+            MySqlDataType::TIME => Ok(Value::Time(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::TIMESTAMP => Ok(Value::Date(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::TINYINT => {
                 if column.is_unsigned() {
-                    Ok(Value::U8(decode_sqlx(value)?))
+                    Ok(Value::U8(decode_sqlx::<_, MySql, _>(value)?))
                 } else {
-                    Ok(Value::I8(decode_sqlx(value)?))
+                    Ok(Value::I8(decode_sqlx::<_, MySql, _>(value)?))
                 }
             }
-            MySqlDataType::YEAR => Ok(Value::U16(decode_sqlx(value)?)),
+            MySqlDataType::YEAR => Ok(Value::U16(decode_sqlx::<_, MySql, _>(value)?)),
         }
     }
 }
@@ -736,19 +735,19 @@ impl Encode<'_, MySql> for Value {
         match self {
             Value::Null => Ok(sqlx::encode::IsNull::Yes),
             Value::Bytes(value) => <Vec<u8> as Encode<'_, MySql>>::encode_by_ref(value, buf),
-            Value::Date(value) => value.encode_by_ref(buf),
+            Value::Date(value) => <DateTime<Utc> as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Decimal(value) => <Decimal as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::String(value) => <String as Encode<'_, MySql>>::encode_by_ref(value, buf),
-            Value::Time(value) => value.encode_by_ref(buf),
+            Value::Time(value) => <NaiveTime as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::F32(value) => <f32 as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::F64(value) => <f64 as Encode<'_, MySql>>::encode_by_ref(value, buf),
-            Value::I8(value) => value.encode_by_ref(buf),
+            Value::I8(value) => <i8 as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::I16(value) => <i16 as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::I32(value) => <i32 as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::I64(value) => <i64 as Encode<'_, MySql>>::encode_by_ref(value, buf),
-            Value::U8(value) => value.encode_by_ref(buf),
-            Value::U16(value) => value.encode_by_ref(buf),
-            Value::U32(value) => value.encode_by_ref(buf),
+            Value::U8(value) => <u8 as Encode<'_, MySql>>::encode_by_ref(value, buf),
+            Value::U16(value) => <u16 as Encode<'_, MySql>>::encode_by_ref(value, buf),
+            Value::U32(value) => <u32 as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::U64(value) => value.encode_by_ref(buf),
         }
     }
