@@ -117,6 +117,7 @@ impl QueryTabState {
 
                     this.tables.push(table);
                     this.table_subscriptions.push(subscription);
+                    cx.notify();
                 });
             })
             .show_progress(),
