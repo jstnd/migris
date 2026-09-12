@@ -1,13 +1,15 @@
 use std::str::FromStr;
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use futures_util::StreamExt;
-use rust_decimal::Decimal;
 use sqlx::{
     AssertSqlSafe, Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type,
     ValueRef,
     mysql::{MySqlArguments, MySqlConnectOptions, MySqlRow, MySqlValueRef},
     query::Query,
+    types::{
+        Decimal,
+        chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc},
+    },
 };
 
 use crate::{

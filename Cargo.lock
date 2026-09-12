@@ -4292,11 +4292,9 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "async-trait",
- "chrono",
  "clap",
  "csv",
  "futures-util",
- "rust_decimal",
  "serde",
  "sqlx",
  "thiserror 2.0.20",
@@ -8166,7 +8164,6 @@ dependencies = [
  "cfg-if",
  "once_cell",
  "rustversion",
- "serde",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
 ]

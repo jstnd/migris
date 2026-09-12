@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, path::Path};
 
-use sqlx::{Database, Decode, ValueRef};
+use sqlx::{Database, Decode, ValueRef, types::chrono::Local};
 
 use crate::{FileType, MigrisError, MigrisResult};
 
@@ -16,7 +16,7 @@ where
 }
 
 pub(crate) fn generate_name() -> String {
-    format!("migris_{}", chrono::Local::now().format("%m%d%Y_%H%M%S%f"))
+    format!("migris_{}", Local::now().format("%m%d%Y_%H%M%S%f"))
 }
 
 pub fn get_safe_name(str: &str) -> String {

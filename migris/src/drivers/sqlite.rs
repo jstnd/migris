@@ -1,6 +1,5 @@
 use std::{str::FromStr, sync::Arc, time::Instant};
 
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 use futures_util::StreamExt;
 use sqlx::{
     AssertSqlSafe, Column as SqlxColumn, Executor, Row as SqlxRow, SqlSafeStr, Sqlite, SqlitePool,
@@ -9,6 +8,7 @@ use sqlx::{
         SqliteColumn, SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous,
         SqliteValueRef,
     },
+    types::chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc},
 };
 
 use crate::{

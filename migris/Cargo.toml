@@ -6,11 +6,9 @@ edition = "2024"
 [dependencies]
 async-stream = "0.3.6"
 async-trait = "0.1.89"
-chrono = "0.4.45"
 clap = { workspace = true }
 csv = "1.4.0"
 futures-util = { workspace = true }
-rust_decimal = "1.39.0"
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = "2.0.17"

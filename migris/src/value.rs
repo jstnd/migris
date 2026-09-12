@@ -1,11 +1,16 @@
+use sqlx::types::{
+    Decimal,
+    chrono::{DateTime, NaiveTime, Utc},
+};
+
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
     Bytes(Vec<u8>),
-    Date(chrono::DateTime<chrono::Utc>),
-    Decimal(rust_decimal::Decimal),
+    Date(DateTime<Utc>),
+    Decimal(Decimal),
     String(String),
-    Time(chrono::NaiveTime),
+    Time(NaiveTime),
     F32(f32),
     F64(f64),
     I8(i8),
