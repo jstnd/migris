@@ -3,7 +3,7 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
-        ActiveTheme, Sizable,
+        Sizable,
         button::{Button, DropdownButton},
         input,
         tab::{Tab, TabBar},
@@ -251,26 +251,19 @@ impl QueryTab {
                     v_flex()
                         .size_full()
                         .child(
-                            h_flex()
-                                .id("table-tab-bar")
-                                .w_full()
-                                .bg(cx.theme().tab_bar)
-                                .overflow_x_scroll()
-                                .child(
-                                    TabBar::new("table-tabs")
-                                        .selected_index(state.active_table)
-                                        .on_click(window.listener_for(
-                                            &self.state,
-                                            |state, idx, _, _| {
-                                                state.active_table = *idx;
-                                            },
-                                        ))
-                                        .children(state.tables.iter().enumerate().map(
-                                            |(idx, _)| {
-                                                Tab::new().label(format!("Result #{}", idx + 1))
-                                            },
-                                        )),
-                                ),
+                            h_flex().id("result-tab-bar").overflow_x_scroll().child(
+                                TabBar::new("result-tabs")
+                                    .selected_index(state.active_table)
+                                    .on_click(window.listener_for(
+                                        &self.state,
+                                        |state, idx, _, _| {
+                                            state.active_table = *idx;
+                                        },
+                                    ))
+                                    .children(state.tables.iter().enumerate().map(|(idx, _)| {
+                                        Tab::new().label(format!("Result #{}", idx + 1))
+                                    })),
+                            ),
                         )
                         .child(QueryTable::new(state.active_table())),
                 )
