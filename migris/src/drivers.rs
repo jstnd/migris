@@ -1,4 +1,4 @@
-use crate::{Entity, MigrisResult, data::QueryResult, entity::EntityData, schema::Index};
+use crate::{Entity, MigrisResult, data::QueryResult, entity::EntityData, schema::Index, shared};
 
 pub(crate) mod mysql;
 pub(crate) mod sqlite;
@@ -15,4 +15,21 @@ pub trait Driver: Send + Sync {
 
     async fn query(&self, query: String) -> MigrisResult<QueryResult>;
     async fn query_stream(&self, query: String) -> MigrisResult<QueryResult>;
+}
+
+#[derive(Debug, Clone, Copy, Default, sqlx::Type)]
+#[sqlx(rename_all = "lowercase")]
+pub enum ConnectionKind {
+    #[default]
+    MySql,
+    Sqlite,
+}
+
+impl ConnectionKind {
+    pub fn default_port(&self) -> u16 {
+        match self {
+            ConnectionKind::MySql => shared::DEFAULT_MYSQL_PORT,
+            ConnectionKind::Sqlite => 0,
+        }
+    }
 }

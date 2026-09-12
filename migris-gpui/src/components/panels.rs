@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding,
-    KeystrokeEvent, ParentElement, RenderOnce, ScrollHandle, SharedString,
+    Action, App, AppContext, BorrowAppContext, Context, Entity, InteractiveElement, IntoElement,
+    KeyBinding, KeystrokeEvent, ParentElement, RenderOnce, ScrollHandle, SharedString,
     StatefulInteractiveElement, Styled, Subscription, Window,
     base::{
         TreeItem, TreeState, h_flex,
@@ -30,6 +30,7 @@ use crate::{
     },
     events::{Event, EventManager, EventVariant},
     shared,
+    state::AppState,
     tabs::{TabVariant, TabView},
 };
 
@@ -292,6 +293,11 @@ impl RenderOnce for ConnectionPanel {
                             .tooltip("Add Connection")
                             .ghost()
                             .on_click(|_, window, cx| {
+                                // Load the connection dialog first before displaying.
+                                cx.update_global(|app_state: &mut AppState, cx| {
+                                    app_state.load_connection_dialog(cx);
+                                });
+
                                 window.open_dialog(cx, |dialog, window, cx| {
                                     connections::connection_dialog(dialog, window, cx)
                                 });

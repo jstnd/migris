@@ -51,4 +51,11 @@ impl AppState {
             })
             .detach();
     }
+
+    /// Loads needed information for the connection dialog.
+    pub fn load_connection_dialog(&self, cx: &mut App) {
+        self.connection_dialog.update(cx, |connection_dialog, cx| {
+            connection_dialog.load_tree(cx);
+        });
+    }
 }

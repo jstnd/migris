@@ -1,29 +1,32 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::Display,
-    fs::File,
-    io::{BufReader, BufWriter},
-    path::PathBuf,
+    sync::Arc,
 };
 
-use anyhow::anyhow;
-use directories::BaseDirs;
-use gpui_kit::{App, Global, SharedString};
-use migris::connection::ConnectionOptions;
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use gpui_kit::{App, Global, SharedString, Task};
+use migris::drivers::ConnectionKind;
+use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::{secrets, shared};
+use crate::{database::Database, secrets};
 
 pub struct ConnectionManager {
-    /// The config containing the connections and folders.
-    config: ConnectionConfig,
+    /// The application's database.
+    database: Arc<Database>,
+
+    /// The saved connections.
+    connections: Vec<Connection>,
 
     /// Tracks the locations of connections within the full list by [`ConnectionId`].
     connection_map: HashMap<ConnectionId, usize>,
 
     /// Tracks the connections within each folder.
     connections_by_folder: HashMap<Option<ConnectionFolderId>, Vec<ConnectionId>>,
+
+    /// The saved connection folders.
+    folders: Vec<ConnectionFolder>,
 
     /// Tracks the locations of folders within the full list by [`ConnectionFolderId`].
     folder_map: HashMap<ConnectionFolderId, usize>,
@@ -35,25 +38,59 @@ pub struct ConnectionManager {
 impl Global for ConnectionManager {}
 
 impl ConnectionManager {
-    /// Loads the config from the config file.
-    pub fn load() -> Self {
-        let config = Self::try_load().unwrap_or_else(|_| ConnectionConfig::default());
-        let mut manager = Self {
-            config,
+    /// Creates a new [`ConnectionManager`].
+    pub fn new(database: Arc<Database>) -> Self {
+        Self {
+            database,
+            connections: Vec::new(),
             connection_map: HashMap::new(),
             connections_by_folder: HashMap::new(),
+            folders: Vec::new(),
             folder_map: HashMap::new(),
             folders_by_parent: HashMap::new(),
-        };
-
-        manager.load_maps();
-        manager
+        }
     }
 
-    /// Saves the config to the config file.
-    pub fn save(&mut self) {
-        // TODO: log errors with saving
-        _ = self.try_save();
+    /// Initializes the in-memory connections and folders from the database.
+    pub fn init(&self, cx: &App) -> Task<Result<()>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            let connections = database.connections().await?;
+            let folders = database.connection_folders().await?;
+            cx.update_global(|this: &mut Self, _| {
+                this.connections = connections;
+                this.folders = folders;
+                this.load_maps();
+            });
+
+            Ok(())
+        })
+    }
+
+    /// Loads the in-memory connection and folder mappings.
+    ///
+    /// These mappings are used for more efficient access to the saved connections and folders.
+    fn load_maps(&mut self) {
+        self.connection_map.clear();
+        self.connections_by_folder.clear();
+        self.folder_map.clear();
+        self.folders_by_parent.clear();
+
+        for (idx, connection) in self.connections.iter().enumerate() {
+            self.connection_map.insert(connection.id, idx);
+            self.connections_by_folder
+                .entry(connection.folder_id)
+                .or_default()
+                .push(connection.id);
+        }
+
+        for (idx, folder) in self.folders.iter().enumerate() {
+            self.folder_map.insert(folder.id, idx);
+            self.folders_by_parent
+                .entry(folder.folder_id)
+                .or_default()
+                .push(folder.id);
+        }
     }
 
     /// Returns a reference to the global [`ConnectionManager`].
@@ -61,35 +98,54 @@ impl ConnectionManager {
         cx.global::<Self>()
     }
 
-    /// Returns a mutable reference to the global [`ConnectionManager`].
-    pub fn global_mut(cx: &mut App) -> &mut Self {
-        cx.global_mut::<Self>()
+    /// Adds a new connection to the saved connections.
+    pub fn add_connection(&self, cx: &App, connection: Connection) -> Task<Result<()>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.insert_connection(&connection).await?;
+            cx.update_global(|this: &mut Self, _| {
+                let next_idx = this.connections.len();
+                this.connection_map.insert(connection.id, next_idx);
+                this.connections_by_folder
+                    .entry(connection.folder_id)
+                    .or_default()
+                    .push(connection.id);
+                this.connections.push(connection);
+            });
+
+            Ok(())
+        })
     }
 
-    /// Adds a new connection to the config.
-    pub fn add_connection(&mut self, connection: Connection) {
-        self.config.connections.push(connection);
-        self.load_maps();
-        self.save();
-    }
+    /// Adds a new folder to the saved folders.
+    pub fn add_folder(&self, cx: &App, folder: ConnectionFolder) -> Task<Result<()>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.insert_connection_folder(&folder).await?;
+            cx.update_global(|this: &mut Self, _| {
+                let next_idx = this.folders.len();
+                this.folder_map.insert(folder.id, next_idx);
+                this.folders_by_parent
+                    .entry(folder.folder_id)
+                    .or_default()
+                    .push(folder.id);
+                this.folders.push(folder);
+            });
 
-    /// Adds a new folder to the config.
-    pub fn add_folder(&mut self, folder: ConnectionFolder) {
-        self.config.folders.push(folder);
-        self.load_maps();
-        self.save();
+            Ok(())
+        })
     }
 
     /// Returns a reference to the connection matching the given [`ConnectionId`].
     pub fn connection(&self, id: &ConnectionId) -> &Connection {
         let idx = self.connection_map[id];
-        &self.config.connections[idx]
+        &self.connections[idx]
     }
 
     /// Returns a mutable reference to the connection matching the given [`ConnectionId`].
-    pub fn connection_mut(&mut self, id: &ConnectionId) -> &mut Connection {
+    fn connection_mut(&mut self, id: &ConnectionId) -> &mut Connection {
         let idx = self.connection_map[id];
-        &mut self.config.connections[idx]
+        &mut self.connections[idx]
     }
 
     /// Returns the connections within the given folder.
@@ -100,70 +156,84 @@ impl ConnectionManager {
         self.connections_by_folder.get(folder)
     }
 
-    /// Duplicates the connection with the given [`ConnectionId`].
-    pub fn duplicate_connection(&mut self, id: &ConnectionId) {
-        let connection = self.connection(id);
-        self.add_connection(connection.duplicate_with_name(format!("{} - Copy", connection.name)));
+    /// Deletes the connection with the given [`ConnectionId`].
+    pub fn delete_connection(&self, cx: &App, id: ConnectionId) -> Task<Result<()>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.delete_connection(&id).await?;
+            cx.update_global(|this: &mut Self, _| {
+                let idx = this.connection_map[&id];
+                let connection = &this.connections[idx];
+
+                // Clean up system key storage.
+                connection.delete_password();
+
+                this.connections.swap_remove(idx);
+                this.load_maps();
+            });
+
+            Ok(())
+        })
     }
 
-    /// Duplicates the folder with the given [`ConnectionFolderId`].
-    pub fn duplicate_folder(&mut self, id: &ConnectionFolderId) {
-        fn duplicate_inner(
-            manager: &ConnectionManager,
-            id: ConnectionFolderId,
-            new_id: ConnectionFolderId,
-        ) -> (Vec<Connection>, Vec<ConnectionFolder>) {
-            let mut new_connections = Vec::new();
-            let mut new_folders = Vec::new();
+    /// Deletes the folder with the given [`ConnectionFolderId`].
+    ///
+    /// Returns the set of connections that were deleted for future processing if needed.
+    pub fn delete_folder(
+        &self,
+        cx: &App,
+        id: ConnectionFolderId,
+    ) -> Task<Result<HashSet<ConnectionId>>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.delete_connection_folder(&id).await?;
+            let deleted_connections = cx.update_global(|this: &mut Self, _| {
+                let mut deleted_connections = HashSet::new();
+                let mut queue = VecDeque::from([id]);
 
-            // Duplicate any connections under the folder.
-            if let Some(connections) = manager.connections_for_folder(&Some(id)) {
-                for connection_id in connections {
-                    let connection = manager
-                        .connection(connection_id)
-                        .duplicate_with_folder(new_id);
+                while let Some(folder_id) = queue.pop_front() {
+                    if let Some(connections) = this.connections_for_folder(&Some(folder_id)) {
+                        deleted_connections.extend(connections);
+                    }
 
-                    new_connections.push(connection);
+                    if let Some(folders) = this.folders_for_parent(&Some(folder_id)) {
+                        queue.extend(folders);
+                    }
                 }
-            }
 
-            // Duplicate any folders under the folder.
-            if let Some(folders) = manager.folders_for_parent(&Some(id)) {
-                for folder_id in folders {
-                    let folder = manager.folder(folder_id).duplicate_with_parent(new_id);
-                    let (inner_new_connections, inner_new_folders) =
-                        duplicate_inner(manager, *folder_id, folder.id);
-
-                    new_connections.extend(inner_new_connections);
-                    new_folders.extend(inner_new_folders);
-                    new_folders.push(folder);
+                // Clean up system key storage.
+                for connection_id in deleted_connections.iter() {
+                    let connection = this.connection(connection_id);
+                    connection.delete_password();
                 }
-            }
 
-            (new_connections, new_folders)
-        }
+                deleted_connections
+            });
 
-        let folder = self.folder(id);
-        let new_folder = folder.duplicate_with_name(format!("{} - Copy", folder.name));
+            cx.read_global(|this: &Self, cx| this.init(cx)).await?;
+            Ok(deleted_connections)
+        })
+    }
 
-        let (new_connections, new_folders) = duplicate_inner(self, folder.id, new_folder.id);
-        self.config.connections.extend(new_connections);
-        self.config.folders.extend(new_folders);
-        self.config.folders.push(new_folder);
-        self.load_maps();
-        self.save();
+    /// Duplicates the connection with the given [`ConnectionId`].
+    pub fn duplicate_connection(&self, cx: &App, id: &ConnectionId) -> Task<Result<()>> {
+        let connection = self.connection(id);
+        self.add_connection(
+            cx,
+            connection.duplicate_with_name(format!("{} - Copy", connection.name)),
+        )
     }
 
     /// Returns a reference to the folder matching the given [`ConnectionFolderId`].
     pub fn folder(&self, id: &ConnectionFolderId) -> &ConnectionFolder {
         let idx = self.folder_map[id];
-        &self.config.folders[idx]
+        &self.folders[idx]
     }
 
     /// Returns a mutable reference to the folder matching the given [`ConnectionFolderId`].
-    pub fn folder_mut(&mut self, id: &ConnectionFolderId) -> &mut ConnectionFolder {
+    fn folder_mut(&mut self, id: &ConnectionFolderId) -> &mut ConnectionFolder {
         let idx = self.folder_map[id];
-        &mut self.config.folders[idx]
+        &mut self.folders[idx]
     }
 
     /// Returns whether the folder with the given [`ConnectionFolderId`] contains the folder with the other [`ConnectionFolderId`].
@@ -191,99 +261,78 @@ impl ConnectionManager {
     }
 
     /// Moves the connection with the given [`ConnectionId`] to the given folder.
-    pub fn move_connection(&mut self, id: &ConnectionId, folder: Option<ConnectionFolderId>) {
-        let connection = self.connection_mut(id);
-        connection.set_folder(folder);
-        self.load_maps();
-        self.save();
+    pub fn move_connection(
+        &self,
+        cx: &App,
+        id: ConnectionId,
+        folder_id: Option<ConnectionFolderId>,
+    ) -> Task<Result<()>> {
+        let mut connection = self.connection(&id).clone();
+        let prev_folder_id = connection.folder_id;
+        connection.folder_id = folder_id;
+
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.update_connection(&connection).await?;
+            cx.update_global(|this: &mut Self, _| {
+                this.connection_mut(&id).folder_id = folder_id;
+
+                // Remove connection from previous folder in mapping.
+                this.connections_by_folder
+                    .entry(prev_folder_id)
+                    .or_default()
+                    .retain(|inner_id| *inner_id != id);
+
+                // Add connection to new folder in mapping.
+                this.connections_by_folder
+                    .entry(folder_id)
+                    .or_default()
+                    .push(id);
+            });
+
+            Ok(())
+        })
     }
 
     /// Moves the folder with the given [`ConnectionFolderId`] to the given parent folder.
-    pub fn move_folder(&mut self, id: &ConnectionFolderId, parent: Option<ConnectionFolderId>) {
-        let folder = self.folder_mut(id);
-        folder.set_parent(parent);
-        self.load_maps();
-        self.save();
-    }
+    pub fn move_folder(
+        &self,
+        cx: &App,
+        id: ConnectionFolderId,
+        folder_id: Option<ConnectionFolderId>,
+    ) -> Task<Result<()>> {
+        let mut folder = self.folder(&id).clone();
+        let prev_folder_id = folder.folder_id;
+        folder.folder_id = folder_id;
 
-    /// Removes the connection with the given [`ConnectionId`] from the config.
-    pub fn remove_connection(&mut self, id: &ConnectionId) {
-        let idx = self.connection_map[id];
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.update_connection_folder(&folder).await?;
+            cx.update_global(|this: &mut Self, _| {
+                this.folder_mut(&id).folder_id = folder_id;
 
-        // Clean up system key storage.
-        let connection = &self.config.connections[idx];
-        connection.delete_password();
+                // Remove folder from previous parent in mapping.
+                this.folders_by_parent
+                    .entry(prev_folder_id)
+                    .or_default()
+                    .retain(|inner_id| *inner_id != id);
 
-        self.config.connections.swap_remove(idx);
-        self.load_maps();
-        self.save();
-    }
+                // Add folder to new parent in mapping.
+                this.folders_by_parent
+                    .entry(folder_id)
+                    .or_default()
+                    .push(id);
+            });
 
-    /// Removes the folder with the given [`ConnectionFolderId`] from the config.
-    ///
-    /// Returns the set of connections that were removed for future processing if needed.
-    pub fn remove_folder(&mut self, id: &ConnectionFolderId) -> HashSet<ConnectionId> {
-        fn remove_inner(
-            manager: &ConnectionManager,
-            id: ConnectionFolderId,
-        ) -> (HashSet<ConnectionId>, HashSet<ConnectionFolderId>) {
-            let mut removed_connections = HashSet::new();
-            let mut removed_folders = HashSet::from([id]);
-
-            if let Some(connections) = manager.connections_for_folder(&Some(id)) {
-                removed_connections.extend(connections);
-            }
-
-            if let Some(folders) = manager.folders_for_parent(&Some(id)) {
-                for id in folders {
-                    let (inner_removed_connections, inner_removed_folders) =
-                        remove_inner(manager, *id);
-                    removed_connections.extend(inner_removed_connections);
-                    removed_folders.extend(inner_removed_folders);
-                }
-            }
-
-            (removed_connections, removed_folders)
-        }
-
-        let (removed_connections, removed_folders) = remove_inner(self, *id);
-
-        // Clean up system key storage.
-        for connection_id in &removed_connections {
-            let connection = self.connection(connection_id);
-            connection.delete_password();
-        }
-
-        // Remove connections and folders from config.
-        self.config
-            .connections
-            .retain(|connection| !removed_connections.contains(&connection.id));
-        self.config
-            .folders
-            .retain(|folder| !removed_folders.contains(&folder.id));
-
-        self.load_maps();
-        self.save();
-        removed_connections
+            Ok(())
+        })
     }
 
     /// Returns a reference to the connection matching the given id string, if one is found.
     pub fn try_connection(&self, id: &SharedString) -> Option<&Connection> {
         if let Ok(uuid) = Uuid::parse_str(id)
             && let Some(idx) = self.connection_map.get(&ConnectionId(uuid))
-            && let Some(connection) = self.config.connections.get(*idx)
-        {
-            Some(connection)
-        } else {
-            None
-        }
-    }
-
-    /// Returns a mutable reference to the connection matching the given id string, if one is found.
-    pub fn try_connection_mut(&mut self, id: &SharedString) -> Option<&mut Connection> {
-        if let Ok(uuid) = Uuid::parse_str(id)
-            && let Some(idx) = self.connection_map.get(&ConnectionId(uuid))
-            && let Some(connection) = self.config.connections.get_mut(*idx)
+            && let Some(connection) = self.connections.get(*idx)
         {
             Some(connection)
         } else {
@@ -295,7 +344,7 @@ impl ConnectionManager {
     pub fn try_folder(&self, id: &SharedString) -> Option<&ConnectionFolder> {
         if let Ok(uuid) = Uuid::parse_str(id)
             && let Some(idx) = self.folder_map.get(&ConnectionFolderId(uuid))
-            && let Some(folder) = self.config.folders.get(*idx)
+            && let Some(folder) = self.folders.get(*idx)
         {
             Some(folder)
         } else {
@@ -303,73 +352,47 @@ impl ConnectionManager {
         }
     }
 
-    /// Returns a mutable reference to the folder matching the given id string, if one is found.
-    pub fn try_folder_mut(&mut self, id: &SharedString) -> Option<&mut ConnectionFolder> {
-        if let Ok(uuid) = Uuid::parse_str(id)
-            && let Some(idx) = self.folder_map.get(&ConnectionFolderId(uuid))
-            && let Some(folder) = self.config.folders.get_mut(*idx)
-        {
-            Some(folder)
-        } else {
-            None
-        }
+    /// Updates the given [`Connection`].
+    ///
+    /// This will persist the connection's data in the application's database and in-memory.
+    pub fn update_connection(&self, cx: &App, connection: Connection) -> Task<Result<()>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            let mut connection = connection;
+            connection.set_password();
+            database.update_connection(&connection).await?;
+            cx.update_global(|this: &mut Self, _| {
+                // Update in-memory connection to passed instance.
+                let idx = this.connection_map[&connection.id];
+                this.connections[idx] = connection;
+                this.load_maps();
+            });
+
+            Ok(())
+        })
     }
 
-    fn load_maps(&mut self) {
-        self.connection_map.clear();
-        self.connections_by_folder.clear();
-        self.folder_map.clear();
-        self.folders_by_parent.clear();
+    /// Updates the given [`ConnectionFolder`].
+    ///
+    /// This will persist the folder's data in the application's database and in-memory.
+    pub fn update_folder(&self, cx: &App, folder: ConnectionFolder) -> Task<Result<()>> {
+        let database = self.database.clone();
+        cx.spawn(async move |cx| {
+            database.update_connection_folder(&folder).await?;
+            cx.update_global(|this: &mut Self, _| {
+                // Update in-memory folder to passed instance.
+                let idx = this.folder_map[&folder.id];
+                this.folders[idx] = folder;
+                this.load_maps();
+            });
 
-        for (idx, connection) in self.config.connections.iter().enumerate() {
-            self.connection_map.insert(connection.id, idx);
-            self.connections_by_folder
-                .entry(connection.folder)
-                .or_default()
-                .push(connection.id);
-        }
-
-        for (idx, folder) in self.config.folders.iter().enumerate() {
-            self.folder_map.insert(folder.id, idx);
-            self.folders_by_parent
-                .entry(folder.parent)
-                .or_default()
-                .push(folder.id);
-        }
-    }
-
-    fn connections_path() -> Result<PathBuf, anyhow::Error> {
-        let Some(dirs) = BaseDirs::new() else {
-            return Err(anyhow!("Failed to retrieve directories"));
-        };
-
-        Ok(dirs
-            .config_dir()
-            .join(shared::APPLICATION_NAME)
-            .join("connections.json"))
-    }
-
-    fn try_load() -> Result<ConnectionConfig, anyhow::Error> {
-        let path = Self::connections_path()?;
-        let reader = BufReader::new(File::open(path)?);
-        Ok(serde_json::from_reader(reader)?)
-    }
-
-    fn try_save(&self) -> Result<(), anyhow::Error> {
-        let path = Self::connections_path()?;
-        let writer = BufWriter::new(File::create(path)?);
-        serde_json::to_writer_pretty(writer, &self.config)?;
-        Ok(())
+            Ok(())
+        })
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct ConnectionConfig {
-    connections: Vec<Connection>,
-    folders: Vec<ConnectionFolder>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type)]
+#[sqlx(transparent)]
 pub struct ConnectionId(Uuid);
 
 impl ConnectionId {
@@ -385,122 +408,100 @@ impl Display for ConnectionId {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Connection {
     /// The id of the connection.
-    id: ConnectionId,
+    pub id: ConnectionId,
 
     /// The optional [`ConnectionFolderId`] of the folder containing the connection.
-    folder: Option<ConnectionFolderId>,
+    pub folder_id: Option<ConnectionFolderId>,
 
     /// The name of the connection.
-    name: String,
+    pub name: String,
 
-    /// The options for the connection.
-    options: ConnectionOptions,
+    /// The kind of the connection.
+    pub kind: ConnectionKind,
+
+    /// The host for the connection.
+    ///
+    /// NOTE: For SQLite connections, this will contain the path to the database file.
+    pub host: String,
+
+    /// The port for the connection.
+    pub port: u16,
+
+    /// The username for the connection.
+    pub username: String,
+
+    /// The password for the connection.
+    pub password: String,
+
+    /// The date and time the connection was created in UTC.
+    pub created_at: DateTime<Utc>,
+
+    /// The date and time the connection was last opened.
+    pub last_connected: Option<DateTime<Utc>>,
 }
 
 impl Connection {
     /// Creates a new [`Connection`].
-    pub fn new(name: impl Into<String>, options: ConnectionOptions) -> Self {
+    pub fn new(name: impl Into<String>, kind: ConnectionKind) -> Self {
         Self {
             id: ConnectionId::new(),
-            folder: None,
+            folder_id: None,
             name: name.into(),
-            options,
+            kind,
+            host: String::new(),
+            port: kind.default_port(),
+            username: String::new(),
+            password: String::new(),
+            created_at: Utc::now(),
+            last_connected: None,
         }
     }
 
-    /// Duplicates the connection, using the given [`ConnectionFolderId`] as the new connection's folder.
-    pub fn duplicate_with_folder(&self, id: ConnectionFolderId) -> Self {
-        let mut connection = Self {
-            id: ConnectionId::new(),
-            folder: Some(id),
-            name: self.name.clone(),
-            options: self.options.clone(),
-        };
-
-        connection.set_password();
-        connection
+    /// Returns the string that should be used to access the connection's database.
+    pub fn connection_string(&self) -> String {
+        match self.kind {
+            ConnectionKind::MySql => format!(
+                "mysql://{}:{}@{}:{}",
+                self.username,
+                self.password(),
+                self.host,
+                self.port
+            ),
+            ConnectionKind::Sqlite => self.host.clone(),
+        }
     }
 
     /// Duplicates the connection, using the given name as the new connection's name.
     pub fn duplicate_with_name(&self, name: impl Into<String>) -> Self {
-        let mut connection = Self {
-            id: ConnectionId::new(),
-            folder: self.folder,
-            name: name.into(),
-            options: self.options.clone(),
-        };
+        let mut connection = self.clone();
+        connection.id = ConnectionId::new();
+        connection.name = name.into();
+        connection.created_at = Utc::now();
+        connection.last_connected = None;
 
+        // Retrieve password from the connection being
+        // duplicated and save it with the new connection.
+        connection.password = connection.password();
         connection.set_password();
         connection
-    }
-
-    /// Returns the [`ConnectionId`] of the connection.
-    pub fn id(&self) -> ConnectionId {
-        self.id
-    }
-
-    /// Returns the [`ConnectionFolderId`] of the folder containing the connection, if any.
-    pub fn folder(&self) -> Option<ConnectionFolderId> {
-        self.folder
-    }
-
-    /// Returns the name of the connection.
-    pub fn name(&self) -> SharedString {
-        SharedString::from(&self.name)
-    }
-
-    /// Returns the options for the connection.
-    pub fn options(&self) -> ConnectionOptions {
-        let mut options = self.options.clone();
-        match &mut options {
-            ConnectionOptions::MySql(options) => {
-                options.password = self.password();
-            }
-        }
-
-        options
-    }
-
-    /// Sets the folder of the connection.
-    pub fn set_folder(&mut self, folder: Option<ConnectionFolderId>) {
-        self.folder = folder;
-    }
-
-    /// Sets the name of the connection.
-    pub fn set_name(&mut self, name: SharedString) {
-        self.name = name.to_string();
-    }
-
-    /// Sets the options for the connection.
-    pub fn set_options(&mut self, options: ConnectionOptions) {
-        self.options = options;
-        self.set_password();
     }
 
     /// Deletes the password for the connection.
     ///
     /// This will delete the password from the system key storage.
     fn delete_password(&self) {
-        match &self.options {
-            ConnectionOptions::MySql(options) => {
-                _ = secrets::delete_secret(&options.password);
-            }
-        }
+        _ = secrets::delete_secret(&self.password);
     }
 
     /// Returns the password for the connection.
     ///
     /// This will attempt to retrieve the password from the system key storage,
     /// and fallback to the originally stored password if that fails.
-    fn password(&self) -> String {
-        match &self.options {
-            ConnectionOptions::MySql(options) => {
-                secrets::get_secret(&options.password).unwrap_or(options.password.clone())
-            }
-        }
+    pub fn password(&self) -> String {
+        secrets::get_secret(&self.password).unwrap_or(self.password.clone())
     }
 
     /// Sets the password for the connection.
@@ -508,24 +509,21 @@ impl Connection {
     /// This will attempt to store the password in the system key storage,
     /// and fallback to keeping the plain password if that fails.
     fn set_password(&mut self) {
-        match &mut self.options {
-            ConnectionOptions::MySql(options) => {
-                let secret = format!("{}:password", self.id);
-                if secrets::set_secret(&secret, &options.password).is_ok() {
-                    options.password = secret;
-                }
-            }
+        let secret = format!("{}:password", self.id);
+        if secrets::set_secret(&secret, &self.password).is_ok() {
+            self.password = secret;
         }
     }
 }
 
 impl Default for Connection {
     fn default() -> Self {
-        Self::new("New connection", ConnectionOptions::default())
+        Self::new("New connection", ConnectionKind::default())
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type)]
+#[sqlx(transparent)]
 pub struct ConnectionFolderId(Uuid);
 
 impl ConnectionFolderId {
@@ -541,16 +539,16 @@ impl Display for ConnectionFolderId {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ConnectionFolder {
     /// The id of the folder.
-    id: ConnectionFolderId,
+    pub id: ConnectionFolderId,
+
+    /// The optional [`ConnectionFolderId`] of the folder containing this folder.
+    pub folder_id: Option<ConnectionFolderId>,
 
     /// The name of the folder.
-    name: String,
-
-    /// The optional [`ConnectionFolderId`] of the parent folder containing the folder.
-    parent: Option<ConnectionFolderId>,
+    pub name: String,
 }
 
 impl ConnectionFolder {
@@ -558,47 +556,9 @@ impl ConnectionFolder {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             id: ConnectionFolderId::new(),
-            parent: None,
+            folder_id: None,
             name: name.into(),
         }
-    }
-
-    /// Duplicates the folder, using the given name as the new folder's name.
-    pub fn duplicate_with_name(&self, name: impl Into<String>) -> Self {
-        Self {
-            id: ConnectionFolderId::new(),
-            name: name.into(),
-            parent: self.parent,
-        }
-    }
-
-    /// Duplicates the folder, using the given [`ConnectionFolderId`] as the new folder's parent.
-    pub fn duplicate_with_parent(&self, id: ConnectionFolderId) -> Self {
-        Self {
-            id: ConnectionFolderId::new(),
-            name: self.name.clone(),
-            parent: Some(id),
-        }
-    }
-
-    /// Returns the [`ConnectionFolderId`] of the folder.
-    pub fn id(&self) -> ConnectionFolderId {
-        self.id
-    }
-
-    /// Returns the name of the folder.
-    pub fn name(&self) -> SharedString {
-        SharedString::from(&self.name)
-    }
-
-    /// Sets the name of the folder.
-    pub fn set_name(&mut self, name: SharedString) {
-        self.name = name.to_string();
-    }
-
-    /// Sets the parent of the folder.
-    pub fn set_parent(&mut self, parent: Option<ConnectionFolderId>) {
-        self.parent = parent;
     }
 }
 

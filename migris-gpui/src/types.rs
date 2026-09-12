@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use migris::Driver;
+use migris::drivers::Driver;
 
 use crate::connections::Connection;
 

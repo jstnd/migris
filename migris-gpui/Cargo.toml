@@ -19,6 +19,7 @@ keyring-core = "1.0.0"
 rust-embed = "8.11.0"
 serde = { workspace = true }
 serde_json = "1.0.149"
+sqlx = { workspace = true }
 tokio = { workspace = true }
 uuid = { version = "1.23.1", features = ["serde", "v7"] }
 

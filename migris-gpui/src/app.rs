@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use gpui_kit::{
     App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
-    Styled, Window,
+    SharedString, Styled, Window,
     base::{h_flex, h_resizable, resizable_panel, v_flex},
     component::{
         ActiveTheme, Root, Sizable, WindowExt,
@@ -21,11 +23,13 @@ use crate::{
         settings,
     },
     connections::{ConnectionId, ConnectionManager},
+    database::Database,
     events::{
         EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent,
         RunSqlEvent,
     },
     settings::SettingsManager,
+    shared,
     state::AppState,
     tabs::TabVariant,
     types::{OpenConnection, QueryProgress},
@@ -34,12 +38,12 @@ use crate::{
 /// Initializes everything the application needs.
 ///
 /// This should always (and only) be called at the application's entry point.
-pub fn init(window: &mut Window, cx: &mut App) {
+pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     assets::Themes::init(cx);
     components::init(cx);
 
     // Set globals for use throughout the application.
-    cx.set_global(ConnectionManager::load());
+    cx.set_global(ConnectionManager::new(database));
     cx.set_global(EventManager::new());
 
     let app_state = AppState::new(window, cx);
@@ -47,6 +51,14 @@ pub fn init(window: &mut Window, cx: &mut App) {
 
     let settings = SettingsManager::load(cx);
     cx.set_global(settings);
+
+    cx.spawn(async |cx| {
+        // TODO: log errors from initializing here
+        _ = cx
+            .read_global(|manager: &ConnectionManager, cx| manager.init(cx))
+            .await;
+    })
+    .detach();
 }
 
 pub struct Application {
@@ -135,7 +147,7 @@ impl Application {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
 
         cx.spawn_in(window, async move |this, cx| {
-            let driver = match migris::driver(&connection.options()).await {
+            let driver = match shared::create_driver(&connection).await {
                 Ok(driver) => driver,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
@@ -288,7 +300,7 @@ impl Render for Application {
                                     }),
                             )
                             .when_some(self.connection.as_ref(), |this, connection| {
-                                this.child(connection.connection.name())
+                                this.child(SharedString::from(&connection.connection.name))
                             }),
                     )
                     .when_some(self.query_progress.as_ref(), |this, progress| {

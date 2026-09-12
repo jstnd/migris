@@ -12,9 +12,10 @@ use sqlx::{
 };
 
 use crate::{
-    Column, ColumnType, Driver, Entity, EntityData, Index, MigrisError, MigrisResult, Row, Value,
+    Column, ColumnType, Entity, EntityData, Index, MigrisError, MigrisResult, Row, Value,
     common::decode_sqlx,
     data::{QueryData, QueryResult},
+    drivers::Driver,
 };
 
 pub struct SqliteConnection {

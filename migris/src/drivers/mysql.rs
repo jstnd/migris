@@ -7,8 +7,9 @@ use sqlx::{
 };
 
 use crate::{
-    Column, ColumnType, Driver, Entity, EntityKind, MigrisError, MigrisResult, Row,
+    Column, ColumnType, Entity, EntityKind, MigrisError, MigrisResult, Row,
     data::{QueryData, QueryResult},
+    drivers::Driver,
     entity::{EntityData, TableData},
     mysql::MySqlDataType,
     schema::{Index, IndexKind},
