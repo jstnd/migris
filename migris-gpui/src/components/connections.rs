@@ -28,7 +28,6 @@ use migris::drivers::ConnectionKind;
 
 use crate::{
     components::{
-        self,
         icon::{Icon, IconName},
         labeled, text_ellipsis,
     },
@@ -952,10 +951,7 @@ impl ConnectionDialogState {
                 .on_error({
                     let this = this.clone();
                     move |window, cx, error| {
-                        window.open_alert_dialog(cx, move |dialog, _, cx| {
-                            components::error_dialog(dialog, cx, &error)
-                        });
-
+                        notifications::show_error(window, cx, error);
                         this.update(cx, |this, _| {
                             this.opening = false;
                         });

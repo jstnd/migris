@@ -1,14 +1,10 @@
-use gpui_kit::{
-    App, AppContext, Context, Entity, IntoElement, SharedString, Window, component::WindowExt,
-};
+use gpui_kit::{App, AppContext, Context, Entity, IntoElement, SharedString, Window};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
-    components::{
-        self,
-        table::{QueryTable, QueryTableEvent, QueryTableState},
-    },
+    components::table::{QueryTable, QueryTableEvent, QueryTableState},
     events::{Event, EventManager, RunSqlEvent},
+    notifications,
 };
 
 pub struct ViewTab {
@@ -84,9 +80,7 @@ impl ViewTabState {
             },
         ))
         .on_error(|window, cx, error| {
-            window.open_alert_dialog(cx, move |dialog, _, cx| {
-                components::error_dialog(dialog, cx, &error)
-            });
+            notifications::show_error(window, cx, error);
         });
 
         EventManager::emit(window, cx, event);

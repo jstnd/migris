@@ -1,18 +1,18 @@
 use gpui_kit::{
     App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
     base::{h_flex, v_flex},
-    component::{ActiveTheme, Sizable, WindowExt, button::Button},
+    component::{ActiveTheme, Sizable, button::Button},
     div,
 };
 use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
 
 use crate::{
     components::{
-        self,
         icon::IconName,
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
     events::{Event, EventManager, LoadEntityEvent, RunSqlEvent},
+    notifications,
 };
 
 pub struct TableTab {
@@ -130,9 +130,7 @@ impl TableTabState {
             },
         ))
         .on_error(|window, cx, error| {
-            window.open_alert_dialog(cx, move |dialog, _, cx| {
-                components::error_dialog(dialog, cx, &error)
-            });
+            notifications::show_error(window, cx, error);
         });
 
         EventManager::emit(window, cx, event);
@@ -158,9 +156,7 @@ impl TableTabState {
             },
         ))
         .on_error(|window, cx, error| {
-            window.open_alert_dialog(cx, move |dialog, _, cx| {
-                components::error_dialog(dialog, cx, &error)
-            });
+            notifications::show_error(window, cx, error);
         });
 
         EventManager::emit(window, cx, event);

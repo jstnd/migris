@@ -3,7 +3,7 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
-        ActiveTheme, Sizable, WindowExt,
+        ActiveTheme, Sizable,
         button::{Button, DropdownButton},
         input,
         tab::{Tab, TabBar},
@@ -13,12 +13,12 @@ use gpui_kit::{
 
 use crate::{
     components::{
-        self,
         editor::{Editor, EditorState},
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
     events::{Event, EventManager, RunSqlEvent},
+    notifications,
 };
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
@@ -122,9 +122,7 @@ impl QueryTabState {
             .show_progress(),
         )
         .on_error(|window, cx, error| {
-            window.open_alert_dialog(cx, move |dialog, _, cx| {
-                components::error_dialog(dialog, cx, &error)
-            });
+            notifications::show_error(window, cx, error);
         });
 
         EventManager::emit(window, cx, event);
