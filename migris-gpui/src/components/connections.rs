@@ -376,14 +376,14 @@ fn connection_tree(
                         Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
                     )
                     .menu_with_icon(
-                        "Duplicate",
-                        Icon::primary(cx, IconName::Copy),
-                        Box::new(ConnectionDialogAction::DuplicateConnection(id)),
-                    )
-                    .menu_with_icon(
                         "Delete",
                         Icon::red(cx, IconName::Trash),
                         Box::new(ConnectionDialogAction::DeleteConnection(id)),
+                    )
+                    .menu_with_icon(
+                        "Duplicate",
+                        Icon::primary(cx, IconName::Copy),
+                        Box::new(ConnectionDialogAction::DuplicateConnection(id)),
                     )
                     .when(!is_root_item, |menu| {
                         menu.separator().menu_with_icon(
