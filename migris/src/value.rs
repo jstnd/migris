@@ -1,13 +1,14 @@
 use sqlx::types::{
     Decimal,
-    chrono::{DateTime, NaiveTime, Utc},
+    chrono::{NaiveDate, NaiveDateTime, NaiveTime},
 };
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
     Bytes(Vec<u8>),
-    Date(DateTime<Utc>),
+    Date(NaiveDate),
+    DateTime(NaiveDateTime),
     Decimal(Decimal),
     String(String),
     Time(NaiveTime),
@@ -29,6 +30,7 @@ impl std::fmt::Display for Value {
             Value::Null => String::from("(NULL)"),
             Value::Bytes(value) => String::from_utf8(value.to_vec()).unwrap_or_default(),
             Value::Date(value) => value.to_string(),
+            Value::DateTime(value) => value.to_string(),
             Value::Decimal(value) => value.to_string(),
             Value::String(value) => value.to_string(),
             Value::Time(value) => value.to_string(),

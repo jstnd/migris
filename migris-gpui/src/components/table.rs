@@ -698,7 +698,7 @@ impl TableDelegate for QueryTableDelegate {
         let value = &row.values[col_ix - 1];
         let color = match value {
             Value::Bytes(_) => cx.theme().magenta,
-            Value::Date(_) | Value::Time(_) => cx.theme().red,
+            Value::Date(_) | Value::DateTime(_) | Value::Time(_) => cx.theme().red,
             Value::Decimal(_)
             | Value::F32(_)
             | Value::F64(_)
@@ -710,8 +710,8 @@ impl TableDelegate for QueryTableDelegate {
             | Value::U16(_)
             | Value::U32(_)
             | Value::U64(_) => cx.theme().blue,
+            Value::Null => cx.theme().foreground,
             Value::String(_) => cx.theme().green,
-            _ => cx.theme().foreground,
         };
 
         div()

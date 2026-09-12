@@ -8,7 +8,6 @@ use sqlx::{
         SqliteColumn, SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous,
         SqliteValueRef,
     },
-    types::chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc},
 };
 
 use crate::{
@@ -147,7 +146,7 @@ pub enum SqliteDataType {
     Blob,
     Boolean,
     Date,
-    Datetime,
+    DateTime,
     Integer,
     Null,
     Numeric,
@@ -164,7 +163,7 @@ impl FromStr for SqliteDataType {
             "BLOB" => Self::Blob,
             "BOOLEAN" => Self::Boolean,
             "DATE" => Self::Date,
-            "DATETIME" => Self::Datetime,
+            "DATETIME" => Self::DateTime,
             "INTEGER" => Self::Integer,
             "NULL" => Self::Null,
             "NUMERIC" => Self::Numeric,
@@ -192,18 +191,8 @@ impl TryFrom<SqliteValueRef<'_>> for Value {
         Ok(match SqliteDataType::from_str(value.type_info().name())? {
             SqliteDataType::Blob => Value::Bytes(decode_sqlx::<_, Sqlite, _>(value)?),
             SqliteDataType::Boolean => Value::U8(decode_sqlx::<_, Sqlite, _>(value)?),
-            SqliteDataType::Date => {
-                let date: NaiveDate = decode_sqlx::<_, Sqlite, _>(value)?;
-                let date: NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
-                    MigrisError::ValueError("failed to convert date to datetime".into()),
-                )?;
-
-                Value::Date(Utc.from_utc_datetime(&date))
-            }
-            SqliteDataType::Datetime => {
-                let date: NaiveDateTime = decode_sqlx::<_, Sqlite, _>(value)?;
-                Value::Date(Utc.from_utc_datetime(&date))
-            }
+            SqliteDataType::Date => Value::Date(decode_sqlx::<_, Sqlite, _>(value)?),
+            SqliteDataType::DateTime => Value::DateTime(decode_sqlx::<_, Sqlite, _>(value)?),
             SqliteDataType::Integer => Value::I64(decode_sqlx::<_, Sqlite, _>(value)?),
             SqliteDataType::Null => Value::Null,
             SqliteDataType::Numeric => Value::F64(decode_sqlx::<_, Sqlite, _>(value)?),

@@ -8,7 +8,7 @@ use sqlx::{
     query::Query,
     types::{
         Decimal,
-        chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc},
+        chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, Utc},
     },
 };
 
@@ -676,18 +676,8 @@ impl Value {
             | MySqlDataType::TEXT
             | MySqlDataType::TINYTEXT
             | MySqlDataType::VARCHAR(_) => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlDataType::DATE => {
-                let date: NaiveDate = decode_sqlx::<_, MySql, _>(value)?;
-                let date: NaiveDateTime = date.and_hms_opt(0, 0, 0).ok_or(
-                    MigrisError::ValueError("failed to convert date to datetime".into()),
-                )?;
-
-                Ok(Value::Date(Utc.from_utc_datetime(&date)))
-            }
-            MySqlDataType::DATETIME => {
-                let date: NaiveDateTime = decode_sqlx::<_, MySql, _>(value)?;
-                Ok(Value::Date(Utc.from_utc_datetime(&date)))
-            }
+            MySqlDataType::DATE => Ok(Value::Date(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::DATETIME => Ok(Value::DateTime(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::DECIMAL(_, _) => Ok(Value::Decimal(decode_sqlx(value)?)),
             MySqlDataType::DOUBLE => Ok(Value::F64(decode_sqlx::<_, MySql, _>(value)?)),
             MySqlDataType::ENUM(_) => Ok(Value::String(decode_sqlx::<_, MySql, _>(value)?)),
@@ -716,7 +706,10 @@ impl Value {
                 }
             }
             MySqlDataType::TIME => Ok(Value::Time(decode_sqlx::<_, MySql, _>(value)?)),
-            MySqlDataType::TIMESTAMP => Ok(Value::Date(decode_sqlx::<_, MySql, _>(value)?)),
+            MySqlDataType::TIMESTAMP => {
+                let date: DateTime<Utc> = decode_sqlx::<_, MySql, _>(value)?;
+                Ok(Value::DateTime(date.with_timezone(&Local).naive_local()))
+            }
             MySqlDataType::TINYINT => {
                 if column.is_unsigned() {
                     Ok(Value::U8(decode_sqlx::<_, MySql, _>(value)?))
@@ -737,7 +730,10 @@ impl Encode<'_, MySql> for Value {
         match self {
             Value::Null => Ok(sqlx::encode::IsNull::Yes),
             Value::Bytes(value) => <Vec<u8> as Encode<'_, MySql>>::encode_by_ref(value, buf),
-            Value::Date(value) => <DateTime<Utc> as Encode<'_, MySql>>::encode_by_ref(value, buf),
+            Value::Date(value) => <NaiveDate as Encode<'_, MySql>>::encode_by_ref(value, buf),
+            Value::DateTime(value) => {
+                <NaiveDateTime as Encode<'_, MySql>>::encode_by_ref(value, buf)
+            }
             Value::Decimal(value) => <Decimal as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::String(value) => <String as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Time(value) => <NaiveTime as Encode<'_, MySql>>::encode_by_ref(value, buf),
@@ -758,7 +754,8 @@ impl Encode<'_, MySql> for Value {
         match self {
             Value::Null => None,
             Value::Bytes(_) => Some(<Vec<u8> as Type<MySql>>::type_info()),
-            Value::Date(_) => Some(<DateTime<Utc> as Type<MySql>>::type_info()),
+            Value::Date(_) => Some(<NaiveDate as Type<MySql>>::type_info()),
+            Value::DateTime(_) => Some(<NaiveDateTime as Type<MySql>>::type_info()),
             Value::Decimal(_) => Some(<Decimal as Type<MySql>>::type_info()),
             Value::String(_) => Some(<String as Type<MySql>>::type_info()),
             Value::Time(_) => Some(<NaiveTime as Type<MySql>>::type_info()),
