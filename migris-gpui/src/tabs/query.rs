@@ -24,6 +24,7 @@ use crate::{
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
 pub enum QueryTabAction {
+    FormatSql,
     RunSql,
     RunSqlSelection,
 }
@@ -66,6 +67,7 @@ impl QueryTabState {
         action: &QueryTabAction,
     ) {
         match action {
+            QueryTabAction::FormatSql => self.format_sql(window, cx),
             QueryTabAction::RunSql => {
                 self.clear_results();
                 self.run_sql(window, cx, false);
@@ -87,6 +89,14 @@ impl QueryTabState {
         self.tables.clear();
         self.table_subscriptions.clear();
         self.active_table = 0;
+    }
+
+    /// Formats the SQL within the editor.
+    fn format_sql(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let formatted = migris::sql::format(&self.editor.read(cx).value(cx));
+        self.editor.update(cx, |editor, cx| {
+            editor.set_value(window, cx, &formatted);
+        });
     }
 
     /// Triggers an event to run the SQL in the editor.
@@ -243,6 +253,14 @@ impl QueryTab {
                             .menu("Copy", Box::new(input::Copy))
                             .menu("Paste", Box::new(input::Paste))
                             .menu("Select All", Box::new(input::SelectAll))
+                            .separator()
+                            .menu_with_icon_and_disabled(
+                                "Format",
+                                Icon::primary(cx, IconName::BrushCleaning)
+                                    .disabled(is_editor_empty),
+                                Box::new(QueryTabAction::FormatSql),
+                                is_editor_empty,
+                            )
                         })),
                 ),
             )

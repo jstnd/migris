@@ -6,6 +6,7 @@ use gpui_kit::{
 pub enum IconName {
     ArrowDownWideNarrow,
     ArrowUpNarrowWide,
+    BrushCleaning,
     Calendar,
     ChevronDown,
     ChevronRight,
@@ -40,6 +41,7 @@ impl IconNamed for IconName {
         match self {
             Self::ArrowDownWideNarrow => "icons/arrow-down-wide-narrow.svg",
             Self::ArrowUpNarrowWide => "icons/arrow-up-narrow-wide.svg",
+            Self::BrushCleaning => "icons/brush-cleaning.svg",
             Self::Calendar => "icons/calendar.svg",
             Self::ChevronDown => "icons/chevron-down.svg",
             Self::ChevronRight => "icons/chevron-right.svg",

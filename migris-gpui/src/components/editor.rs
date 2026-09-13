@@ -187,6 +187,13 @@ impl EditorState {
         self.editor.read(cx).selected_value()
     }
 
+    /// Sets the content within the editor.
+    pub fn set_value(&self, window: &mut Window, cx: &mut App, value: &str) {
+        self.editor.update(cx, |editor, cx| {
+            editor.replace_all(value, window, cx);
+        });
+    }
+
     /// Returns the content within the editor.
     pub fn value(&self, cx: &App) -> SharedString {
         self.editor.read(cx).value()

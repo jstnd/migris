@@ -1,3 +1,5 @@
+use sqlformat::{FormatOptions, Indent, QueryParams};
+
 use crate::Entity;
 
 const CHAR_ASTERISK: char = '*';
@@ -20,6 +22,16 @@ pub enum SqlStatementKind {
 pub struct SqlStatement {
     pub kind: SqlStatementKind,
     pub sql: String,
+}
+
+pub fn format(sql: &str) -> String {
+    let options = FormatOptions {
+        indent: Indent::Spaces(4),
+        uppercase: Some(true),
+        ..Default::default()
+    };
+
+    sqlformat::format(sql, &QueryParams::None, &options)
 }
 
 pub fn select_all(entity: &Entity, order_by: &str) -> String {
