@@ -5,10 +5,11 @@ use gpui_kit::{
     KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
     StatefulInteractiveElement, Styled, Window,
     base::input::TabSize,
-    component::{input, native_menu::NativeMenu},
-    div,
-    prelude::FluentBuilder,
-    px,
+    component::{
+        input,
+        menu::{ContextMenuExt, PopupMenu},
+    },
+    div, px,
 };
 
 use crate::settings::SettingsManager;
@@ -38,7 +39,7 @@ pub struct Editor {
 
     /// The optional context menu builder.
     context_menu_builder:
-        Option<Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu + 'static>>,
+        Option<Rc<dyn Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static>>,
 }
 
 impl Editor {
@@ -53,7 +54,7 @@ impl Editor {
     /// Sets the context menu for the editor.
     pub fn context_menu(
         mut self,
-        f: impl Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu + 'static,
+        f: impl Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static,
     ) -> Self {
         self.context_menu_builder = Some(Rc::new(f));
         self
@@ -62,6 +63,7 @@ impl Editor {
 
 impl RenderOnce for Editor {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let context_menu_builder = self.context_menu_builder.clone();
         let state = self.state.read(cx);
 
         // Handle scrolling events within the editor for the purpose of zoom in/out.
@@ -98,12 +100,7 @@ impl RenderOnce for Editor {
                     .p_0()
                     .h_full()
                     .appearance(false)
-                    .text_size(SettingsManager::editor_size(cx).font_size(cx))
-                    .when_some(self.context_menu_builder, |this, context_menu_builder| {
-                        this.context_menu(move |menu, window, cx| {
-                            context_menu_builder(menu, window, cx)
-                        })
-                    }),
+                    .text_size(SettingsManager::editor_size(cx).font_size(cx)),
             )
             .on_action(
                 window.listener_for(&self.state, |state, action, window, cx| {
@@ -116,6 +113,13 @@ impl RenderOnce for Editor {
                     cx.notify();
                 }),
             )
+            .context_menu(move |menu, window, cx| {
+                if let Some(context_menu_builder) = context_menu_builder.clone() {
+                    context_menu_builder(menu, window, cx)
+                } else {
+                    menu
+                }
+            })
     }
 }
 
@@ -133,6 +137,7 @@ impl EditorState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| {
             input::EditorState::new(window, cx)
+                .context_menu(false)
                 .language("sql")
                 .tab_size(TabSize {
                     tab_size: 4,
