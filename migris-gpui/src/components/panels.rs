@@ -17,6 +17,7 @@ use gpui_kit::{
         tab::{Tab, TabBar},
         tree,
     },
+    div,
     prelude::FluentBuilder,
     px,
 };
@@ -493,59 +494,62 @@ impl RenderOnce for TabPanel {
         v_flex()
             .size_full()
             .child(
-                TabBar::new("panel-tabs")
-                    .selected_index(state.active_tab)
-                    .track_scroll(&state.scroll_handle)
-                    .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
-                        let tab = tab.read(cx);
+                h_flex().id("panel-tab-bar").overflow_x_scroll().child(
+                    TabBar::new("panel-tabs")
+                        .flex_1()
+                        .selected_index(state.active_tab)
+                        .track_scroll(&state.scroll_handle)
+                        .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
+                            let tab = tab.read(cx);
 
-                        Tab::new().child(
-                            h_flex()
-                                .id(("panel-tab", idx))
-                                .gap_1p5()
-                                .items_center()
-                                .child(Icon::new(cx, tab.icon()))
-                                .child(tab.label(cx))
-                                .child(
-                                    Button::new(("button-close", idx))
-                                        .icon(IconName::X)
-                                        .ghost()
-                                        .xsmall()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .on_click(window.listener_for(
-                                            &self.state,
-                                            move |state, _, _, cx| {
-                                                state.close_tab(idx);
-                                                cx.stop_propagation();
-                                            },
-                                        )),
-                                )
-                                .on_hover(window.listener_for(
-                                    &self.state,
-                                    move |state, is_hovered: &bool, _, cx| {
-                                        state.hovered_tab = is_hovered.then_some(idx);
-                                        cx.notify();
-                                    },
-                                )),
+                            Tab::new().child(
+                                h_flex()
+                                    .id(("panel-tab", idx))
+                                    .gap_1p5()
+                                    .items_center()
+                                    .child(Icon::new(cx, tab.icon()))
+                                    .child(tab.label(cx))
+                                    .child(
+                                        Button::new(("button-close", idx))
+                                            .icon(IconName::X)
+                                            .ghost()
+                                            .xsmall()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .on_click(window.listener_for(
+                                                &self.state,
+                                                move |state, _, _, cx| {
+                                                    state.close_tab(idx);
+                                                    cx.stop_propagation();
+                                                },
+                                            )),
+                                    )
+                                    .on_hover(window.listener_for(
+                                        &self.state,
+                                        move |state, is_hovered: &bool, _, cx| {
+                                            state.hovered_tab = is_hovered.then_some(idx);
+                                            cx.notify();
+                                        },
+                                    )),
+                            )
+                        }))
+                        .prefix(
+                            div().p_1().child(
+                                Button::new("button-add-tab")
+                                    .icon(IconName::Plus)
+                                    .ghost()
+                                    .small()
+                                    .on_click(window.listener_for(
+                                        &self.state,
+                                        |state, _, window, cx| {
+                                            state.add_query_tab(window, cx);
+                                        },
+                                    )),
+                            ),
                         )
-                    }))
-                    .suffix(
-                        h_flex().gap_1().p_1().child(
-                            Button::new("button-add-tab")
-                                .icon(IconName::Plus)
-                                .ghost()
-                                .small()
-                                .on_click(window.listener_for(
-                                    &self.state,
-                                    |state, _, window, cx| {
-                                        state.add_query_tab(window, cx);
-                                    },
-                                )),
-                        ),
-                    )
-                    .on_click(window.listener_for(&self.state, |state, idx, window, cx| {
-                        state.open_tab(window, cx, *idx);
-                    })),
+                        .on_click(window.listener_for(&self.state, |state, idx, window, cx| {
+                            state.open_tab(window, cx, *idx);
+                        })),
+                ),
             )
             .when(!state.tabs.is_empty(), |this| {
                 this.child(state.active_tab().read(cx).content(window, cx))
