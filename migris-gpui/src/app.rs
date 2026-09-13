@@ -18,9 +18,10 @@ use crate::{
     assets,
     components::{
         self,
+        connection_panel::{ConnectionPanel, ConnectionPanelState},
         icon::IconName,
-        panels::{ConnectionPanel, ConnectionPanelState, TabPanel, TabPanelState},
         settings,
+        tab_panel::{TabPanel, TabPanelState},
     },
     connections::{ConnectionId, ConnectionManager},
     database::Database,

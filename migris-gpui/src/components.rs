@@ -7,18 +7,19 @@ use gpui_kit::{
 
 use crate::components::icon::{Icon, IconName};
 
+pub mod connection_panel;
 pub mod connections;
 pub mod editor;
 pub mod icon;
-pub mod panels;
 pub mod settings;
+pub mod tab_panel;
 pub mod table;
 
 /// Initializes configuration for components.
 pub fn init(cx: &mut App) {
+    connection_panel::init(cx);
     editor::init(cx);
     table::init(cx);
-    panels::init(cx);
 }
 
 pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: &str) -> AlertDialog {
