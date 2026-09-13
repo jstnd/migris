@@ -253,6 +253,7 @@ impl QueryTab {
                         .child(
                             h_flex().id("result-tab-bar").overflow_x_scroll().child(
                                 TabBar::new("result-tabs")
+                                    .flex_1()
                                     .selected_index(state.active_table)
                                     .on_click(window.listener_for(
                                         &self.state,
