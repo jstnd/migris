@@ -272,7 +272,13 @@ impl Render for Application {
                             .size(px(300.0))
                             .child(ConnectionPanel::new(&self.connection_panel)),
                     )
-                    .child(resizable_panel().child(TabPanel::new(&self.tab_panel))),
+                    .child(resizable_panel().map(|this| {
+                        this.child(if self.connection.is_some() {
+                            TabPanel::new(&self.tab_panel).into_any_element()
+                        } else {
+                            components::entry_screen(cx).into_any_element()
+                        })
+                    })),
             )
             .child(
                 h_flex()

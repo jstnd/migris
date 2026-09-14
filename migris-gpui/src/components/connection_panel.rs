@@ -1,21 +1,15 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui_kit::{
-    Action, App, AppContext, BorrowAppContext, Context, Entity, InteractiveElement, IntoElement,
-    KeyBinding, KeystrokeEvent, ParentElement, RenderOnce, SharedString, Styled, Subscription,
-    Window,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding,
+    KeystrokeEvent, ParentElement, RenderOnce, SharedString, Styled, Subscription, Window,
     base::{
         TreeItem, TreeState, h_flex,
         input::{InputEvent, InputState},
         v_flex,
     },
-    component::{
-        WindowExt,
-        button::{Button, ButtonVariants},
-        input::Input,
-        list::ListItem,
-        tree,
-    },
+    component::{input::Input, list::ListItem, tree},
+    div,
     prelude::FluentBuilder,
     px,
 };
@@ -23,13 +17,11 @@ use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
     components::{
-        connections,
         icon::{Icon, IconName},
         text_ellipsis,
     },
     events::{Event, EventManager, EventVariant},
     shared,
-    state::AppState,
 };
 
 const CONNECTION_PANEL: &str = "CONNECTION_PANEL";
@@ -72,32 +64,11 @@ impl RenderOnce for ConnectionPanel {
             .size_full()
             .items_center()
             .child(
-                h_flex()
-                    .gap_1()
-                    .pt_1()
-                    .px_1()
-                    .w_full()
-                    .child(
-                        Input::new(&self.state.read(cx).search_input)
-                            .cleanable(true)
-                            .prefix(Icon::new(cx, IconName::Search)),
-                    )
-                    .child(
-                        Button::new("button-add-connection")
-                            .icon(IconName::Plus)
-                            .tooltip("Add Connection")
-                            .ghost()
-                            .on_click(|_, window, cx| {
-                                // Load the connection dialog first before displaying.
-                                cx.update_global(|app_state: &mut AppState, cx| {
-                                    app_state.load_connection_dialog(cx);
-                                });
-
-                                window.open_dialog(cx, |dialog, window, cx| {
-                                    connections::connection_dialog(dialog, window, cx)
-                                });
-                            }),
-                    ),
+                div().w_full().pt_1().px_1().child(
+                    Input::new(&self.state.read(cx).search_input)
+                        .cleanable(true)
+                        .prefix(Icon::new(cx, IconName::Search)),
+                ),
             )
             .child({
                 let state = self.state.clone();
