@@ -128,6 +128,17 @@ impl TabPanelState {
         }
     }
 
+    /// Returns a reference to the active tab.
+    fn active_tab(&self) -> &Entity<TabView> {
+        &self.tabs[self.active_tab]
+    }
+
+    /// Adds a new query tab to the panel.
+    pub fn add_query_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let variant = TabVariant::Query(self.next_query_number(cx));
+        self.add_tab(window, cx, variant);
+    }
+
     /// Adds a new tab to the panel.
     pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, variant: TabVariant) {
         let tab = cx.new(|cx| TabView::new(window, cx, variant));
@@ -135,6 +146,16 @@ impl TabPanelState {
 
         // Open the newly added tab.
         self.open_tab(window, cx, self.tabs.len() - 1);
+    }
+
+    /// Closes the tab at the given index.
+    fn close_tab(&mut self, idx: usize) {
+        self.tabs.remove(idx);
+
+        // Move the active tab index if the active tab is after the tab that is being closed.
+        if self.active_tab >= idx && self.active_tab > 0 {
+            self.active_tab -= 1;
+        }
     }
 
     /// Returns the index for the tab displaying the given entity, if one is found.
@@ -154,38 +175,6 @@ impl TabPanelState {
             .map(|(idx, _)| idx)
     }
 
-    /// Opens the tab at the given index.
-    pub fn open_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
-        self.active_tab = idx;
-        self.scroll_handle.scroll_to_item(idx);
-
-        // Focus the opened tab.
-        self.active_tab().update(cx, |tab, cx| {
-            tab.focus(window, cx);
-        });
-    }
-
-    /// Returns a reference to the active tab.
-    fn active_tab(&self) -> &Entity<TabView> {
-        &self.tabs[self.active_tab]
-    }
-
-    /// Adds a new query tab to the panel.
-    fn add_query_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let variant = TabVariant::Query(self.next_query_number(cx));
-        self.add_tab(window, cx, variant);
-    }
-
-    /// Closes the tab at the given index.
-    fn close_tab(&mut self, idx: usize) {
-        self.tabs.remove(idx);
-
-        // Move the active tab index if the active tab is after the tab that is being closed.
-        if self.active_tab >= idx && self.active_tab > 0 {
-            self.active_tab -= 1;
-        }
-    }
-
     /// Calculates and returns what the next query tab number should be based on the current query tabs.
     ///
     /// The next query tab number should always be equal to the highest current query tab number plus one.
@@ -202,5 +191,21 @@ impl TabPanelState {
             .max()
             .unwrap_or_default()
             + 1
+    }
+
+    /// Opens the tab at the given index.
+    pub fn open_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
+        self.active_tab = idx;
+        self.scroll_handle.scroll_to_item(idx);
+
+        // Focus the opened tab.
+        self.active_tab().update(cx, |tab, cx| {
+            tab.focus(window, cx);
+        });
+    }
+
+    /// Returns a reference to the tabs within the panel.
+    pub fn tabs(&self) -> &[Entity<TabView>] {
+        &self.tabs
     }
 }

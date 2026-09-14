@@ -173,6 +173,13 @@ impl Application {
                 this.connection_panel.update(cx, |connection_panel, cx| {
                     connection_panel.load_entities(cx, entities);
                 });
+                
+                // Open a query tab after opening the connection.
+                this.tab_panel.update(cx, |tab_panel, cx| {
+                    if tab_panel.tabs().is_empty() {
+                        tab_panel.add_query_tab(window, cx);
+                    }
+                });
 
                 callbacks.on_complete(window, cx);
             });
