@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
-    SharedString, Styled, Window,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
+    Render, SharedString, Styled, Window,
     base::{h_flex, h_resizable, resizable_panel, v_flex},
     component::{
         ActiveTheme, Root, Sizable, WindowExt,
@@ -29,6 +29,7 @@ use crate::{
         EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent,
         RunSqlEvent,
     },
+    history::{QueryHistoryGroup, QueryStatus},
     settings::SettingsManager,
     shared,
     state::AppState,
@@ -44,10 +45,10 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     components::init(cx);
 
     // Set globals for use throughout the application.
-    cx.set_global(ConnectionManager::new(database));
+    cx.set_global(ConnectionManager::new());
     cx.set_global(EventManager::new());
 
-    let app_state = AppState::new(window, cx);
+    let app_state = AppState::new(window, cx, database);
     cx.set_global(app_state);
 
     let settings = SettingsManager::load(cx);
@@ -173,7 +174,7 @@ impl Application {
                 this.connection_panel.update(cx, |connection_panel, cx| {
                     connection_panel.load_entities(cx, entities);
                 });
-                
+
                 // Open a query tab after opening the connection.
                 this.tab_panel.update(cx, |tab_panel, cx| {
                     if tab_panel.tabs().is_empty() {
@@ -215,9 +216,12 @@ impl Application {
         callbacks: EventCallbacks,
     ) {
         // TODO: remove this unwrap
+        let connection_id = self.connection.as_ref().unwrap().connection.id;
         let driver = self.connection.as_ref().unwrap().driver.clone();
+        let database = AppState::database(cx);
 
         cx.spawn_in(window, async move |this, cx| {
+            let mut history_group = QueryHistoryGroup::new(connection_id);
             let statements = migris::sql::split(&event.sql);
 
             // Initialize the query progress.
@@ -227,8 +231,17 @@ impl Application {
                 });
             }
 
+            let mut continue_execution = true;
             for (idx, statement) in statements.iter().enumerate() {
                 let query = statement.sql.clone();
+                let history = history_group.add(&migris::sql::minify(&query));
+
+                // We want to continue iterating through the statements even if we stopped execution
+                // so the skipped statements can still get recorded within history above.
+                if !continue_execution {
+                    continue;
+                }
+
                 let result = if event.stream {
                     driver.query_stream(query).await
                 } else {
@@ -237,13 +250,20 @@ impl Application {
 
                 _ = this.update_in(cx, |this, window, cx| match result {
                     Ok(result) => {
-                        (event.on_result)(window, cx, result);
+                        history.status = QueryStatus::Success;
+                        history.duration_ms = result.duration_ms;
+                        history.rows_returned = Some(result.data.rows().len() as u64);
 
+                        (event.on_result)(window, cx, result);
                         if event.show_progress {
                             this.update_query_progress(idx + 1);
                         }
                     }
                     Err(err) => {
+                        history.status = QueryStatus::Failed;
+                        history.error = err.to_string();
+
+                        continue_execution = false;
                         callbacks.on_error(window, cx, err.to_string());
                     }
                 });
@@ -253,6 +273,17 @@ impl Application {
             if event.show_progress {
                 _ = this.update(cx, |this, _| {
                     this.query_progress = None;
+                });
+            }
+
+            if event.record_history {
+                // TODO: log errors here
+                _ = database.insert_query_history_group(&history_group).await;
+                _ = this.update(cx, |this, cx| {
+                    this.connection_panel.update(cx, |connection_panel, cx| {
+                        connection_panel.add_history(history_group);
+                        cx.notify();
+                    });
                 });
             }
         })
@@ -276,6 +307,7 @@ impl Render for Application {
                 h_resizable("application-view")
                     .child(
                         resizable_panel()
+                            .size_range(px(250.0)..Pixels::MAX)
                             .size(px(300.0))
                             .child(ConnectionPanel::new(&self.connection_panel)),
                     )

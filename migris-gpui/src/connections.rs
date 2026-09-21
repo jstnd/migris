@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt::Display,
-    sync::Arc,
 };
 
 use anyhow::Result;
@@ -10,12 +9,9 @@ use migris::drivers::ConnectionKind;
 use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::{database::Database, secrets};
+use crate::{secrets, state::AppState};
 
 pub struct ConnectionManager {
-    /// The application's database.
-    database: Arc<Database>,
-
     /// The saved connections.
     connections: Vec<Connection>,
 
@@ -39,9 +35,8 @@ impl Global for ConnectionManager {}
 
 impl ConnectionManager {
     /// Creates a new [`ConnectionManager`].
-    pub fn new(database: Arc<Database>) -> Self {
+    pub fn new() -> Self {
         Self {
-            database,
             connections: Vec::new(),
             connection_map: HashMap::new(),
             connections_by_folder: HashMap::new(),
@@ -53,7 +48,7 @@ impl ConnectionManager {
 
     /// Initializes the in-memory connections and folders from the database.
     pub fn init(&self, cx: &App) -> Task<Result<()>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             let connections = database.connections().await?;
             let folders = database.connection_folders().await?;
@@ -100,7 +95,7 @@ impl ConnectionManager {
 
     /// Adds a new connection to the saved connections.
     pub fn add_connection(&self, cx: &App, connection: Connection) -> Task<Result<()>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.insert_connection(&connection).await?;
             cx.update_global(|this: &mut Self, _| {
@@ -119,7 +114,7 @@ impl ConnectionManager {
 
     /// Adds a new folder to the saved folders.
     pub fn add_folder(&self, cx: &App, folder: ConnectionFolder) -> Task<Result<()>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.insert_connection_folder(&folder).await?;
             cx.update_global(|this: &mut Self, _| {
@@ -158,7 +153,7 @@ impl ConnectionManager {
 
     /// Deletes the connection with the given [`ConnectionId`].
     pub fn delete_connection(&self, cx: &App, id: ConnectionId) -> Task<Result<()>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.delete_connection(&id).await?;
             cx.update_global(|this: &mut Self, _| {
@@ -184,7 +179,7 @@ impl ConnectionManager {
         cx: &App,
         id: ConnectionFolderId,
     ) -> Task<Result<HashSet<ConnectionId>>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.delete_connection_folder(&id).await?;
             let deleted_connections = cx.update_global(|this: &mut Self, _| {
@@ -271,7 +266,7 @@ impl ConnectionManager {
         let prev_folder_id = connection.folder_id;
         connection.folder_id = folder_id;
 
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.update_connection(&connection).await?;
             cx.update_global(|this: &mut Self, _| {
@@ -305,7 +300,7 @@ impl ConnectionManager {
         let prev_folder_id = folder.folder_id;
         folder.folder_id = folder_id;
 
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.update_connection_folder(&folder).await?;
             cx.update_global(|this: &mut Self, _| {
@@ -356,7 +351,7 @@ impl ConnectionManager {
     ///
     /// This will persist the connection's data in the application's database and in-memory.
     pub fn update_connection(&self, cx: &App, connection: Connection) -> Task<Result<()>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             let mut connection = connection;
             connection.set_password();
@@ -376,7 +371,7 @@ impl ConnectionManager {
     ///
     /// This will persist the folder's data in the application's database and in-memory.
     pub fn update_folder(&self, cx: &App, folder: ConnectionFolder) -> Task<Result<()>> {
-        let database = self.database.clone();
+        let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.update_connection_folder(&folder).await?;
             cx.update_global(|this: &mut Self, _| {

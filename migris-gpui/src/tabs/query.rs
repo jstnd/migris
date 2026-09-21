@@ -130,6 +130,7 @@ impl QueryTabState {
                     cx.notify();
                 });
             })
+            .record_history()
             .show_progress(),
         )
         .on_error(|window, cx, error| {

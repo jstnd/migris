@@ -34,6 +34,15 @@ pub fn format(sql: &str) -> String {
     sqlformat::format(sql, &QueryParams::None, &options)
 }
 
+pub fn minify(sql: &str) -> String {
+    let options = FormatOptions {
+        inline: true,
+        ..Default::default()
+    };
+
+    sqlformat::format(sql, &QueryParams::None, &options)
+}
+
 pub fn select_all(entity: &Entity, order_by: &str) -> String {
     format!(
         "SELECT * FROM `{}`.`{}` {}",

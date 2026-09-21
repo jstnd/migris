@@ -33,3 +33,15 @@ pub async fn create_driver(connection: &Connection) -> Result<Arc<dyn Driver>> {
         ConnectionKind::Sqlite => Arc::new(SqliteConnection::new(&connection_string).await?),
     })
 }
+
+/// Formats the given milliseconds into a more human-readable string.
+pub fn format_ms(ms: u64) -> String {
+    if ms == 0 {
+        "<1ms".to_string()
+    } else if ms < 1000 {
+        format!("{}ms", ms)
+    } else {
+        let seconds = ms as f32 / 1000.0;
+        format!("{:.3}s", seconds)
+    }
+}

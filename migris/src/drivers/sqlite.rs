@@ -77,12 +77,12 @@ impl Driver for SqliteConnection {
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
 
-        let elapsed = instant.elapsed();
+        let duration = instant.elapsed();
         let rows: MigrisResult<Vec<Row>> = rows.iter().map(Row::try_from).collect();
 
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, rows?)),
-            execute_time: elapsed.as_millis(),
+            duration_ms: duration.as_millis() as u64,
             stream: None,
         })
     }
@@ -105,7 +105,7 @@ impl Driver for SqliteConnection {
 
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, Vec::new())),
-            execute_time: 0,
+            duration_ms: 0,
             stream: Some(Box::pin(stream)),
         })
     }

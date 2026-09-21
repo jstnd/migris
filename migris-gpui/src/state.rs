@@ -1,15 +1,20 @@
+use std::sync::Arc;
+
 use gpui_kit::{
     App, AppContext, BorrowAppContext, Entity, Global, Window,
     component::{Theme, ThemeMode},
 };
 
-use crate::{components::connections::ConnectionDialogState, settings::SettingsManager};
+use crate::{components::connections::ConnectionDialogState, database::Database, settings::SettingsManager};
 
 pub struct AppState {
     /// The state for the application's connection dialog.
     ///
     /// This is stored here to be available globally so that the dialog can be opened from anywhere.
     pub connection_dialog: Entity<ConnectionDialogState>,
+
+    /// The database for the application.
+    pub database: Arc<Database>,
 
     /// The current system theme mode.
     pub system_theme_mode: ThemeMode,
@@ -19,12 +24,13 @@ impl Global for AppState {}
 
 impl AppState {
     /// Creates a new [`AppState`].
-    pub fn new(window: &mut Window, cx: &mut App) -> Self {
+    pub fn new(window: &mut Window, cx: &mut App, database: Arc<Database>) -> Self {
         let connection_dialog = cx.new(|cx| ConnectionDialogState::new(window, cx));
         Self::init(window);
 
         Self {
             connection_dialog,
+            database,
             system_theme_mode: ThemeMode::from(window.appearance()),
         }
     }
@@ -50,6 +56,11 @@ impl AppState {
                 });
             })
             .detach();
+    }
+
+    /// Returns a cloned pointer instance of the application's database.
+    pub fn database(cx: &App) -> Arc<Database> {
+        Self::global(cx).database.clone()
     }
 
     /// Loads needed information for the connection dialog.

@@ -168,6 +168,9 @@ pub struct RunSqlEvent {
     /// The SQL to run.
     pub sql: SharedString,
 
+    /// Whether to record query history.
+    pub record_history: bool,
+
     /// Whether to show query progress.
     pub show_progress: bool,
 
@@ -186,6 +189,7 @@ impl RunSqlEvent {
     ) -> Self {
         Self {
             sql: sql.into(),
+            record_history: false,
             show_progress: false,
             stream: false,
             on_result: Rc::new(on_result),
@@ -199,10 +203,17 @@ impl RunSqlEvent {
     ) -> Self {
         Self {
             sql: sql.into(),
+            record_history: false,
             show_progress: false,
             stream: true,
             on_result: Rc::new(on_result),
         }
+    }
+
+    /// Sets the event to record query history.
+    pub fn record_history(mut self) -> Self {
+        self.record_history = true;
+        self
     }
 
     /// Sets the event to show progress.

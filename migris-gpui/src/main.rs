@@ -4,6 +4,7 @@ mod components;
 mod connections;
 mod database;
 mod events;
+mod history;
 mod notifications;
 mod secrets;
 mod settings;

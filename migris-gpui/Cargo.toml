@@ -11,6 +11,7 @@ winresource = "0.1.31"
 migris = { workspace = true }
 
 anyhow = "1.0.102"
+chrono = { workspace = true }
 directories = "6.0.0"
 futures-util = { workspace = true }
 gpui-kit = { git = "https://github.com/longbridge/gpui-kit", features = ["tree-sitter-sql"] }

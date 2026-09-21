@@ -1,13 +1,16 @@
 use anyhow::{Result, anyhow};
 use directories::BaseDirs;
 use migris::sqlite::SqliteConnection;
+use sqlx::QueryBuilder;
 
 use crate::{
     connections::{Connection, ConnectionFolder, ConnectionFolderId, ConnectionId},
+    history::{QueryHistoryGroup, QueryHistoryItem},
     shared,
 };
 
 const DATABASE_FILE: &str = "migris.db";
+const DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 pub struct Database {
     connection: SqliteConnection,
@@ -56,7 +59,7 @@ impl Database {
             .await?)
     }
 
-    pub async fn delete_connection(&self, connection_id: &ConnectionId) -> Result<()> {
+    pub async fn delete_connection(&self, id: &ConnectionId) -> Result<()> {
         let query = r#"
             DELETE
             FROM connections
@@ -65,13 +68,13 @@ impl Database {
         "#;
 
         sqlx::query(query)
-            .bind(connection_id)
+            .bind(id)
             .execute(self.connection.pool())
             .await?;
         Ok(())
     }
 
-    pub async fn delete_connection_folder(&self, folder_id: &ConnectionFolderId) -> Result<()> {
+    pub async fn delete_connection_folder(&self, id: &ConnectionFolderId) -> Result<()> {
         let query = r#"
             DELETE
             FROM connection_folders
@@ -80,7 +83,7 @@ impl Database {
         "#;
 
         sqlx::query(query)
-            .bind(folder_id)
+            .bind(id)
             .execute(self.connection.pool())
             .await?;
         Ok(())
@@ -122,6 +125,29 @@ impl Database {
             .bind(&folder.name)
             .execute(self.connection.pool())
             .await?;
+        Ok(())
+    }
+
+    pub async fn insert_query_history_group(&self, group: &QueryHistoryGroup) -> Result<()> {
+        let mut builder = QueryBuilder::new(
+            "INSERT INTO query_history (id, execute_id, connection_id, query, executed_at, duration_ms, status, error, rows_affected, rows_returned) ",
+        );
+
+        // TODO: handle sqlite parameter limit
+        builder.push_values(&group.items, |mut b, item| {
+            b.push_bind(item.id)
+                .push_bind(item.execute_id)
+                .push_bind(item.connection_id)
+                .push_bind(&item.query)
+                .push_bind(item.executed_at.format(DATE_FORMAT).to_string())
+                .push_bind(item.duration_ms as i64)
+                .push_bind(item.status)
+                .push_bind(&item.error)
+                .push_bind(item.rows_affected.map(|r| r as i64))
+                .push_bind(item.rows_returned.map(|r| r as i64));
+        });
+
+        builder.build().execute(self.connection.pool()).await?;
         Ok(())
     }
 
@@ -173,5 +199,22 @@ impl Database {
             .execute(self.connection.pool())
             .await?;
         Ok(())
+    }
+
+    pub async fn query_history(&self) -> Result<Vec<QueryHistoryItem>> {
+        let query = r#"
+            SELECT
+                id, execute_id, connection_id,
+                query, executed_at, duration_ms,
+                status, error, rows_affected, rows_returned
+            FROM query_history
+            ORDER BY
+                execute_id DESC,
+                executed_at
+        "#;
+
+        Ok(sqlx::query_as::<_, QueryHistoryItem>(query)
+            .fetch_all(self.connection.pool())
+            .await?)
     }
 }

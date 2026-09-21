@@ -47,7 +47,7 @@ pub struct QueryResult {
     pub data: Arc<QueryData>,
 
     /// The execution time of the query in milliseconds.
-    pub execute_time: u128,
+    pub duration_ms: u64,
 
     /// The optional stream where the data will be sourced from.
     pub stream: Option<Pin<Box<dyn Stream<Item = MigrisResult<Row>> + Send>>>,
