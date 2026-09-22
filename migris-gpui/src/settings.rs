@@ -99,7 +99,7 @@ impl SettingsManager {
 
     /// Returns the saved [`Size`] for the editor component.
     pub fn editor_size(cx: &App) -> Size {
-        Self::global(cx).settings.read(cx).appearance.editor_size
+        Self::global(cx).settings.read(cx).editor.size
     }
 
     /// Sets the saved [`AppThemeMode`].
@@ -115,7 +115,7 @@ impl SettingsManager {
     pub fn set_editor_size(cx: &mut App, size: Size) {
         cx.update_global(|manager: &mut Self, cx| {
             manager.settings.update(cx, |settings, cx| {
-                settings.appearance.editor_size = size;
+                settings.editor.size = size;
                 cx.emit(SettingUpdated(Setting::EditorSize));
             });
         });
@@ -125,7 +125,7 @@ impl SettingsManager {
     pub fn set_table_size(cx: &mut App, size: Size) {
         cx.update_global(|manager: &mut Self, cx| {
             manager.settings.update(cx, |settings, cx| {
-                settings.appearance.table_size = size;
+                settings.table.size = size;
                 cx.emit(SettingUpdated(Setting::TableSize));
             });
         });
@@ -145,7 +145,7 @@ impl SettingsManager {
 
     /// Returns the saved [`Size`] for the table component.
     pub fn table_size(cx: &App) -> Size {
-        Self::global(cx).settings.read(cx).appearance.table_size
+        Self::global(cx).settings.read(cx).table.size
     }
 
     /// Returns the saved theme for the current [`ThemeMode`].
@@ -171,7 +171,14 @@ struct SettingUpdated(Setting);
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct Settings {
+    /// The general appearance settings.
     appearance: AppearanceSettings,
+
+    /// The settings for the editor component.
+    editor: EditorSettings,
+
+    /// The settings for the table component.
+    table: TableSettings,
 }
 
 impl EventEmitter<SettingUpdated> for Settings {}
@@ -215,12 +222,6 @@ impl Settings {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct AppearanceSettings {
-    /// The size used for the editor component.
-    editor_size: Size,
-
-    /// The size used for the table component.
-    table_size: Size,
-
     /// The theme to use when dark mode is enabled.
     theme_dark: SharedString,
 
@@ -229,6 +230,20 @@ struct AppearanceSettings {
 
     /// The app theme mode.
     theme_mode: AppThemeMode,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default)]
+struct EditorSettings {
+    /// The size used for the editor component.
+    size: Size,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+#[serde(default)]
+struct TableSettings {
+    /// The size used for the table component.
+    size: Size,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
