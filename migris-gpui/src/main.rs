@@ -32,13 +32,6 @@ use crate::{app::Application, database::Database};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Use tokio runtime (needed for sqlx operations).
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
-    let handle = runtime.handle();
-    let _guard = handle.enter();
-
     // Connect to application database.
     let database = Arc::new(Database::new().await?);
 
