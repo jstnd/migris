@@ -32,7 +32,7 @@ use crate::{app::Application, database::Database};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Connect to application database.
+    shared::create_config_dir()?;
     let database = Arc::new(Database::new().await?);
 
     // Set keyring store for storing secrets.

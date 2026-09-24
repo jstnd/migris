@@ -5,8 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::anyhow;
-use directories::BaseDirs;
+use anyhow::Result;
 use gpui_kit::{
     App, AppContext, BorrowAppContext, Entity, EventEmitter, Global, SharedString, Subscription,
     component::{Theme, ThemeMode},
@@ -50,24 +49,17 @@ impl SettingsManager {
     }
 
     /// Retrieves the path for the settings file.
-    fn settings_path() -> Result<PathBuf, anyhow::Error> {
-        let Some(dirs) = BaseDirs::new() else {
-            return Err(anyhow!("Failed to retrieve directories"));
-        };
-
-        Ok(dirs
-            .config_dir()
-            .join(shared::APPLICATION_NAME)
-            .join("settings.json"))
+    fn settings_path() -> Result<PathBuf> {
+        Ok(shared::config_dir()?.join("settings.json"))
     }
 
-    fn try_load() -> Result<Settings, anyhow::Error> {
+    fn try_load() -> Result<Settings> {
         let path = Self::settings_path()?;
         let reader = BufReader::new(File::open(path)?);
         Ok(serde_json::from_reader(reader)?)
     }
 
-    fn try_save(&self, cx: &App) -> Result<(), anyhow::Error> {
+    fn try_save(&self, cx: &App) -> Result<()> {
         let path = Self::settings_path()?;
         let writer = BufWriter::new(File::create(path)?);
         serde_json::to_writer_pretty(writer, &self.settings.read(cx))?;

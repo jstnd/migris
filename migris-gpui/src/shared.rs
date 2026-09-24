@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
+use directories::BaseDirs;
 use gpui_kit::{Pixels, px};
 use migris::{
     drivers::{ConnectionKind, Driver},
@@ -24,6 +25,20 @@ pub const DIALOG_HEIGHT: Pixels = px(600.0);
 
 /// The placeholder text for search input fields.
 pub const SEARCH_PLACEHOLDER: &str = "Search...";
+
+/// Returns the path of the application's folder within the user's config directory.
+pub fn config_dir() -> Result<PathBuf> {
+    Ok(BaseDirs::new()
+        .ok_or(anyhow!("failed to create BaseDirs struct"))?
+        .config_dir()
+        .join(APPLICATION_NAME))
+}
+
+/// Creates the application's folder within the user's config directory.
+pub fn create_config_dir() -> Result<()> {
+    std::fs::create_dir_all(config_dir()?)?;
+    Ok(())
+}
 
 /// Creates a database driver from the given connection.
 pub async fn create_driver(connection: &Connection) -> Result<Arc<dyn Driver>> {

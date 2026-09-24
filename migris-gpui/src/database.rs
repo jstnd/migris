@@ -1,5 +1,4 @@
-use anyhow::{Result, anyhow};
-use directories::BaseDirs;
+use anyhow::Result;
 use migris::sqlite::SqliteConnection;
 use sqlx::QueryBuilder;
 
@@ -18,12 +17,7 @@ pub struct Database {
 
 impl Database {
     pub async fn new() -> Result<Self> {
-        let path = BaseDirs::new()
-            .ok_or(anyhow!("failed to create BaseDirs struct"))?
-            .config_dir()
-            .join(shared::APPLICATION_NAME)
-            .join(DATABASE_FILE);
-
+        let path = shared::config_dir()?.join(DATABASE_FILE);
         let connection = SqliteConnection::new(&path.to_string_lossy()).await?;
         sqlx::migrate!("./migrations")
             .run(connection.pool())
