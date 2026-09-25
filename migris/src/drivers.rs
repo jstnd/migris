@@ -1,4 +1,7 @@
-use crate::{Entity, MigrisResult, data::QueryResult, entity::EntityData, schema::Index, shared};
+use crate::{
+    Entity, MigrisResult, data::QueryResult, entity::EntityData, query::Query, schema::Index,
+    shared,
+};
 
 pub(crate) mod mysql;
 pub(crate) mod sqlite;
@@ -13,8 +16,8 @@ pub trait Driver: Send + Sync {
     /// Returns the indexes associated with the given entity.
     async fn indexes(&self, entity: &Entity) -> MigrisResult<Vec<Index>>;
 
-    async fn query(&self, query: String) -> MigrisResult<QueryResult>;
-    async fn query_stream(&self, query: String) -> MigrisResult<QueryResult>;
+    async fn query(&self, query: &Query) -> MigrisResult<QueryResult>;
+    async fn query_stream(&self, query: &Query) -> MigrisResult<QueryResult>;
 }
 
 #[derive(Debug, Clone, Copy, Default, sqlx::Type)]

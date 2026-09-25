@@ -15,6 +15,7 @@ use crate::{
     common::decode_sqlx,
     data::{QueryData, QueryResult},
     drivers::Driver,
+    query::Query,
 };
 
 pub struct SqliteConnection {
@@ -68,11 +69,10 @@ impl Driver for SqliteConnection {
         Ok(vec![])
     }
 
-    async fn query(&self, query: String) -> MigrisResult<QueryResult> {
-        let query: Arc<str> = Arc::from(query);
-        let columns = self.columns_from_query(query.clone()).await?;
+    async fn query(&self, query: &Query) -> MigrisResult<QueryResult> {
+        let columns = self.columns_from_query(query.sql()).await?;
         let instant = Instant::now();
-        let rows = sqlx::query(AssertSqlSafe(query))
+        let rows = sqlx::query(AssertSqlSafe(query.sql()))
             .fetch_all(&self.pool)
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
@@ -87,12 +87,12 @@ impl Driver for SqliteConnection {
         })
     }
 
-    async fn query_stream(&self, query: String) -> MigrisResult<QueryResult> {
-        let query: Arc<str> = Arc::from(query);
+    async fn query_stream(&self, query: &Query) -> MigrisResult<QueryResult> {
         let pool = self.pool.clone();
-        let columns = self.columns_from_query(query.clone()).await?;
+        let sql = query.sql();
+        let columns = self.columns_from_query(sql.clone()).await?;
         let stream = async_stream::stream! {
-            let mut stream = sqlx::query(AssertSqlSafe(query)).fetch(&pool);
+            let mut stream = sqlx::query(AssertSqlSafe(sql)).fetch(&pool);
 
             while let Some(row) = stream.next().await {
                 let row = row

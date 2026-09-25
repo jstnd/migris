@@ -13,3 +13,5 @@ serde = { workspace = true }
 sqlformat = "0.5.0"
 sqlx = { workspace = true }
 thiserror = "2.0.17"
+tokio = { workspace = true }
+tokio-util = { workspace = true }

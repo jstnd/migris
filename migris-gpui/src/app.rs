@@ -12,7 +12,7 @@ use gpui_kit::{
     prelude::FluentBuilder,
     px,
 };
-use migris::{Entity as MigrisEntity, EntityKind};
+use migris::{Entity as MigrisEntity, EntityKind, query::Query};
 
 use crate::{
     assets,
@@ -92,32 +92,32 @@ impl Application {
     }
 
     fn handle_event(&mut self, window: &mut Window, cx: &mut Context<Self>, id: &EventId) {
-        let Some(event) = EventManager::global(cx).get(id) else {
+        let Some(event) = EventManager::get(cx, *id) else {
             return;
         };
 
         match &event.variant {
             EventVariant::LoadEntity(inner) => {
-                self.load_entity(window, cx, inner.clone(), event.callbacks.clone());
+                self.load_entity(window, cx, event.id, inner.clone(), event.callbacks.clone());
             }
             EventVariant::OpenConnection(id) => {
-                self.open_connection(window, cx, *id, event.callbacks.clone())
+                self.open_connection(window, cx, event.id, *id, event.callbacks.clone())
             }
             EventVariant::OpenEntity(entity) => {
                 self.open_entity(window, cx, entity.clone());
+                EventManager::complete(cx, id);
             }
             EventVariant::RunSql(inner) => {
-                self.run_sql(window, cx, inner.clone(), event.callbacks.clone());
+                self.run_sql(window, cx, event.id, inner.clone(), event.callbacks.clone());
             }
         }
-
-        EventManager::global_mut(cx).complete(id);
     }
 
     fn load_entity(
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
+        event_id: EventId,
         event: LoadEntityEvent,
         callbacks: EventCallbacks,
     ) {
@@ -126,14 +126,18 @@ impl Application {
 
         cx.spawn_in(window, async move |_, cx| {
             let result = driver.entity_data(&event.entity).await;
-            _ = cx.update(|window, cx| match result {
-                Ok(data) => {
-                    (event.on_result)(window, cx, data);
-                    callbacks.on_complete(window, cx);
+            _ = cx.update(|window, cx| {
+                match result {
+                    Ok(data) => {
+                        (event.on_result)(window, cx, data);
+                    }
+                    Err(err) => {
+                        callbacks.on_error(window, cx, err.to_string());
+                    }
                 }
-                Err(err) => {
-                    callbacks.on_error(window, cx, err.to_string());
-                }
+
+                callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event_id);
             })
         })
         .detach();
@@ -143,10 +147,13 @@ impl Application {
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
-        id: ConnectionId,
+        event_id: EventId,
+        connection_id: ConnectionId,
         callbacks: EventCallbacks,
     ) {
-        let connection = ConnectionManager::global(cx).connection(&id).clone();
+        let connection = ConnectionManager::global(cx)
+            .connection(&connection_id)
+            .clone();
 
         cx.spawn_in(window, async move |this, cx| {
             let driver = match shared::create_driver(&connection).await {
@@ -183,6 +190,7 @@ impl Application {
                 });
 
                 callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event_id);
             });
         })
         .detach();
@@ -212,6 +220,7 @@ impl Application {
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
+        event_id: EventId,
         event: RunSqlEvent,
         callbacks: EventCallbacks,
     ) {
@@ -233,8 +242,8 @@ impl Application {
 
             let mut continue_execution = true;
             for (idx, statement) in statements.iter().enumerate() {
-                let query = statement.sql.clone();
-                let history = history_group.add(&migris::sql::minify(&query));
+                let query = Query::new(&statement.sql, event.token.clone());
+                let history = history_group.add(&migris::sql::minify(&query.sql()));
 
                 // We want to continue iterating through the statements even if we stopped execution
                 // so the skipped statements can still get recorded within history above.
@@ -243,9 +252,9 @@ impl Application {
                 }
 
                 let result = if event.stream {
-                    driver.query_stream(query).await
+                    driver.query_stream(&query).await
                 } else {
-                    driver.query(query).await
+                    driver.query(&query).await
                 };
 
                 _ = this.update_in(cx, |this, window, cx| match result {
@@ -286,6 +295,11 @@ impl Application {
                     });
                 });
             }
+
+            _ = this.update_in(cx, |_, window, cx| {
+                callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event_id);
+            });
         })
         .detach();
     }

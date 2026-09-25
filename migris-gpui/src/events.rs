@@ -2,6 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use gpui_kit::{Action, App, Global, SharedString, Window};
 use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::connections::ConnectionId;
@@ -25,6 +26,32 @@ impl EventManager {
         }
     }
 
+    /// Returns a reference to the global [`EventManager`].
+    pub fn global(cx: &App) -> &Self {
+        cx.global::<Self>()
+    }
+
+    /// Returns a mutable reference to the global [`EventManager`].
+    fn global_mut(cx: &mut App) -> &mut Self {
+        cx.global_mut::<Self>()
+    }
+
+    /// Cancels the event with the given [`EventId`].
+    pub fn cancel(cx: &App, id: EventId) {
+        let Some(event) = Self::get(cx, id) else {
+            return;
+        };
+
+        if let EventVariant::RunSql(inner) = &event.variant {
+            inner.token.cancel();
+        }
+    }
+
+    /// Completes the event with the given [`EventId`].
+    pub fn complete(cx: &mut App, id: &EventId) {
+        Self::global_mut(cx).events.remove(id);
+    }
+
     /// Emits the given [`Event`].
     pub fn emit(window: &mut Window, cx: &mut App, event: Event) {
         let id = event.id;
@@ -32,24 +59,9 @@ impl EventManager {
         window.dispatch_action(Box::new(EventEmitted(id)), cx);
     }
 
-    /// Returns a reference to the global [`EventManager`].
-    pub fn global(cx: &App) -> &Self {
-        cx.global::<Self>()
-    }
-
-    /// Returns a mutable reference to the global [`EventManager`].
-    pub fn global_mut(cx: &mut App) -> &mut Self {
-        cx.global_mut::<Self>()
-    }
-
-    /// Completes the event with the given [`EventId`].
-    pub fn complete(&mut self, id: &EventId) {
-        self.events.remove(id);
-    }
-
     /// Returns a reference to the event with the given [`EventId`], if one is found.
-    pub fn get(&self, id: &EventId) -> Option<&Event> {
-        self.events.get(id)
+    pub fn get(cx: &App, id: EventId) -> Option<&Event> {
+        Self::global(cx).events.get(&id)
     }
 
     /// Inserts an event into the event map.
@@ -177,6 +189,11 @@ pub struct RunSqlEvent {
     /// Whether the results should be returned as a stream.
     pub stream: bool,
 
+    /// The cancellation token for the event.
+    ///
+    /// This can be used to cancel the running queries if needed.
+    pub token: CancellationToken,
+
     /// The callback used when a query result is retrieved.
     pub on_result: Rc<dyn Fn(&mut Window, &mut App, QueryResult) + 'static>,
 }
@@ -192,6 +209,7 @@ impl RunSqlEvent {
             record_history: false,
             show_progress: false,
             stream: false,
+            token: CancellationToken::new(),
             on_result: Rc::new(on_result),
         }
     }
@@ -206,6 +224,7 @@ impl RunSqlEvent {
             record_history: false,
             show_progress: false,
             stream: true,
+            token: CancellationToken::new(),
             on_result: Rc::new(on_result),
         }
     }

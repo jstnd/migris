@@ -2,8 +2,10 @@ use std::{collections::HashMap, str::FromStr, sync::Arc, time::Instant};
 
 use futures_util::StreamExt;
 use sqlx::{
-    AssertSqlSafe, Column as SqlxColumn, Executor, MySqlPool, Row as SqlxRow, SqlSafeStr, TypeInfo,
+    AssertSqlSafe, Column as SqlxColumn, Executor, MySql, MySqlPool, Row as SqlxRow, SqlSafeStr,
+    TypeInfo,
     mysql::{MySqlColumn, MySqlTypeInfo},
+    pool::PoolConnection,
 };
 
 use crate::{
@@ -12,6 +14,7 @@ use crate::{
     drivers::Driver,
     entity::{EntityData, TableData},
     mysql::MySqlDataType,
+    query::Query,
     schema::{Index, IndexKind},
 };
 
@@ -40,6 +43,21 @@ impl MySqlConnection {
             .iter()
             .map(Column::from_mysql_query)
             .collect()
+    }
+
+    async fn connection(&self) -> MigrisResult<PoolConnection<MySql>> {
+        self.pool
+            .acquire()
+            .await
+            .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+    }
+
+    async fn kill_query(&self, id: u32) -> MigrisResult<()> {
+        sqlx::query(AssertSqlSafe(format!("KILL QUERY {}", id)))
+            .execute(&self.pool)
+            .await
+            .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+        Ok(())
     }
 }
 
@@ -143,14 +161,25 @@ impl Driver for MySqlConnection {
         Ok(indexes.into_values().collect())
     }
 
-    async fn query(&self, query: String) -> MigrisResult<QueryResult> {
-        let query: Arc<str> = Arc::from(query);
-        let columns = self.columns_from_query(query.clone()).await?;
-        let instant = Instant::now();
-        let rows = sqlx::query(AssertSqlSafe(query))
-            .fetch_all(&self.pool)
+    async fn query(&self, query: &Query) -> MigrisResult<QueryResult> {
+        let mut connection = self.connection().await?;
+        let connection_id: u32 = sqlx::query_scalar("SELECT CONNECTION_ID()")
+            .fetch_one(&mut *connection)
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
+        let columns = self.columns_from_query(query.sql()).await?;
+        let instant = Instant::now();
+        let rows = tokio::select! {
+            result = sqlx::query(AssertSqlSafe(query.sql())).fetch_all(&mut *connection) => {
+                result.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+            }
+
+            _ = query.cancelled() => {
+                self.kill_query(connection_id).await?;
+                Err(MigrisError::QueryCancelled)
+            }
+        }?;
 
         let duration = instant.elapsed();
         let rows: MigrisResult<Vec<Row>> = rows
@@ -165,13 +194,13 @@ impl Driver for MySqlConnection {
         })
     }
 
-    async fn query_stream(&self, query: String) -> MigrisResult<QueryResult> {
-        let query: Arc<str> = Arc::from(query);
+    async fn query_stream(&self, query: &Query) -> MigrisResult<QueryResult> {
         let pool = self.pool.clone();
-        let columns = self.columns_from_query(query.clone()).await?;
+        let sql = query.sql();
+        let columns = self.columns_from_query(sql.clone()).await?;
         let stream_columns = columns.clone();
         let stream = async_stream::stream! {
-            let mut stream = sqlx::query(AssertSqlSafe(query)).fetch(&pool);
+            let mut stream = sqlx::query(AssertSqlSafe(sql)).fetch(&pool);
 
             while let Some(row) = stream.next().await {
                 let row = row

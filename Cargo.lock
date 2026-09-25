@@ -4306,6 +4306,8 @@ dependencies = [
  "sqlformat",
  "sqlx",
  "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4337,6 +4339,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tokio-util",
  "uuid",
  "windows-native-keyring-store",
  "winresource",

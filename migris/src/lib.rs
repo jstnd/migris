@@ -4,6 +4,7 @@ pub mod data;
 pub mod drivers;
 mod entity;
 mod options;
+pub mod query;
 mod schema;
 pub mod shared;
 pub mod sql;
@@ -52,6 +53,9 @@ pub enum MigrisError {
 
     #[error("Failed to write to file: {0}")]
     FileWriteFailed(String),
+
+    #[error("Query Cancelled")]
+    QueryCancelled,
 
     #[error("Value error encountered: {0}")]
     ValueError(String),
