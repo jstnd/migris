@@ -11,8 +11,8 @@ use crate::{
     state::AppState,
 };
 
+pub mod connection_dialog;
 pub mod connection_panel;
-pub mod connections;
 pub mod editor;
 pub mod icon;
 pub mod settings;
@@ -54,7 +54,7 @@ pub fn entry_screen(cx: &App) -> impl IntoElement {
                             });
 
                             window.open_dialog(cx, |dialog, window, cx| {
-                                connections::connection_dialog(dialog, window, cx)
+                                connection_dialog::connection_dialog(dialog, window, cx)
                             });
                         }),
                 )
