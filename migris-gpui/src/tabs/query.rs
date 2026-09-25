@@ -29,140 +29,6 @@ pub enum QueryTabAction {
     RunSqlSelection,
 }
 
-/// The state used with a [`QueryTab`].
-struct QueryTabState {
-    /// The id for the active query event.
-    active_event: Option<EventId>,
-
-    /// The index of the active table tab.
-    active_table: usize,
-
-    /// The state for the editor.
-    editor: Entity<EditorState>,
-
-    /// The states for the tables showing query results.
-    tables: Vec<Entity<QueryTableState>>,
-
-    /// The subscriptions that handle events originating from the query tables, such as sorting.
-    ///
-    /// These are saved here since we want to drop the subscriptions when new queries are ran.
-    table_subscriptions: Vec<Subscription>,
-}
-
-impl QueryTabState {
-    /// Creates a new [`QueryTabState`].
-    fn new(window: &mut Window, cx: &mut App) -> Self {
-        let editor = cx.new(|cx| EditorState::new(window, cx));
-
-        Self {
-            active_event: None,
-            active_table: 0,
-            editor,
-            tables: Vec::new(),
-            table_subscriptions: Vec::new(),
-        }
-    }
-
-    /// Handles actions originating from the tab.
-    fn handle_action(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        action: &QueryTabAction,
-    ) {
-        match action {
-            QueryTabAction::FormatSql => self.format_sql(window, cx),
-            QueryTabAction::RunSql => {
-                self.clear_results();
-                self.run_sql(window, cx, false);
-            }
-            QueryTabAction::RunSqlSelection => {
-                self.clear_results();
-                self.run_sql(window, cx, true);
-            }
-        }
-    }
-
-    /// Returns a reference to the active table.
-    fn active_table(&self) -> &Entity<QueryTableState> {
-        &self.tables[self.active_table]
-    }
-
-    /// Cancels the running query event.
-    fn cancel_event(&self, cx: &App) {
-        let Some(event_id) = self.active_event else {
-            return;
-        };
-
-        EventManager::cancel(cx, event_id);
-    }
-
-    /// Clears the results from the tab.
-    fn clear_results(&mut self) {
-        self.tables.clear();
-        self.table_subscriptions.clear();
-        self.active_table = 0;
-    }
-
-    /// Formats the SQL within the editor.
-    fn format_sql(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let formatted = migris::sql::format(&self.editor.read(cx).value(cx));
-        self.editor.update(cx, |editor, cx| {
-            editor.set_value(window, cx, &formatted);
-        });
-    }
-
-    /// Triggers an event to run the SQL in the editor.
-    fn run_sql(&mut self, window: &mut Window, cx: &mut Context<Self>, selected: bool) {
-        let editor = self.editor.read(cx);
-        let sql = if selected {
-            editor.selected_value(cx)
-        } else {
-            editor.value(cx)
-        };
-
-        let this = cx.entity();
-        let event = Event::new(
-            RunSqlEvent::new(sql, move |window, cx, result| {
-                this.update(cx, |this, cx| {
-                    let table = cx.new(|cx| QueryTableState::with_result(window, cx, result));
-                    let subscription = cx.subscribe(&table, |_, table, event, cx| {
-                        match event {
-                            QueryTableEvent::Sort => {
-                                // When sorting within a result table on a query tab, we just want to perform the sort in-memory
-                                // as attempting to hit the database again for the sorted data would be quite complex.
-                                table.update(cx, |table, cx| {
-                                    table.sort_data(cx);
-                                });
-                            }
-                        }
-                    });
-
-                    this.tables.push(table);
-                    this.table_subscriptions.push(subscription);
-                    cx.notify();
-                });
-            })
-            .record_history()
-            .show_progress(),
-        )
-        .on_complete({
-            let this = cx.entity();
-            move |_, cx| {
-                this.update(cx, |this, _| {
-                    this.active_event = None;
-                });
-            }
-        })
-        .on_error(|window, cx, error| {
-            notifications::show_error(window, cx, error);
-        });
-
-        self.active_event = Some(event.id);
-        EventManager::emit(window, cx, event);
-    }
-}
-
 pub struct QueryTab {
     /// The state for the query tab.
     state: Entity<QueryTabState>,
@@ -184,20 +50,6 @@ impl QueryTab {
             label: SharedString::from(format!("Query #{}", number)),
             number,
         }
-    }
-
-    /// Focuses the content in the tab.
-    pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        self.state.update(cx, |state, cx| {
-            state.editor.update(cx, |editor, cx| {
-                editor.focus(window, cx);
-            });
-        });
-    }
-
-    /// Returns the label for the tab.
-    pub fn label(&self) -> SharedString {
-        self.label.clone()
     }
 
     /// Returns the content for the tab.
@@ -333,5 +185,153 @@ impl QueryTab {
                         .child(QueryTable::new(state.active_table())),
                 )
             }))
+    }
+
+    /// Focuses the content in the tab.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.editor.update(cx, |editor, cx| {
+                editor.focus(window, cx);
+            });
+        });
+    }
+
+    /// Returns the label for the tab.
+    pub fn label(&self) -> SharedString {
+        self.label.clone()
+    }
+}
+
+/// The state used with a [`QueryTab`].
+struct QueryTabState {
+    /// The id for the active query event.
+    active_event: Option<EventId>,
+
+    /// The index of the active table tab.
+    active_table: usize,
+
+    /// The state for the editor.
+    editor: Entity<EditorState>,
+
+    /// The states for the tables showing query results.
+    tables: Vec<Entity<QueryTableState>>,
+
+    /// The subscriptions that handle events originating from the query tables, such as sorting.
+    ///
+    /// These are saved here since we want to drop the subscriptions when new queries are ran.
+    table_subscriptions: Vec<Subscription>,
+}
+
+impl QueryTabState {
+    /// Creates a new [`QueryTabState`].
+    fn new(window: &mut Window, cx: &mut App) -> Self {
+        let editor = cx.new(|cx| EditorState::new(window, cx));
+
+        Self {
+            active_event: None,
+            active_table: 0,
+            editor,
+            tables: Vec::new(),
+            table_subscriptions: Vec::new(),
+        }
+    }
+
+    /// Handles actions originating from the tab.
+    fn handle_action(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        action: &QueryTabAction,
+    ) {
+        match action {
+            QueryTabAction::FormatSql => self.format_sql(window, cx),
+            QueryTabAction::RunSql => {
+                self.clear_results();
+                self.run_sql(window, cx, false);
+            }
+            QueryTabAction::RunSqlSelection => {
+                self.clear_results();
+                self.run_sql(window, cx, true);
+            }
+        }
+    }
+
+    /// Returns a reference to the active table.
+    fn active_table(&self) -> &Entity<QueryTableState> {
+        &self.tables[self.active_table]
+    }
+
+    /// Cancels the running query event.
+    fn cancel_event(&self, cx: &App) {
+        let Some(event_id) = self.active_event else {
+            return;
+        };
+
+        EventManager::cancel(cx, event_id);
+    }
+
+    /// Clears the results from the tab.
+    fn clear_results(&mut self) {
+        self.tables.clear();
+        self.table_subscriptions.clear();
+        self.active_table = 0;
+    }
+
+    /// Formats the SQL within the editor.
+    fn format_sql(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let formatted = migris::sql::format(&self.editor.read(cx).value(cx));
+        self.editor.update(cx, |editor, cx| {
+            editor.set_value(window, cx, &formatted);
+        });
+    }
+
+    /// Triggers an event to run the SQL in the editor.
+    fn run_sql(&mut self, window: &mut Window, cx: &mut Context<Self>, selected: bool) {
+        let editor = self.editor.read(cx);
+        let sql = if selected {
+            editor.selected_value(cx)
+        } else {
+            editor.value(cx)
+        };
+
+        let this = cx.entity();
+        let event = Event::new(
+            RunSqlEvent::new(sql, move |window, cx, result| {
+                this.update(cx, |this, cx| {
+                    let table = cx.new(|cx| QueryTableState::with_result(window, cx, result));
+                    let subscription = cx.subscribe(&table, |_, table, event, cx| {
+                        match event {
+                            QueryTableEvent::Sort => {
+                                // When sorting within a result table on a query tab, we just want to perform the sort in-memory
+                                // as attempting to hit the database again for the sorted data would be quite complex.
+                                table.update(cx, |table, cx| {
+                                    table.sort_data(cx);
+                                });
+                            }
+                        }
+                    });
+
+                    this.tables.push(table);
+                    this.table_subscriptions.push(subscription);
+                    cx.notify();
+                });
+            })
+            .record_history()
+            .show_progress(),
+        )
+        .on_complete({
+            let this = cx.entity();
+            move |_, cx| {
+                this.update(cx, |this, _| {
+                    this.active_event = None;
+                });
+            }
+        })
+        .on_error(|window, cx, error| {
+            notifications::show_error(window, cx, error);
+        });
+
+        self.active_event = Some(event.id);
+        EventManager::emit(window, cx, event);
     }
 }
