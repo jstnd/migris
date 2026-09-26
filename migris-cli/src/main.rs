@@ -38,6 +38,5 @@ async fn main() {
 }
 
 pub fn create_connector(str: &str) -> anyhow::Result<Box<dyn Connector>> {
-    migris::connector_from_str(str)
-        .ok_or_else(|| anyhow!("Failed to create connector for identifier: {}", str))
+    migris::connector_from_str(str).ok_or_else(|| anyhow!("Failed to create connector for identifier: {}", str))
 }

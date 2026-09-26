@@ -83,10 +83,7 @@ impl MigrateEngine {
 
                         for table in tables {
                             read_options = read_options
-                                .with_query(format!(
-                                    "SELECT * FROM `{}`.`{}`",
-                                    table.schema, table.name
-                                ))
+                                .with_query(format!("SELECT * FROM `{}`.`{}`", table.schema, table.name))
                                 .with_table_schema(&table.schema)
                                 .with_table_name(&table.name);
 
@@ -105,10 +102,8 @@ impl MigrateEngine {
                     }
                 }
                 ConnectorKind::File => {
-                    let stem =
-                        migris::common::get_file_stem(&source_identifier).ok_or_else(|| {
-                            anyhow!("Failed to get stem for file: {}", source_identifier)
-                        })?;
+                    let stem = migris::common::get_file_stem(&source_identifier)
+                        .ok_or_else(|| anyhow!("Failed to get stem for file: {}", source_identifier))?;
 
                     // Use source file name if a target table name was not given.
                     if self.args.target_table.is_none() {
@@ -119,9 +114,7 @@ impl MigrateEngine {
                     let mut target = self.target(stem)?;
 
                     // Infer schema from the file if the target database table does not exist.
-                    if target.kind() == ConnectorKind::Database
-                        && !target.exists(&write_options).await
-                    {
+                    if target.kind() == ConnectorKind::Database && !target.exists(&write_options).await {
                         read_options = read_options.infer_schema(true);
                     }
 
@@ -171,8 +164,7 @@ impl MigrateEngine {
             let _ = std::fs::create_dir_all(target_path);
 
             if target_path.is_dir() {
-                let target_path =
-                    target_path.join(format!("{}.{}", file_name, self.args.target_type));
+                let target_path = target_path.join(format!("{}.{}", file_name, self.args.target_type));
                 crate::create_connector(&target_path.display().to_string())
             } else {
                 Err(anyhow!(

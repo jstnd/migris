@@ -1,9 +1,8 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    Action, App, AppContext, Context, DispatchPhase, Entity, InteractiveElement, IntoElement,
-    KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString,
-    StatefulInteractiveElement, Styled, Window,
+    Action, App, AppContext, Context, DispatchPhase, Entity, InteractiveElement, IntoElement, KeyBinding,
+    ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled, Window,
     base::input::TabSize,
     component::{
         input,
@@ -38,8 +37,7 @@ pub struct Editor {
     state: Entity<EditorState>,
 
     /// The optional context menu builder.
-    context_menu_builder:
-        Option<Rc<dyn Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static>>,
+    context_menu_builder: Option<Rc<dyn Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static>>,
 }
 
 impl Editor {
@@ -52,10 +50,7 @@ impl Editor {
     }
 
     /// Sets the context menu for the editor.
-    pub fn context_menu(
-        mut self,
-        f: impl Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static,
-    ) -> Self {
+    pub fn context_menu(mut self, f: impl Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static) -> Self {
         self.context_menu_builder = Some(Rc::new(f));
         self
     }
@@ -70,10 +65,7 @@ impl RenderOnce for Editor {
         window.on_mouse_event({
             let state = self.state.clone();
             move |event: &ScrollWheelEvent, phase, window, cx| {
-                if phase != DispatchPhase::Capture
-                    || !event.secondary()
-                    || !state.read(cx).is_hovered
-                {
+                if phase != DispatchPhase::Capture || !event.secondary() || !state.read(cx).is_hovered {
                     return;
                 }
 
@@ -102,17 +94,13 @@ impl RenderOnce for Editor {
                     .appearance(false)
                     .text_size(SettingsManager::editor_size(cx).font_size(cx)),
             )
-            .on_action(
-                window.listener_for(&self.state, |state, action, window, cx| {
-                    state.handle_action(window, cx, action);
-                }),
-            )
-            .on_hover(
-                window.listener_for(&self.state, |state, is_hovered, _, cx| {
-                    state.is_hovered = *is_hovered;
-                    cx.notify();
-                }),
-            )
+            .on_action(window.listener_for(&self.state, |state, action, window, cx| {
+                state.handle_action(window, cx, action);
+            }))
+            .on_hover(window.listener_for(&self.state, |state, is_hovered, _, cx| {
+                state.is_hovered = *is_hovered;
+                cx.notify();
+            }))
             .context_menu(move |menu, window, cx| {
                 if let Some(context_menu_builder) = context_menu_builder.clone() {
                     context_menu_builder(menu, window, cx)

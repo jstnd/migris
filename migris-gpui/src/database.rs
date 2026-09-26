@@ -19,10 +19,7 @@ impl Database {
     pub async fn new() -> Result<Self> {
         let path = shared::config_dir()?.join(DATABASE_FILE);
         let connection = SqliteConnection::new(&path.to_string_lossy()).await?;
-        sqlx::migrate!("./migrations")
-            .run(connection.pool())
-            .await?;
-
+        sqlx::migrate!("./migrations").run(connection.pool()).await?;
         Ok(Self { connection })
     }
 
@@ -61,10 +58,7 @@ impl Database {
                 id = ?
         "#;
 
-        sqlx::query(query)
-            .bind(id)
-            .execute(self.connection.pool())
-            .await?;
+        sqlx::query(query).bind(id).execute(self.connection.pool()).await?;
         Ok(())
     }
 
@@ -76,10 +70,7 @@ impl Database {
                 id = ?
         "#;
 
-        sqlx::query(query)
-            .bind(id)
-            .execute(self.connection.pool())
-            .await?;
+        sqlx::query(query).bind(id).execute(self.connection.pool()).await?;
         Ok(())
     }
 

@@ -32,11 +32,7 @@ pub trait Connector: Send {
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>>;
 
-    async fn write<'a>(
-        &mut self,
-        data: ConnectorData<'a>,
-        options: &WriteOptions,
-    ) -> MigrisResult<()>;
+    async fn write<'a>(&mut self, data: ConnectorData<'a>, options: &WriteOptions) -> MigrisResult<()>;
 
     async fn exists(&mut self, options: &WriteOptions) -> bool;
 

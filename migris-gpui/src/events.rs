@@ -21,9 +21,7 @@ impl Global for EventManager {}
 impl EventManager {
     /// Creates a new [`EventManager`].
     pub fn new() -> Self {
-        Self {
-            events: HashMap::new(),
-        }
+        Self { events: HashMap::new() }
     }
 
     /// Returns a reference to the global [`EventManager`].
@@ -158,10 +156,7 @@ pub struct LoadEntityEvent {
 
 impl LoadEntityEvent {
     /// Creates a new [`LoadEntityEvent`].
-    pub fn new(
-        entity: MigrisEntity,
-        on_result: impl Fn(&mut Window, &mut App, EntityData) + 'static,
-    ) -> Self {
+    pub fn new(entity: MigrisEntity, on_result: impl Fn(&mut Window, &mut App, EntityData) + 'static) -> Self {
         Self {
             entity,
             on_result: Rc::new(on_result),
@@ -200,10 +195,7 @@ pub struct RunSqlEvent {
 
 impl RunSqlEvent {
     /// Creates a new [`RunSqlEvent`].
-    pub fn new(
-        sql: impl Into<SharedString>,
-        on_result: impl Fn(&mut Window, &mut App, QueryResult) + 'static,
-    ) -> Self {
+    pub fn new(sql: impl Into<SharedString>, on_result: impl Fn(&mut Window, &mut App, QueryResult) + 'static) -> Self {
         Self {
             sql: sql.into(),
             record_history: false,

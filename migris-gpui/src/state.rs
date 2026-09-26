@@ -5,10 +5,7 @@ use gpui_kit::{
     component::{Theme, ThemeMode},
 };
 
-use crate::{
-    components::connection_dialog::ConnectionDialogState, database::Database,
-    settings::SettingsManager,
-};
+use crate::{components::connection_dialog::ConnectionDialogState, database::Database, settings::SettingsManager};
 
 pub struct AppState {
     /// The state for the application's connection dialog.

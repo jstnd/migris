@@ -79,9 +79,7 @@ impl Themes {
         ThemeRegistry::global(cx)
             .sorted_themes()
             .iter()
-            .filter_map(|theme| {
-                (theme.mode == mode).then_some((theme.name.clone(), theme.name.clone()))
-            })
+            .filter_map(|theme| (theme.mode == mode).then_some((theme.name.clone(), theme.name.clone())))
             .collect()
     }
 }

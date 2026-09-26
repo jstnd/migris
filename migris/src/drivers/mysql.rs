@@ -2,8 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc, time::Instant};
 
 use futures_util::StreamExt;
 use sqlx::{
-    AssertSqlSafe, Column as SqlxColumn, Executor, MySql, MySqlPool, Row as SqlxRow, SqlSafeStr,
-    TypeInfo,
+    AssertSqlSafe, Column as SqlxColumn, Executor, MySql, MySqlPool, Row as SqlxRow, SqlSafeStr, TypeInfo,
     mysql::{MySqlColumn, MySqlTypeInfo},
     pool::PoolConnection,
 };
@@ -150,10 +149,7 @@ impl Driver for MySqlConnection {
 
             indexes
                 .entry(index_name.clone())
-                .or_insert(Index::new(
-                    IndexKind::from_str(row.get("INDEX_KIND"))?,
-                    index_name,
-                ))
+                .or_insert(Index::new(IndexKind::from_str(row.get("INDEX_KIND"))?, index_name))
                 .columns
                 .push(row.get("COLUMN_NAME"));
         }
@@ -182,10 +178,7 @@ impl Driver for MySqlConnection {
         }?;
 
         let duration = instant.elapsed();
-        let rows: MigrisResult<Vec<Row>> = rows
-            .iter()
-            .map(|row| Row::from_mysql(row, &columns))
-            .collect();
+        let rows: MigrisResult<Vec<Row>> = rows.iter().map(|row| Row::from_mysql(row, &columns)).collect();
 
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, rows?)),

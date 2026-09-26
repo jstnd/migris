@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
-    Render, SharedString, Styled, Window,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
+    Styled, Window,
     base::{h_flex, h_resizable, resizable_panel, v_flex},
     component::{
         ActiveTheme, Root, Sizable, WindowExt,
@@ -25,10 +25,7 @@ use crate::{
     },
     connections::{ConnectionId, ConnectionManager},
     database::Database,
-    events::{
-        EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent,
-        RunSqlEvent,
-    },
+    events::{EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent, RunSqlEvent},
     history::{QueryHistoryGroup, QueryStatus},
     settings::SettingsManager,
     shared,
@@ -56,9 +53,7 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
 
     cx.spawn(async |cx| {
         // TODO: log errors from initializing here
-        _ = cx
-            .read_global(|manager: &ConnectionManager, cx| manager.init(cx))
-            .await;
+        _ = cx.read_global(|manager: &ConnectionManager, cx| manager.init(cx)).await;
     })
     .detach();
 }
@@ -151,9 +146,7 @@ impl Application {
         connection_id: ConnectionId,
         callbacks: EventCallbacks,
     ) {
-        let connection = ConnectionManager::global(cx)
-            .connection(&connection_id)
-            .clone();
+        let connection = ConnectionManager::global(cx).connection(&connection_id).clone();
 
         cx.spawn_in(window, async move |this, cx| {
             let driver = match shared::create_driver(&connection).await {
@@ -381,10 +374,8 @@ impl Render for Application {
                     }),
             )
             .children(dialog_layer)
-            .on_action(
-                cx.listener(|application, action: &EventEmitted, window, cx| {
-                    application.handle_event(window, cx, &action.0);
-                }),
-            )
+            .on_action(cx.listener(|application, action: &EventEmitted, window, cx| {
+                application.handle_event(window, cx, &action.0);
+            }))
     }
 }

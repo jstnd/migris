@@ -1,6 +1,6 @@
 use gpui_kit::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    ScrollHandle, StatefulInteractiveElement, Styled, Window,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
+    StatefulInteractiveElement, Styled, Window,
     base::{h_flex, v_flex},
     component::{
         ActiveTheme, Sizable,
@@ -26,9 +26,7 @@ pub struct TabPanel {
 impl TabPanel {
     /// Creates a new [`TabPanel`].
     pub fn new(state: &Entity<TabPanelState>) -> Self {
-        Self {
-            state: state.clone(),
-        }
+        Self { state: state.clone() }
     }
 }
 
@@ -60,13 +58,10 @@ impl RenderOnce for TabPanel {
                                             .ghost()
                                             .xsmall()
                                             .text_color(cx.theme().muted_foreground)
-                                            .on_click(window.listener_for(
-                                                &self.state,
-                                                move |state, _, _, cx| {
-                                                    state.close_tab(cx, idx);
-                                                    cx.stop_propagation();
-                                                },
-                                            )),
+                                            .on_click(window.listener_for(&self.state, move |state, _, _, cx| {
+                                                state.close_tab(cx, idx);
+                                                cx.stop_propagation();
+                                            })),
                                     )
                                     .on_hover(window.listener_for(
                                         &self.state,
@@ -83,12 +78,9 @@ impl RenderOnce for TabPanel {
                                     .icon(IconName::Plus)
                                     .ghost()
                                     .small()
-                                    .on_click(window.listener_for(
-                                        &self.state,
-                                        |state, _, window, cx| {
-                                            state.add_query_tab(window, cx);
-                                        },
-                                    )),
+                                    .on_click(window.listener_for(&self.state, |state, _, window, cx| {
+                                        state.add_query_tab(window, cx);
+                                    })),
                             ),
                         )
                         .on_click(window.listener_for(&self.state, |state, idx, window, cx| {

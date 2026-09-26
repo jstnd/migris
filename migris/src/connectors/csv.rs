@@ -4,8 +4,8 @@ use csv::{Reader, StringRecord, Writer};
 use futures_util::StreamExt;
 
 use crate::{
-    Column, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult,
-    ReadOptions, Row, Schema, Value, WriteOptions, common,
+    Column, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions, Row, Schema,
+    Value, WriteOptions, common,
 };
 
 #[derive(Debug)]
@@ -26,8 +26,7 @@ impl Connector for CsvConnector {
     }
 
     async fn read<'a>(&mut self, options: &'a ReadOptions) -> MigrisResult<ConnectorData<'a>> {
-        let reader = Reader::from_path(&self.path)
-            .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
+        let reader = Reader::from_path(&self.path).map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
 
         let columns = Schema::from_csv(&self.path, options.infer_schema)?.columns;
         let stream = futures_util::stream::iter(reader.into_records().map(|result| {
@@ -39,11 +38,7 @@ impl Connector for CsvConnector {
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
-    async fn write<'a>(
-        &mut self,
-        data: ConnectorData<'a>,
-        options: &WriteOptions,
-    ) -> MigrisResult<()> {
+    async fn write<'a>(&mut self, data: ConnectorData<'a>, options: &WriteOptions) -> MigrisResult<()> {
         let path = Path::new(&self.path);
         let file = OpenOptions::new()
             .write(true)
@@ -55,8 +50,7 @@ impl Connector for CsvConnector {
 
         // Create any missing parent directories in the given path.
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
         }
 
         let mut writer = Writer::from_writer(file);
@@ -134,9 +128,7 @@ impl Row {
 
 impl Schema {
     fn from_csv(path: &str, infer: bool) -> MigrisResult<Self> {
-        let mut reader =
-            Reader::from_path(path).map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
-
+        let mut reader = Reader::from_path(path).map_err(|err| MigrisError::FileOpenFailed(err.to_string()))?;
         let mut columns: Vec<Column> = reader
             .headers()
             .map_err(|err| MigrisError::FileReadFailed(err.to_string()))?
@@ -166,9 +158,7 @@ impl Schema {
                                     }
                                 } else {
                                     // Otherwise, set the column type to a string instead.
-                                    let lengths =
-                                        [min.to_string().len(), max.to_string().len(), value.len()];
-
+                                    let lengths = [min.to_string().len(), max.to_string().len(), value.len()];
                                     let len = lengths.iter().max().unwrap_or(&0);
                                     *column_type = CsvDataType::String(*len);
                                 }

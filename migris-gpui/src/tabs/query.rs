@@ -1,6 +1,6 @@
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
         Sizable,
@@ -82,19 +82,12 @@ impl QueryTab {
                                             .small()
                                             .button(
                                                 Button::new("btn-run-query")
-                                                    .icon(
-                                                        Icon::primary(cx, IconName::Play)
-                                                            .disabled(is_run_disabled),
-                                                    )
+                                                    .icon(Icon::primary(cx, IconName::Play).disabled(is_run_disabled))
                                                     .label("Run")
                                                     .on_click(window.listener_for(
                                                         &self.state,
                                                         |state, _, window, cx| {
-                                                            state.handle_action(
-                                                                window,
-                                                                cx,
-                                                                &QueryTabAction::RunSql,
-                                                            );
+                                                            state.handle_action(window, cx, &QueryTabAction::RunSql);
                                                         },
                                                     )),
                                             )
@@ -116,18 +109,12 @@ impl QueryTab {
                                     .child(
                                         Button::new("btn-cancel-query")
                                             .disabled(is_cancel_disabled)
-                                            .icon(
-                                                Icon::red(cx, IconName::X)
-                                                    .disabled(is_cancel_disabled),
-                                            )
+                                            .icon(Icon::red(cx, IconName::X).disabled(is_cancel_disabled))
                                             .small()
                                             .tooltip("Cancel")
-                                            .on_click(window.listener_for(
-                                                &self.state,
-                                                |state, _, _, cx| {
-                                                    state.cancel_event(cx);
-                                                },
-                                            )),
+                                            .on_click(window.listener_for(&self.state, |state, _, _, cx| {
+                                                state.cancel_event(cx);
+                                            })),
                                     ),
                             ),
                         )
@@ -153,18 +140,14 @@ impl QueryTab {
                             .separator()
                             .menu_with_icon_and_disabled(
                                 "Format",
-                                Icon::primary(cx, IconName::BrushCleaning)
-                                    .disabled(is_editor_empty),
+                                Icon::primary(cx, IconName::BrushCleaning).disabled(is_editor_empty),
                                 Box::new(QueryTabAction::FormatSql),
                                 is_editor_empty,
                             )
                         }))
-                        .on_action(window.listener_for(
-                            &self.state,
-                            |state, action, window, cx| {
-                                state.handle_action(window, cx, action);
-                            },
-                        )),
+                        .on_action(window.listener_for(&self.state, |state, action, window, cx| {
+                            state.handle_action(window, cx, action);
+                        })),
                 ),
             )
             .child(resizable_panel().when(!state.tables.is_empty(), |this| {
@@ -176,15 +159,16 @@ impl QueryTab {
                                 TabBar::new("result-tabs")
                                     .flex_1()
                                     .selected_index(state.active_table)
-                                    .on_click(window.listener_for(
-                                        &self.state,
-                                        |state, idx, _, _| {
-                                            state.active_table = *idx;
-                                        },
-                                    ))
-                                    .children(state.tables.iter().enumerate().map(|(idx, _)| {
-                                        Tab::new().label(format!("Result #{}", idx + 1))
-                                    })),
+                                    .on_click(window.listener_for(&self.state, |state, idx, _, _| {
+                                        state.active_table = *idx;
+                                    }))
+                                    .children(
+                                        state
+                                            .tables
+                                            .iter()
+                                            .enumerate()
+                                            .map(|(idx, _)| Tab::new().label(format!("Result #{}", idx + 1))),
+                                    ),
                             ),
                         )
                         .child(QueryTable::new(state.active_table())),
@@ -242,12 +226,7 @@ impl QueryTabState {
     }
 
     /// Handles actions originating from the tab.
-    fn handle_action(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        action: &QueryTabAction,
-    ) {
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &QueryTabAction) {
         match action {
             QueryTabAction::FormatSql => self.format_sql(window, cx),
             QueryTabAction::RunSql => {

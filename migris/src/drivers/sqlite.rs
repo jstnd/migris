@@ -2,12 +2,8 @@ use std::{str::FromStr, sync::Arc, time::Instant};
 
 use futures_util::StreamExt;
 use sqlx::{
-    AssertSqlSafe, Column as SqlxColumn, Executor, Row as SqlxRow, SqlSafeStr, Sqlite, SqlitePool,
-    TypeInfo, ValueRef,
-    sqlite::{
-        SqliteColumn, SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous,
-        SqliteValueRef,
-    },
+    AssertSqlSafe, Column as SqlxColumn, Executor, Row as SqlxRow, SqlSafeStr, Sqlite, SqlitePool, TypeInfo, ValueRef,
+    sqlite::{SqliteColumn, SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous, SqliteValueRef},
 };
 
 use crate::{

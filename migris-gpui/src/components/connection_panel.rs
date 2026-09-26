@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding,
-    KeystrokeEvent, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
-    Window,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, KeystrokeEvent,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window,
     base::{
         TreeItem, TreeState, h_flex,
         input::{InputEvent, InputState},
@@ -84,9 +83,7 @@ pub struct ConnectionPanel {
 impl ConnectionPanel {
     /// Creates a new [`ConnectionPanel`].
     pub fn new(state: &Entity<ConnectionPanelState>) -> Self {
-        Self {
-            state: state.clone(),
-        }
+        Self { state: state.clone() }
     }
 }
 
@@ -111,37 +108,28 @@ impl RenderOnce for ConnectionPanel {
                                 .child(
                                     h_flex()
                                         .gap_1p5()
-                                        .child(Icon::primary(cx, tab.icon()).disabled(
-                                            active_tab != tab && hovered_tab != Some(tab),
-                                        ))
+                                        .child(
+                                            Icon::primary(cx, tab.icon())
+                                                .disabled(active_tab != tab && hovered_tab != Some(tab)),
+                                        )
                                         .child(tab.label()),
                                 )
-                                .on_click(window.listener_for(
-                                    &self.state,
-                                    move |state, _, _, _| {
-                                        state.active_tab = tab;
-                                    },
-                                ))
-                                .on_hover(window.listener_for(
-                                    &self.state,
-                                    move |state, is_hovered: &bool, _, _| {
-                                        state.hovered_tab = is_hovered.then_some(tab);
-                                    },
-                                ))
+                                .on_click(window.listener_for(&self.state, move |state, _, _, _| {
+                                    state.active_tab = tab;
+                                }))
+                                .on_hover(window.listener_for(&self.state, move |state, is_hovered: &bool, _, _| {
+                                    state.hovered_tab = is_hovered.then_some(tab);
+                                }))
                         })),
                 ),
             )
             .child(match active_tab {
-                ConnectionPanelTab::Connection => {
-                    connection_tab(cx, &self.state).into_any_element()
-                }
+                ConnectionPanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
                 ConnectionPanelTab::History => history_tab(cx, &self.state).into_any_element(),
             })
-            .on_action(
-                window.listener_for(&self.state, |state, action, window, cx| {
-                    state.handle_action(window, cx, action);
-                }),
-            )
+            .on_action(window.listener_for(&self.state, |state, action, window, cx| {
+                state.handle_action(window, cx, action);
+            }))
     }
 }
 
@@ -242,43 +230,31 @@ fn history_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoE
                         ),
                     };
 
-                    h_flex()
-                        .w_full()
-                        .gap_0p5()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            h_flex()
-                                .gap_1()
-                                .min_w_0()
-                                .child(
-                                    div()
-                                        .id(format!("item-status-{}", item.id))
-                                        .child(match item.status {
-                                            QueryStatus::None => Icon::new(cx, IconName::Minus),
-                                            QueryStatus::Cancelled => {
-                                                Icon::yellow(cx, IconName::CircleAlert)
-                                            }
-                                            QueryStatus::Failed => Icon::red(cx, IconName::X),
-                                            QueryStatus::Success => {
-                                                Icon::green(cx, IconName::Check)
-                                            }
-                                        })
-                                        .tooltip(move |window, cx| {
-                                            Tooltip::new(tooltip_text.clone()).build(window, cx)
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .id(format!("item-query-{}", item.id))
-                                        .truncate()
-                                        .child(SharedString::from(&item.query))
-                                        .tooltip(move |window, cx| {
-                                            Tooltip::new(migris::sql::format(&item_query))
-                                                .build(window, cx)
-                                        }),
-                                ),
-                        )
+                    h_flex().w_full().gap_0p5().items_center().justify_between().child(
+                        h_flex()
+                            .gap_1()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .id(format!("item-status-{}", item.id))
+                                    .child(match item.status {
+                                        QueryStatus::None => Icon::new(cx, IconName::Minus),
+                                        QueryStatus::Cancelled => Icon::yellow(cx, IconName::CircleAlert),
+                                        QueryStatus::Failed => Icon::red(cx, IconName::X),
+                                        QueryStatus::Success => Icon::green(cx, IconName::Check),
+                                    })
+                                    .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx)),
+                            )
+                            .child(
+                                div()
+                                    .id(format!("item-query-{}", item.id))
+                                    .truncate()
+                                    .child(SharedString::from(&item.query))
+                                    .tooltip(move |window, cx| {
+                                        Tooltip::new(migris::sql::format(&item_query)).build(window, cx)
+                                    }),
+                            ),
+                    )
                 }))
         }))
         .into_any_element()
@@ -316,8 +292,7 @@ pub struct ConnectionPanelState {
 impl ConnectionPanelState {
     /// Creates a new [`ConnectionPanelState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let search_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
+        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
 
         cx.observe_keystrokes(|this, event, _, cx| {
@@ -354,12 +329,7 @@ impl ConnectionPanelState {
     }
 
     /// Handles actions originating from the connection panel.
-    fn handle_action(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        action: &ConnectionPanelAction,
-    ) {
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &ConnectionPanelAction) {
         match action {
             ConnectionPanelAction::OpenSelectedEntity => {
                 if let Some(entity) = self.selected_entity(cx)
@@ -437,9 +407,7 @@ impl ConnectionPanelState {
             .iter()
             .filter(|entity| entity.kind != EntityKind::Schema)
             .fold(BTreeMap::new(), |mut map, entity| {
-                map.entry(entity.schema.clone())
-                    .or_insert(Vec::new())
-                    .push(entity);
+                map.entry(entity.schema.clone()).or_insert(Vec::new()).push(entity);
                 map
             });
 

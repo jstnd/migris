@@ -20,27 +20,25 @@ pub fn settings_dialog(dialog: Dialog, _: &mut Window, cx: &mut App) -> Dialog {
         .w(shared::DIALOG_WIDTH)
         .h(shared::DIALOG_HEIGHT)
         .title("Settings")
-        .child(Settings::new("app-settings").pages(Vec::from([
-            SettingPage::new("General").group(appearance_group(cx)),
-        ])))
+        .child(
+            Settings::new("app-settings").pages(Vec::from([SettingPage::new("General").group(appearance_group(cx))])),
+        )
         .footer(
             DialogFooter::new().child(
                 h_flex()
                     .gap_2()
-                    .child(Button::new("settings-cancel").label("Cancel").on_click(
-                        |_, window, cx| {
-                            SettingsManager::reload(cx);
-                            window.close_dialog(cx);
-                        },
-                    ))
                     .child(
-                        Button::new("settings-save")
-                            .label("Save")
+                        Button::new("settings-cancel")
+                            .label("Cancel")
                             .on_click(|_, window, cx| {
-                                SettingsManager::save(cx);
+                                SettingsManager::reload(cx);
                                 window.close_dialog(cx);
                             }),
-                    ),
+                    )
+                    .child(Button::new("settings-save").label("Save").on_click(|_, window, cx| {
+                        SettingsManager::save(cx);
+                        window.close_dialog(cx);
+                    })),
             ),
         )
         .on_close(|_, _, cx| {

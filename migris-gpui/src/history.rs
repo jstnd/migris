@@ -53,11 +53,8 @@ impl QueryHistoryGroup {
 
     /// Adds a new history item to the group and returns a mutable reference to the item.
     pub fn add(&mut self, query: &str) -> &mut QueryHistoryItem {
-        self.items.push_mut(QueryHistoryItem::new(
-            self.execute_id,
-            self.connection_id,
-            query,
-        ))
+        self.items
+            .push_mut(QueryHistoryItem::new(self.execute_id, self.connection_id, query))
     }
 
     /// Returns the date display for the group.

@@ -144,10 +144,7 @@ impl ConnectionManager {
     }
 
     /// Returns the connections within the given folder.
-    pub fn connections_for_folder(
-        &self,
-        folder: &Option<ConnectionFolderId>,
-    ) -> Option<&Vec<ConnectionId>> {
+    pub fn connections_for_folder(&self, folder: &Option<ConnectionFolderId>) -> Option<&Vec<ConnectionId>> {
         self.connections_by_folder.get(folder)
     }
 
@@ -174,11 +171,7 @@ impl ConnectionManager {
     /// Deletes the folder with the given [`ConnectionFolderId`].
     ///
     /// Returns the set of connections that were deleted for future processing if needed.
-    pub fn delete_folder(
-        &self,
-        cx: &App,
-        id: ConnectionFolderId,
-    ) -> Task<Result<HashSet<ConnectionId>>> {
+    pub fn delete_folder(&self, cx: &App, id: ConnectionFolderId) -> Task<Result<HashSet<ConnectionId>>> {
         let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             database.delete_connection_folder(&id).await?;
@@ -232,26 +225,16 @@ impl ConnectionManager {
     }
 
     /// Returns whether the folder with the given [`ConnectionFolderId`] contains the folder with the other [`ConnectionFolderId`].
-    pub fn folder_contains_folder(
-        &self,
-        id: &ConnectionFolderId,
-        other: &ConnectionFolderId,
-    ) -> bool {
+    pub fn folder_contains_folder(&self, id: &ConnectionFolderId, other: &ConnectionFolderId) -> bool {
         if let Some(children_folders) = self.folders_for_parent(&Some(*id)) {
-            children_folders.contains(other)
-                || children_folders
-                    .iter()
-                    .any(|id| self.folder_contains_folder(id, other))
+            children_folders.contains(other) || children_folders.iter().any(|id| self.folder_contains_folder(id, other))
         } else {
             false
         }
     }
 
     /// Returns the folders within the given parent folder.
-    pub fn folders_for_parent(
-        &self,
-        parent: &Option<ConnectionFolderId>,
-    ) -> Option<&Vec<ConnectionFolderId>> {
+    pub fn folders_for_parent(&self, parent: &Option<ConnectionFolderId>) -> Option<&Vec<ConnectionFolderId>> {
         self.folders_by_parent.get(parent)
     }
 
@@ -279,10 +262,7 @@ impl ConnectionManager {
                     .retain(|inner_id| *inner_id != id);
 
                 // Add connection to new folder in mapping.
-                this.connections_by_folder
-                    .entry(folder_id)
-                    .or_default()
-                    .push(id);
+                this.connections_by_folder.entry(folder_id).or_default().push(id);
             });
 
             Ok(())
@@ -313,10 +293,7 @@ impl ConnectionManager {
                     .retain(|inner_id| *inner_id != id);
 
                 // Add folder to new parent in mapping.
-                this.folders_by_parent
-                    .entry(folder_id)
-                    .or_default()
-                    .push(id);
+                this.folders_by_parent.entry(folder_id).or_default().push(id);
             });
 
             Ok(())

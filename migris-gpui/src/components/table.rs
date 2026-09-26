@@ -2,9 +2,9 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use futures_util::StreamExt;
 use gpui_kit::{
-    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable,
-    InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels, RenderOnce,
-    ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable, InteractiveElement, IntoElement,
+    KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window,
     base::h_flex,
     component::{
         ActiveTheme, Sizable,
@@ -58,9 +58,7 @@ pub struct QueryTable {
 impl QueryTable {
     /// Creates a new [`QueryTable`].
     pub fn new(state: &Entity<QueryTableState>) -> Self {
-        Self {
-            state: state.clone(),
-        }
+        Self { state: state.clone() }
     }
 }
 
@@ -73,10 +71,7 @@ impl RenderOnce for QueryTable {
         window.on_mouse_event({
             let state = self.state.clone();
             move |event: &ScrollWheelEvent, phase, window, cx| {
-                if phase != DispatchPhase::Capture
-                    || !event.secondary()
-                    || !state.read(cx).is_hovered
-                {
+                if phase != DispatchPhase::Capture || !event.secondary() || !state.read(cx).is_hovered {
                     return;
                 }
 
@@ -99,16 +94,21 @@ impl RenderOnce for QueryTable {
             .key_context(TABLE_ID)
             .relative()
             .size_full()
-            .child(div().absolute().top_0().left_0().size_full().child(
-                DataTable::new(&state.table).bordered(false).map(|this| {
-                    match SettingsManager::table_size(cx) {
-                        Size::XSmall | Size::Small | Size::Medium => this.xsmall(),
-                        Size::Large | Size::XLarge => this.small(),
-                        Size::XXLarge => this,
-                        Size::XXXLarge => this.large(),
-                    }
-                }),
-            ))
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .child(DataTable::new(&state.table).bordered(false).map(
+                        |this| match SettingsManager::table_size(cx) {
+                            Size::XSmall | Size::Small | Size::Medium => this.xsmall(),
+                            Size::Large | Size::XLarge => this.small(),
+                            Size::XXLarge => this,
+                            Size::XXXLarge => this.large(),
+                        },
+                    )),
+            )
             .when(table.delegate().loading, |this| {
                 this.child(
                     div().absolute().top_0().left_0().w_full().child(
@@ -119,17 +119,13 @@ impl RenderOnce for QueryTable {
                     ),
                 )
             })
-            .on_action(
-                window.listener_for(&self.state, |state, action, window, cx| {
-                    state.handle_action(window, cx, action);
-                }),
-            )
-            .on_hover(
-                window.listener_for(&self.state, |state, is_hovered, _, cx| {
-                    state.is_hovered = *is_hovered;
-                    cx.notify();
-                }),
-            )
+            .on_action(window.listener_for(&self.state, |state, action, window, cx| {
+                state.handle_action(window, cx, action);
+            }))
+            .on_hover(window.listener_for(&self.state, |state, is_hovered, _, cx| {
+                state.is_hovered = *is_hovered;
+                cx.notify();
+            }))
     }
 }
 
@@ -265,11 +261,7 @@ impl QueryTableState {
             orders.push(format!(
                 "{} {}",
                 name,
-                if *sort == ColumnSort::Ascending {
-                    "ASC"
-                } else {
-                    "DESC"
-                }
+                if *sort == ColumnSort::Ascending { "ASC" } else { "DESC" }
             ));
         }
 
@@ -426,11 +418,7 @@ impl QueryTableDelegate {
                 .map(|result| result.data.rows().len())
                 .unwrap_or_default();
 
-            self.load(
-                cx,
-                std::cmp::max(loaded_rows, INIT_BATCH_SIZE),
-                is_first_load,
-            );
+            self.load(cx, std::cmp::max(loaded_rows, INIT_BATCH_SIZE), is_first_load);
         } else {
             // Results without a stream can be shown directly inside the table without pre-loading.
             self.result = Some(result);
@@ -453,9 +441,7 @@ impl QueryTableDelegate {
             .iter()
             .map(|column| {
                 let name = column.name().to_owned();
-                let width =
-                    (name.len() * font_size * 0.60).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
-
+                let width = (name.len() * font_size * 0.60).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
                 Column::new(&name, &name).width(width)
             })
             .collect();
@@ -470,8 +456,7 @@ impl QueryTableDelegate {
 
                 // Determine the width from the value's length.
                 let value = row.values[idx].to_string();
-                let width =
-                    (value.len() * font_size * 0.60).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
+                let width = (value.len() * font_size * 0.60).clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
 
                 // Set the column's new width.
                 if width > column.width {
@@ -487,13 +472,12 @@ impl QueryTableDelegate {
     /// Builds the column index map using the given indexes.
     fn build_column_index_map(&mut self, indexes: &[Index]) {
         // Retrieve all index kinds for each column.
-        let column_indexes: HashMap<&str, Vec<IndexKind>> =
-            indexes.iter().fold(HashMap::new(), |mut map, index| {
-                for column in index.columns() {
-                    map.entry(column).or_default().push(index.kind());
-                }
-                map
-            });
+        let column_indexes: HashMap<&str, Vec<IndexKind>> = indexes.iter().fold(HashMap::new(), |mut map, index| {
+            for column in index.columns() {
+                map.entry(column).or_default().push(index.kind());
+            }
+            map
+        });
 
         // Using the previous map, find the highest-priority index kind to display for each column.
         self.column_index_map = column_indexes
@@ -514,8 +498,7 @@ impl QueryTableDelegate {
 
         let data_len = data.rows().len().to_string();
         let font_size = SettingsManager::table_size(cx).font_size(cx);
-        let width =
-            (data_len.len() * font_size * 0.75).clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH);
+        let width = (data_len.len() * font_size * 0.75).clamp(MIN_COLUMN_WIDTH / 2.0, MAX_COLUMN_WIDTH);
 
         if self.columns[ROW_NUMBER_COLUMN_IDX].key == ROW_NUMBER_COLUMN_KEY {
             self.columns[ROW_NUMBER_COLUMN_IDX].width = width;
@@ -615,8 +598,7 @@ impl QueryTableDelegate {
         match current_sort {
             ColumnSort::Default => {
                 // Move unsorted (default) column to ascending order.
-                self.column_sorts
-                    .insert(column.key.clone(), ColumnSort::Ascending);
+                self.column_sorts.insert(column.key.clone(), ColumnSort::Ascending);
             }
             ColumnSort::Ascending => {
                 // Move ascending order column to descending order.
@@ -722,12 +704,7 @@ impl TableDelegate for QueryTableDelegate {
             .child(text_ellipsis(value.to_string()))
     }
 
-    fn render_th(
-        &mut self,
-        col_ix: usize,
-        _: &mut Window,
-        cx: &mut Context<TableState<Self>>,
-    ) -> impl IntoElement {
+    fn render_th(&mut self, col_ix: usize, _: &mut Window, cx: &mut Context<TableState<Self>>) -> impl IntoElement {
         let table_size = SettingsManager::table_size(cx);
         let font_size = table_size.font_size(cx);
         if col_ix == ROW_NUMBER_COLUMN_IDX {
@@ -753,11 +730,7 @@ impl TableDelegate for QueryTableDelegate {
                     .min_w_0()
                     .items_center()
                     .text_color(cx.theme().foreground)
-                    .child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(col_ix.to_string()),
-                    )
+                    .child(div().text_color(cx.theme().muted_foreground).child(col_ix.to_string()))
                     .child(text_ellipsis(column.name.clone())),
             )
             .child(
@@ -785,9 +758,7 @@ impl TableDelegate for QueryTableDelegate {
                                         .right(px(-2.0))
                                         .text_color(cx.theme().muted_foreground)
                                         .map(|this| match table_size {
-                                            Size::XSmall | Size::Small | Size::Medium => {
-                                                this.text_xs()
-                                            }
+                                            Size::XSmall | Size::Small | Size::Medium => this.text_xs(),
                                             Size::Large => this.text_sm(),
                                             Size::XLarge => this.text_base(),
                                             Size::XXLarge => this.text_lg(),
@@ -807,9 +778,7 @@ impl TableDelegate for QueryTableDelegate {
                                         .right(px(-2.0))
                                         .text_color(cx.theme().muted_foreground)
                                         .map(|this| match table_size {
-                                            Size::XSmall | Size::Small | Size::Medium => {
-                                                this.text_xs()
-                                            }
+                                            Size::XSmall | Size::Small | Size::Medium => this.text_xs(),
                                             Size::Large => this.text_sm(),
                                             Size::XLarge => this.text_base(),
                                             Size::XXLarge => this.text_lg(),

@@ -1,9 +1,9 @@
 use std::{collections::HashSet, time::Duration};
 
 use gpui_kit::{
-    Action, App, AppContext, ClickEvent, Context, Div, Entity, InteractiveElement, IntoElement,
-    KeystrokeEvent, MouseButton, ParentElement, Pixels, Render, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Task, Window,
+    Action, App, AppContext, ClickEvent, Context, Div, Entity, InteractiveElement, IntoElement, KeystrokeEvent,
+    MouseButton, ParentElement, Pixels, Render, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Task, Window,
     base::{
         Disableable, TreeItem, TreeState, h_flex, h_resizable,
         input::{InputEvent, InputState, MaskPattern},
@@ -31,9 +31,7 @@ use crate::{
         icon::{Icon, IconName},
         labeled, text_ellipsis,
     },
-    connections::{
-        Connection, ConnectionFolder, ConnectionFolderId, ConnectionId, ConnectionManager,
-    },
+    connections::{Connection, ConnectionFolder, ConnectionFolderId, ConnectionId, ConnectionManager},
     events::{Event, EventManager, EventVariant},
     notifications, shared,
     state::AppState,
@@ -81,15 +79,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     .tooltip("New Connection")
                                                     .ghost()
                                                     .small()
-                                                    .on_click(window.listener_for(
-                                                        state,
-                                                        |state, _, _, cx| {
-                                                            state.add_connection(
-                                                                cx,
-                                                                state.selected_parent(cx),
-                                                            );
-                                                        },
-                                                    )),
+                                                    .on_click(window.listener_for(state, |state, _, _, cx| {
+                                                        state.add_connection(cx, state.selected_parent(cx));
+                                                    })),
                                             )
                                             .child(
                                                 Button::new("button-new-folder")
@@ -97,15 +89,9 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
                                                     .tooltip("New Folder")
                                                     .ghost()
                                                     .small()
-                                                    .on_click(window.listener_for(
-                                                        state,
-                                                        |state, _, _, cx| {
-                                                            state.add_folder(
-                                                                cx,
-                                                                state.selected_parent(cx),
-                                                            );
-                                                        },
-                                                    )),
+                                                    .on_click(window.listener_for(state, |state, _, _, cx| {
+                                                        state.add_folder(cx, state.selected_parent(cx));
+                                                    })),
                                             ),
                                     ),
                             )
@@ -121,12 +107,14 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
             DialogFooter::new().child(
                 h_flex()
                     .gap_2()
-                    .child(Button::new("connections-cancel").label("Cancel").on_click(
-                        window.listener_for(state, |state, _, window, cx| {
-                            state.reset(cx);
-                            window.close_dialog(cx);
-                        }),
-                    ))
+                    .child(
+                        Button::new("connections-cancel")
+                            .label("Cancel")
+                            .on_click(window.listener_for(state, |state, _, window, cx| {
+                                state.reset(cx);
+                                window.close_dialog(cx);
+                            })),
+                    )
                     .child(
                         Button::new("connections-save")
                             .icon(IconName::Save)
@@ -178,11 +166,7 @@ pub fn connection_dialog(dialog: Dialog, window: &mut Window, cx: &mut App) -> D
         })
 }
 
-fn connection_tree(
-    state: Entity<ConnectionDialogState>,
-    window: &mut Window,
-    cx: &App,
-) -> impl IntoElement {
+fn connection_tree(state: Entity<ConnectionDialogState>, window: &mut Window, cx: &App) -> impl IntoElement {
     div()
         .id("connection-tree")
         .size_full()
@@ -239,12 +223,10 @@ fn connection_tree(
                                             )
                                         })
                                         .drag_over(|this, _: &DragConnection, _, cx| {
-                                            this.border_1()
-                                                .border_color(cx.theme().list_active_border)
+                                            this.border_1().border_color(cx.theme().list_active_border)
                                         })
                                         .drag_over(|this, _: &DragFolder, _, cx| {
-                                            this.border_1()
-                                                .border_color(cx.theme().list_active_border)
+                                            this.border_1().border_color(cx.theme().list_active_border)
                                         })
                                         .on_drop(window.listener_for(
                                             &state,
@@ -252,12 +234,9 @@ fn connection_tree(
                                                 state.move_connection(cx, drag.id, folder_id);
                                             },
                                         ))
-                                        .on_drop(window.listener_for(
-                                            &state,
-                                            move |state, drag: &DragFolder, _, cx| {
-                                                state.move_folder(cx, drag.id, folder_id);
-                                            },
-                                        ))
+                                        .on_drop(window.listener_for(&state, move |state, drag: &DragFolder, _, cx| {
+                                            state.move_folder(cx, drag.id, folder_id);
+                                        }))
                                 })
                                 .when_some(folder, |this, folder| {
                                     let folder_id = folder.id;
@@ -291,20 +270,15 @@ fn connection_tree(
                                     .drag_over(|this, _: &DragFolder, _, cx| {
                                         this.border_1().border_color(cx.theme().list_active_border)
                                     })
+                                    .on_drop(window.listener_for(&state, move |state, drag: &DragConnection, _, cx| {
+                                        state.move_connection(cx, drag.id, Some(folder_id));
+                                    }))
                                     .on_drop(window.listener_for(
                                         &state,
-                                        move |state, drag: &DragConnection, _, cx| {
-                                            state.move_connection(cx, drag.id, Some(folder_id));
+                                        move |state, drag: &DragFolder, _, cx| {
+                                            state.move_folder(cx, drag.id, Some(folder_id));
                                         },
                                     ))
-                                    .on_drop(
-                                        window.listener_for(
-                                            &state,
-                                            move |state, drag: &DragFolder, _, cx| {
-                                                state.move_folder(cx, drag.id, Some(folder_id));
-                                            },
-                                        ),
-                                    )
                                 })
                                 .child({
                                     if state.read(cx).is_inline_editing(&entry.item().id) {
@@ -320,37 +294,34 @@ fn connection_tree(
                         )
                         .on_click({
                             let item = entry.item().clone();
-                            window.listener_for(
-                                &state,
-                                move |state, event: &ClickEvent, window, cx| {
-                                    // We do not want to perform any click event handling if we are inline editing this item.
-                                    if state.is_inline_editing(&item.id) {
-                                        return;
-                                    }
+                            window.listener_for(&state, move |state, event: &ClickEvent, window, cx| {
+                                // We do not want to perform any click event handling if we are inline editing this item.
+                                if state.is_inline_editing(&item.id) {
+                                    return;
+                                }
 
-                                    // Set the selected item after click.
-                                    state.tree.update(cx, |tree, cx| {
-                                        tree.focus(window, cx);
-                                        tree.set_selected_item(Some(&item), cx);
-                                    });
+                                // Set the selected item after click.
+                                state.tree.update(cx, |tree, cx| {
+                                    tree.focus(window, cx);
+                                    tree.set_selected_item(Some(&item), cx);
+                                });
 
-                                    if event.click_count() >= 2 {
-                                        if connection_id.is_some() {
-                                            // Open connection on double-click.
-                                            state.open_connection(window, cx);
-                                        } else if let Some(id) = folder_id {
-                                            // Open folder in inline editor on double-click.
-                                            state.open_inline_editor(window, cx, id.to_string());
-                                        }
-
-                                        return;
+                                if event.click_count() >= 2 {
+                                    if connection_id.is_some() {
+                                        // Open connection on double-click.
+                                        state.open_connection(window, cx);
                                     } else if let Some(id) = folder_id {
-                                        state.toggle_expand(cx, id);
+                                        // Open folder in inline editor on double-click.
+                                        state.open_inline_editor(window, cx, id.to_string());
                                     }
 
-                                    state.open_editor(window, cx, connection_id);
-                                },
-                            )
+                                    return;
+                                } else if let Some(id) = folder_id {
+                                    state.toggle_expand(cx, id);
+                                }
+
+                                state.open_editor(window, cx, connection_id);
+                            })
                         })
                         .on_mouse_down(MouseButton::Left, |_, _, cx| {
                             // The underlying tree component uses the `on_mouse_down` event to handle things such as item expansion.
@@ -361,9 +332,7 @@ fn connection_tree(
             })
             .context_menu(|_, entry, menu, _, cx| {
                 let manager = ConnectionManager::global(cx);
-                let connection_id = manager
-                    .try_connection(&entry.item().id)
-                    .map(|connection| connection.id);
+                let connection_id = manager.try_connection(&entry.item().id).map(|connection| connection.id);
                 let folder_id = manager.try_folder(&entry.item().id).map(|folder| folder.id);
 
                 let is_root_item = entry.depth() == 0;
@@ -425,16 +394,12 @@ fn connection_tree(
                 }
             }),
         )
-        .on_drop(
-            window.listener_for(&state, |state, drag: &DragConnection, _, cx| {
-                state.move_connection(cx, drag.id, None);
-            }),
-        )
-        .on_drop(
-            window.listener_for(&state, |state, drag: &DragFolder, _, cx| {
-                state.move_folder(cx, drag.id, None);
-            }),
-        )
+        .on_drop(window.listener_for(&state, |state, drag: &DragConnection, _, cx| {
+            state.move_connection(cx, drag.id, None);
+        }))
+        .on_drop(window.listener_for(&state, |state, drag: &DragFolder, _, cx| {
+            state.move_folder(cx, drag.id, None);
+        }))
 }
 
 fn drag_container(cx: &App) -> Div {
@@ -559,8 +524,7 @@ impl ConnectionDialogState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| ConnectionEditorState::new(window, cx));
         let inline_name_input = cx.new(|cx| InputState::new(window, cx).context_menu(false));
-        let search_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
+        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
 
         let _subscriptions = Vec::from([
@@ -577,9 +541,7 @@ impl ConnectionDialogState {
                         // For example, if we click on a folder item with the inline editor active, we want that folder to
                         // toggle its expanded state first before saving, as saving will reload the tree and we want that
                         // new expanded state to take effect before the tree is reloaded to eliminate any odd rendering behavior.
-                        cx.background_executor()
-                            .timer(Duration::from_millis(100))
-                            .await;
+                        cx.background_executor().timer(Duration::from_millis(100)).await;
 
                         _ = this.update_in(cx, |this, window, cx| {
                             this.save_inline_editor(cx);
@@ -615,33 +577,21 @@ impl ConnectionDialogState {
     }
 
     /// Handles actions originating from the connection dialog.
-    fn handle_action(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        action: &ConnectionDialogAction,
-    ) {
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &ConnectionDialogAction) {
         match action {
             ConnectionDialogAction::AddConnection(folder) => self.add_connection(cx, *folder),
             ConnectionDialogAction::AddFolder(parent) => self.add_folder(cx, *parent),
             ConnectionDialogAction::DeleteConnection(id) => self.delete_connection(cx, id),
             ConnectionDialogAction::DeleteFolder(id) => self.delete_folder(cx, id),
             ConnectionDialogAction::DuplicateConnection(id) => self.duplicate_connection(cx, *id),
-            ConnectionDialogAction::MoveConnection(id, folder) => {
-                self.move_connection(cx, *id, *folder)
-            }
+            ConnectionDialogAction::MoveConnection(id, folder) => self.move_connection(cx, *id, *folder),
             ConnectionDialogAction::MoveFolder(id, parent) => self.move_folder(cx, *id, *parent),
             ConnectionDialogAction::RenameItem(id) => self.open_inline_editor(window, cx, id),
         }
     }
 
     /// Handles keystroke events from inner components.
-    fn handle_keystroke(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        event: &KeystrokeEvent,
-    ) {
+    fn handle_keystroke(&mut self, window: &mut Window, cx: &mut Context<Self>, event: &KeystrokeEvent) {
         if let Some(action) = &event.action
             && event
                 .context_stack
@@ -678,9 +628,7 @@ impl ConnectionDialogState {
 
         cx.spawn(async move |this, cx| {
             let result = cx
-                .read_global(|manager: &ConnectionManager, cx| {
-                    manager.add_connection(cx, connection)
-                })
+                .read_global(|manager: &ConnectionManager, cx| manager.add_connection(cx, connection))
                 .await;
 
             _ = this.update_in(cx, |this, window, cx| match result {
@@ -793,9 +741,7 @@ impl ConnectionDialogState {
     fn duplicate_connection(&self, cx: &mut Context<Self>, id: ConnectionId) {
         cx.spawn(async move |this, cx| {
             let result = cx
-                .read_global(|manager: &ConnectionManager, cx| {
-                    manager.duplicate_connection(cx, &id)
-                })
+                .read_global(|manager: &ConnectionManager, cx| manager.duplicate_connection(cx, &id))
                 .await;
 
             _ = this.update_in(cx, |this, window, cx| match result {
@@ -850,12 +796,7 @@ impl ConnectionDialogState {
     }
 
     /// Moves the connection with the given [`ConnectionId`] to the given folder.
-    fn move_connection(
-        &mut self,
-        cx: &mut Context<Self>,
-        id: ConnectionId,
-        folder_id: Option<ConnectionFolderId>,
-    ) {
+    fn move_connection(&mut self, cx: &mut Context<Self>, id: ConnectionId, folder_id: Option<ConnectionFolderId>) {
         // Do not move the connection if it's already inside the given folder.
         if folder_id == ConnectionManager::global(cx).connection(&id).folder_id {
             return;
@@ -863,9 +804,7 @@ impl ConnectionDialogState {
 
         cx.spawn(async move |this, cx| {
             let result = cx
-                .read_global(|manager: &ConnectionManager, cx| {
-                    manager.move_connection(cx, id, folder_id)
-                })
+                .read_global(|manager: &ConnectionManager, cx| manager.move_connection(cx, id, folder_id))
                 .await;
 
             _ = this.update_in(cx, |this, window, cx| {
@@ -886,25 +825,17 @@ impl ConnectionDialogState {
     }
 
     /// Moves the folder with the given [`ConnectionFolderId`] to the given parent folder.
-    fn move_folder(
-        &mut self,
-        cx: &mut Context<Self>,
-        id: ConnectionFolderId,
-        folder_id: Option<ConnectionFolderId>,
-    ) {
+    fn move_folder(&mut self, cx: &mut Context<Self>, id: ConnectionFolderId, folder_id: Option<ConnectionFolderId>) {
         // Do not move the folder if we are trying to move it inside itself.
         if let Some(folder_id) = folder_id
-            && (folder_id == id
-                || ConnectionManager::global(cx).folder_contains_folder(&id, &folder_id))
+            && (folder_id == id || ConnectionManager::global(cx).folder_contains_folder(&id, &folder_id))
         {
             return;
         }
 
         cx.spawn(async move |this, cx| {
             let result = cx
-                .read_global(|manager: &ConnectionManager, cx| {
-                    manager.move_folder(cx, id, folder_id)
-                })
+                .read_global(|manager: &ConnectionManager, cx| manager.move_folder(cx, id, folder_id))
                 .await;
 
             _ = this.update_in(cx, |this, window, cx| {
@@ -978,12 +909,7 @@ impl ConnectionDialogState {
     }
 
     /// Opens the inline editor with the given id string.
-    fn open_inline_editor(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        id: impl Into<SharedString>,
-    ) {
+    fn open_inline_editor(&mut self, window: &mut Window, cx: &mut Context<Self>, id: impl Into<SharedString>) {
         let id = id.into();
         let manager = ConnectionManager::global(cx);
         let name = if let Some(connection) = manager.try_connection(&id) {
@@ -1022,9 +948,7 @@ impl ConnectionDialogState {
         if let Some(connection) = editor.connection(cx) {
             cx.spawn(async move |this, cx| {
                 let result = cx
-                    .read_global(|manager: &ConnectionManager, cx| {
-                        manager.update_connection(cx, connection)
-                    })
+                    .read_global(|manager: &ConnectionManager, cx| manager.update_connection(cx, connection))
                     .await;
 
                 _ = this.update_in(cx, |this, window, cx| match result {
@@ -1184,9 +1108,7 @@ struct ConnectionEditor {
 impl ConnectionEditor {
     /// Creates a new [`ConnectionEditor`].
     fn new(state: &Entity<ConnectionEditorState>) -> Self {
-        Self {
-            state: state.clone(),
-        }
+        Self { state: state.clone() }
     }
 }
 
@@ -1204,20 +1126,13 @@ impl RenderOnce for ConnectionEditor {
                                 h_flex()
                                     .gap_3()
                                     .child(labeled("Host", Input::new(&state.host_input)))
-                                    .child(
-                                        h_flex()
-                                            .w_1_4()
-                                            .child(labeled("Port", Input::new(&state.port_input))),
-                                    ),
+                                    .child(h_flex().w_1_4().child(labeled("Port", Input::new(&state.port_input)))),
                             )
                             .child(
                                 h_flex()
                                     .gap_3()
                                     .child(labeled("User", Input::new(&state.username_input)))
-                                    .child(labeled(
-                                        "Password",
-                                        Input::new(&state.password_input).mask_toggle(),
-                                    )),
+                                    .child(labeled("Password", Input::new(&state.password_input).mask_toggle())),
                             ),
                     })
             } else {
@@ -1249,8 +1164,7 @@ impl ConnectionEditorState {
     /// Creates a new [`ConnectionEditorState`].
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let name_input = cx.new(|cx| InputState::new(window, cx));
-        let type_select =
-            cx.new(|cx| SelectState::new(vec![SharedString::from("test")], None, window, cx));
+        let type_select = cx.new(|cx| SelectState::new(vec![SharedString::from("test")], None, window, cx));
 
         Self {
             name_input,
@@ -1348,8 +1262,7 @@ impl MySqlEditorState {
                 })
         });
 
-        let username_input =
-            cx.new(|cx| InputState::new(window, cx).default_value(&connection.username));
+        let username_input = cx.new(|cx| InputState::new(window, cx).default_value(&connection.username));
         let password_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .default_value(connection.password())

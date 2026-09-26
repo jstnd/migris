@@ -1,7 +1,4 @@
-use crate::{
-    Entity, MigrisResult, data::QueryResult, entity::EntityData, query::Query, schema::Index,
-    shared,
-};
+use crate::{Entity, MigrisResult, data::QueryResult, entity::EntityData, query::Query, schema::Index, shared};
 
 pub(crate) mod mysql;
 pub(crate) mod sqlite;

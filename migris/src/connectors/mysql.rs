@@ -2,8 +2,7 @@ use std::str::FromStr;
 
 use futures_util::StreamExt;
 use sqlx::{
-    AssertSqlSafe, Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type,
-    ValueRef,
+    AssertSqlSafe, Encode, Executor, MySql, MySqlPool, QueryBuilder, Row as SqlxRow, Type, ValueRef,
     mysql::{MySqlArguments, MySqlConnectOptions, MySqlRow, MySqlValueRef},
     query::Query,
     types::{
@@ -13,8 +12,8 @@ use sqlx::{
 };
 
 use crate::{
-    Column, ColumnFlag, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError,
-    MigrisResult, ReadOptions, Row, Schema, Table, Value, WriteOptions,
+    Column, ColumnFlag, ColumnType, Connector, ConnectorData, ConnectorKind, MigrisError, MigrisResult, ReadOptions,
+    Row, Schema, Table, Value, WriteOptions,
     common::{self, DEFAULT_SCHEMA, decode_sqlx},
 };
 
@@ -70,21 +69,15 @@ impl Connector for MySqlConnector {
             .ok_or(MigrisError::DatabaseReadFailed("no query given".into()))?
             .clone();
 
-        let stream = sqlx::query(AssertSqlSafe(query))
-            .fetch(pool)
-            .map(move |row| {
-                row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
-                    .and_then(|row| Row::from_mysql(&row, &stream_columns))
-            });
+        let stream = sqlx::query(AssertSqlSafe(query)).fetch(pool).map(move |row| {
+            row.map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
+                .and_then(|row| Row::from_mysql(&row, &stream_columns))
+        });
 
         Ok(ConnectorData::new(columns, Box::pin(stream)))
     }
 
-    async fn write<'a>(
-        &mut self,
-        data: ConnectorData<'a>,
-        options: &WriteOptions,
-    ) -> MigrisResult<()> {
+    async fn write<'a>(&mut self, data: ConnectorData<'a>, options: &WriteOptions) -> MigrisResult<()> {
         let table = get_write_table(&self.url, options);
         let pool = self.connect().await?;
         let mut txn = pool
@@ -99,10 +92,8 @@ impl Connector for MySqlConnector {
             truncate_table(&table, pool).await?;
         }
 
-        let mut builder: QueryBuilder<MySql> = QueryBuilder::new(format!(
-            "INSERT INTO `{}`.`{}` VALUES ",
-            table.schema, table.name
-        ));
+        let mut builder: QueryBuilder<MySql> =
+            QueryBuilder::new(format!("INSERT INTO `{}`.`{}` VALUES ", table.schema, table.name));
 
         let mut rows_per_txn = 0;
         let mut current_rows_in_txn = 0;
@@ -258,10 +249,7 @@ async fn truncate_table(table: &Table, pool: &MySqlPool) -> MigrisResult<()> {
     Ok(())
 }
 
-async fn execute_query<'e, E>(
-    query: Query<'_, MySql, MySqlArguments>,
-    executor: E,
-) -> MigrisResult<()>
+async fn execute_query<'e, E>(query: Query<'_, MySql, MySqlArguments>, executor: E) -> MigrisResult<()>
 where
     E: Executor<'e, Database = MySql>,
 {
@@ -295,9 +283,7 @@ fn get_read_table(url: &str, options: &ReadOptions) -> MigrisResult<Table> {
     let table_name = options
         .table_name
         .as_ref()
-        .ok_or(MigrisError::DatabaseReadFailed(
-            "no table name given".into(),
-        ))?;
+        .ok_or(MigrisError::DatabaseReadFailed("no table name given".into()))?;
 
     Ok(Table::new(table_schema, table_name))
 }
@@ -421,26 +407,27 @@ impl MySqlDataType {
                     )));
                 }
 
-                let (precision, scale) = type_parts[1]
-                    .split_once(',')
-                    .ok_or_else(|| {
-                        MigrisError::GeneralError(format!(
-                            "failed to split '{}' into precision and scale specifiers for column type '{}'",
-                            type_parts[1], column_type
-                        ))
-                    })?;
+                let (precision, scale) = type_parts[1].split_once(',').ok_or_else(|| {
+                    MigrisError::GeneralError(format!(
+                        "failed to split '{}' into precision and scale specifiers for column type '{}'",
+                        type_parts[1], column_type
+                    ))
+                })?;
 
-                Self::DECIMAL(precision.parse().map_err(|err| {
-                    MigrisError::GeneralError(format!(
-                        "failed to parse '{}' into precision specifier for column type '{}': {}",
-                        type_parts[1], column_type, err
-                    ))
-                })?, scale.parse().map_err(|err| {
-                    MigrisError::GeneralError(format!(
-                        "failed to parse '{}' into scale specifier for column type '{}': {}",
-                        type_parts[2], column_type, err
-                    ))
-                })?)
+                Self::DECIMAL(
+                    precision.parse().map_err(|err| {
+                        MigrisError::GeneralError(format!(
+                            "failed to parse '{}' into precision specifier for column type '{}': {}",
+                            type_parts[1], column_type, err
+                        ))
+                    })?,
+                    scale.parse().map_err(|err| {
+                        MigrisError::GeneralError(format!(
+                            "failed to parse '{}' into scale specifier for column type '{}': {}",
+                            type_parts[2], column_type, err
+                        ))
+                    })?,
+                )
             }
             "DOUBLE" => Self::DOUBLE,
             "ENUM" => {
@@ -637,9 +624,7 @@ impl Schema {
             columns.push(Column {
                 name: row.get("COLUMN_NAME"),
                 ordinal: row.get::<u32, _>("ORDINAL_POSITION") as usize,
-                column_type: ColumnType::MySql(MySqlDataType::from_type(
-                    column_type.trim_end_matches(" unsigned"),
-                )?),
+                column_type: ColumnType::MySql(MySqlDataType::from_type(column_type.trim_end_matches(" unsigned"))?),
                 flags,
             });
         }
@@ -731,9 +716,7 @@ impl Encode<'_, MySql> for Value {
             Value::Null => Ok(sqlx::encode::IsNull::Yes),
             Value::Bytes(value) => <Vec<u8> as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Date(value) => <NaiveDate as Encode<'_, MySql>>::encode_by_ref(value, buf),
-            Value::DateTime(value) => {
-                <NaiveDateTime as Encode<'_, MySql>>::encode_by_ref(value, buf)
-            }
+            Value::DateTime(value) => <NaiveDateTime as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Decimal(value) => <Decimal as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::String(value) => <String as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Time(value) => <NaiveTime as Encode<'_, MySql>>::encode_by_ref(value, buf),

@@ -1,6 +1,6 @@
 use gpui_kit::{
-    App, BorrowAppContext, InteractiveElement, IntoElement, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled,
+    App, BorrowAppContext, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement,
+    Styled,
     base::{h_flex, v_flex},
     component::{ActiveTheme, WindowExt, dialog::AlertDialog},
     div,
@@ -32,11 +32,7 @@ pub fn entry_screen(cx: &App) -> impl IntoElement {
         .size_full()
         .items_center()
         .justify_center()
-        .child(
-            div()
-                .text_3xl()
-                .child(Icon::primary(cx, IconName::DatabaseX)),
-        )
+        .child(div().text_3xl().child(Icon::primary(cx, IconName::DatabaseX)))
         .child(
             h_flex()
                 .child("No connection open; ")
@@ -64,12 +60,7 @@ pub fn entry_screen(cx: &App) -> impl IntoElement {
 
 pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: &str) -> AlertDialog {
     dialog
-        .title(
-            h_flex()
-                .gap_2()
-                .child(Icon::red(cx, IconName::CircleX2))
-                .child("Error"),
-        )
+        .title(h_flex().gap_2().child(Icon::red(cx, IconName::CircleX2)).child("Error"))
         .description(SharedString::new(error))
 }
 

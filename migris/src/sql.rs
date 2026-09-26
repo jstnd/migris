@@ -44,10 +44,7 @@ pub fn minify(sql: &str) -> String {
 }
 
 pub fn select_all(entity: &Entity, order_by: &str) -> String {
-    format!(
-        "SELECT * FROM `{}`.`{}` {}",
-        entity.schema, entity.name, order_by
-    )
+    format!("SELECT * FROM `{}`.`{}` {}", entity.schema, entity.name, order_by)
 }
 
 pub fn split(sql: &str) -> Vec<SqlStatement> {

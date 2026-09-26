@@ -139,22 +139,19 @@ impl TableTabState {
     /// Refreshes the entity data inside the tab.
     fn refresh_entity(&self, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity();
-        let event = Event::new(LoadEntityEvent::new(
-            self.entity.clone(),
-            move |_, cx, data| {
-                this.update(cx, |this, cx| {
-                    this.table.update(cx, |table, cx| {
-                        let EntityData::Table(data) = &data else {
-                            return;
-                        };
+        let event = Event::new(LoadEntityEvent::new(self.entity.clone(), move |_, cx, data| {
+            this.update(cx, |this, cx| {
+                this.table.update(cx, |table, cx| {
+                    let EntityData::Table(data) = &data else {
+                        return;
+                    };
 
-                        table.build_column_index_map(cx, data.indexes());
-                    });
-
-                    this.data = Some(data);
+                    table.build_column_index_map(cx, data.indexes());
                 });
-            },
-        ))
+
+                this.data = Some(data);
+            });
+        }))
         .on_error(|window, cx, error| {
             notifications::show_error(window, cx, error);
         });

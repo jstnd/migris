@@ -1,6 +1,5 @@
 use gpui_kit::{
-    App, Hsla, IntoElement, RenderOnce, SharedString, Styled, Window, assets::IconNamed,
-    component::ActiveTheme,
+    App, Hsla, IntoElement, RenderOnce, SharedString, Styled, Window, assets::IconNamed, component::ActiveTheme,
 };
 
 pub enum IconName {
