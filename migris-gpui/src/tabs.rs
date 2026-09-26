@@ -64,7 +64,7 @@ impl TabView {
         match &self.tab {
             TabState::Query(tab) => tab.focus(window, cx),
             TabState::Table(tab) => tab.focus(window, cx),
-            TabState::View(_) => {}
+            TabState::View(tab) => tab.focus(window, cx),
         }
     }
 

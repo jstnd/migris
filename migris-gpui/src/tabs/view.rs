@@ -1,8 +1,16 @@
-use gpui_kit::{App, AppContext, Context, Entity, IntoElement, SharedString, Window};
+use gpui_kit::{
+    App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
+    base::{h_flex, v_flex},
+    component::{ActiveTheme, Sizable, button::Button},
+    div,
+};
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
-    components::table::{QueryTable, QueryTableEvent, QueryTableState},
+    components::{
+        icon::IconName,
+        table::{QueryTable, QueryTableEvent, QueryTableState},
+    },
     events::{Event, EventManager, RunSqlEvent},
     notifications,
 };
@@ -28,10 +36,39 @@ impl ViewTab {
     }
 
     /// Returns the content for the tab.
-    pub fn content(&self, _: &mut Window, cx: &App) -> impl IntoElement {
+    pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
         let state = self.state.read(cx);
 
-        QueryTable::new(&state.table)
+        v_flex()
+            .size_full()
+            .gap_1()
+            .child(
+                h_flex().pt_1().px_1().justify_end().child(
+                    Button::new("table-refresh")
+                        .icon(IconName::RefreshCw)
+                        .tooltip("Refresh")
+                        .small()
+                        .on_click(window.listener_for(&self.state, |state, _, window, cx| {
+                            state.refresh(window, cx);
+                        })),
+                ),
+            )
+            .child(
+                div()
+                    .size_full()
+                    .border_t_1()
+                    .border_color(cx.theme().border)
+                    .child(QueryTable::new(&state.table)),
+            )
+    }
+
+    /// Focuses the content in the tab.
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.table.update(cx, |table, cx| {
+                table.focus(window, cx);
+            });
+        });
     }
 
     /// Returns the label for the tab.
