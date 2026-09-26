@@ -51,6 +51,14 @@ impl TabView {
         Self { tab, variant }
     }
 
+    /// Performs any needed behavior for closing the tab.
+    pub fn close(&self, cx: &App) {
+        match &self.tab {
+            TabState::Query(tab) => tab.read(cx).close(cx),
+            _ => {}
+        }
+    }
+
     /// Returns the content for the tab view.
     pub fn content(&self, window: &mut Window, cx: &App) -> AnyElement {
         match &self.tab {

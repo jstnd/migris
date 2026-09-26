@@ -52,6 +52,11 @@ impl QueryTab {
         }
     }
 
+    /// Performs any needed behavior for closing the tab.
+    pub fn close(&self, cx: &App) {
+        self.state.read(cx).cancel_event(cx);
+    }
+
     /// Returns the content for the tab.
     pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
         let state = self.state.read(cx);

@@ -63,7 +63,7 @@ impl RenderOnce for TabPanel {
                                             .on_click(window.listener_for(
                                                 &self.state,
                                                 move |state, _, _, cx| {
-                                                    state.close_tab(idx);
+                                                    state.close_tab(cx, idx);
                                                     cx.stop_propagation();
                                                 },
                                             )),
@@ -149,7 +149,8 @@ impl TabPanelState {
     }
 
     /// Closes the tab at the given index.
-    fn close_tab(&mut self, idx: usize) {
+    fn close_tab(&mut self, cx: &App, idx: usize) {
+        self.tabs[idx].read(cx).close(cx);
         self.tabs.remove(idx);
 
         // Move the active tab index if the active tab is after the tab that is being closed.
