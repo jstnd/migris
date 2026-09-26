@@ -158,7 +158,7 @@ impl QueryHistoryItem {
         if rows == 1 {
             "1 row".to_string()
         } else {
-            format!("{} rows", rows)
+            format!("{} rows", shared::format_number(rows))
         }
     }
 }

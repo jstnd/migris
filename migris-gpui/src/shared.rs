@@ -60,3 +60,16 @@ pub fn format_ms(ms: u64) -> String {
         format!("{:.3}s", seconds)
     }
 }
+
+/// Formats the given number to contain commas.
+pub fn format_number(number: u64) -> String {
+    number
+        .to_string()
+        .as_bytes()
+        .rchunks(3)
+        .rev()
+        .map(str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .unwrap()
+        .join(",")
+}
