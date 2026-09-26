@@ -1,14 +1,16 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use gpui_kit::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
-    Styled, Window,
-    base::{h_flex, h_resizable, resizable_panel, v_flex},
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem, ParentElement, Pixels,
+    Render, SharedString, Styled, Window,
+    base::{GlobalState, h_flex, h_resizable, resizable_panel, v_flex},
     component::{
-        ActiveTheme, Root, Sizable, WindowExt,
+        ActiveTheme, Root, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
+        menu::AppMenuBar,
         progress::ProgressCircle,
     },
+    img,
     prelude::FluentBuilder,
     px,
 };
@@ -58,7 +60,16 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     .detach();
 }
 
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+enum ApplicationAction {
+    OpenConnectionDialog,
+}
+
 pub struct Application {
+    /// The application's menu bar.
+    app_menu_bar: Entity<AppMenuBar>,
+
     /// The state for the connection panel.
     connection_panel: Entity<ConnectionPanelState>,
 
@@ -75,14 +86,26 @@ pub struct Application {
 impl Application {
     /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let connection_panel = cx.new(|cx| ConnectionPanelState::new(window, cx));
-        let tab_panel = cx.new(|_| TabPanelState::new());
+        let app_menu_bar = AppMenuBar::new(cx);
+        let menus = Vec::from([
+            Menu::new("File").items([MenuItem::action("Connections", ApplicationAction::OpenConnectionDialog)])
+        ]);
+
+        GlobalState::global_mut(cx).set_app_menus(menus.into_iter().map(Menu::owned).collect());
+        app_menu_bar.update(cx, |app_menu_bar, cx| app_menu_bar.reload(cx));
 
         Self {
-            connection_panel,
-            tab_panel,
+            app_menu_bar,
+            connection_panel: cx.new(|cx| ConnectionPanelState::new(window, cx)),
+            tab_panel: cx.new(|_| TabPanelState::new()),
             connection: None,
             query_progress: None,
+        }
+    }
+
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &ApplicationAction) {
+        match action {
+            ApplicationAction::OpenConnectionDialog => components::open_connection_dialog(window, cx),
         }
     }
 
@@ -315,6 +338,11 @@ impl Render for Application {
         v_flex()
             .size_full()
             .child(
+                TitleBar::new()
+                    .child(img(Path::new("./assets/logo-16x16.png")).size_4().mr_2())
+                    .child(self.app_menu_bar.clone()),
+            )
+            .child(
                 h_resizable("application-view")
                     .child(
                         resizable_panel()
@@ -374,6 +402,9 @@ impl Render for Application {
                     }),
             )
             .children(dialog_layer)
+            .on_action(cx.listener(|application, action: &ApplicationAction, window, cx| {
+                application.handle_action(window, cx, action);
+            }))
             .on_action(cx.listener(|application, action: &EventEmitted, window, cx| {
                 application.handle_event(window, cx, &action.0);
             }))

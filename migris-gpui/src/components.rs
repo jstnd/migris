@@ -1,6 +1,6 @@
 use gpui_kit::{
     App, BorrowAppContext, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement,
-    Styled,
+    Styled, Window,
     base::{h_flex, v_flex},
     component::{ActiveTheme, WindowExt, dialog::AlertDialog},
     div,
@@ -44,14 +44,7 @@ pub fn entry_screen(cx: &App) -> impl IntoElement {
                         .text_color(cx.theme().link)
                         .child("add or open a connection")
                         .on_click(|_, window, cx| {
-                            // Load the connection dialog first before displaying.
-                            cx.update_global(|app_state: &mut AppState, cx| {
-                                app_state.load_connection_dialog(cx);
-                            });
-
-                            window.open_dialog(cx, |dialog, window, cx| {
-                                connection_dialog::connection_dialog(dialog, window, cx)
-                            });
+                            open_connection_dialog(window, cx);
                         }),
                 )
                 .child("."),
@@ -71,6 +64,17 @@ pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> imp
         .text_sm()
         .child(h_flex().pl_1().child(label.into()))
         .child(h_flex().child(element))
+}
+
+pub fn open_connection_dialog(window: &mut Window, cx: &mut App) {
+    // Load the connection dialog first before displaying.
+    cx.update_global(|app_state: &mut AppState, cx| {
+        app_state.load_connection_dialog(cx);
+    });
+
+    window.open_dialog(cx, |dialog, window, cx| {
+        connection_dialog::connection_dialog(dialog, window, cx)
+    });
 }
 
 pub fn text_ellipsis(element: impl IntoElement) -> impl IntoElement {

@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-changed=assets");
     println!("cargo:rerun-if-changed=migrations");
 
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {

@@ -17,9 +17,9 @@ mod types;
 use std::sync::Arc;
 
 use gpui_kit::{
-    AppContext, WindowOptions,
+    AppContext,
     base::ScrollbarMode,
-    component::{Root, Theme},
+    component::{Root, Theme, TitleBar},
 };
 
 #[cfg(target_os = "windows")]
@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
         .detach();
 
         cx.spawn(async move |cx| {
-            cx.open_window(WindowOptions::default(), |window, cx| {
+            cx.open_window(TitleBar::window_options(), |window, cx| {
                 app::init(window, cx, database);
                 window.activate_window();
 
