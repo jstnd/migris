@@ -1,5 +1,5 @@
 use gpui_kit::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
+    App, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
     StatefulInteractiveElement, Styled, Window,
     base::{h_flex, v_flex},
     component::{
@@ -43,15 +43,13 @@ impl RenderOnce for TabPanel {
                         .selected_index(state.active_tab)
                         .track_scroll(&state.scroll_handle)
                         .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
-                            let tab = tab.read(cx);
-
                             Tab::new().child(
                                 h_flex()
                                     .id(("panel-tab", idx))
                                     .gap_1p5()
                                     .items_center()
                                     .child(Icon::new(cx, tab.icon()))
-                                    .child(tab.label(cx))
+                                    .child(tab.label())
                                     .child(
                                         Button::new(("button-close", idx))
                                             .icon(IconName::X)
@@ -89,7 +87,7 @@ impl RenderOnce for TabPanel {
                 ),
             )
             .when(!state.tabs.is_empty(), |this| {
-                this.child(state.active_tab().read(cx).content(window, cx))
+                this.child(state.active_tab().content(window, cx))
             })
     }
 }
@@ -97,7 +95,7 @@ impl RenderOnce for TabPanel {
 /// The state used with a [`TabPanel`].
 pub struct TabPanelState {
     /// The tabs shown in the panel.
-    tabs: Vec<Entity<TabView>>,
+    tabs: Vec<TabView>,
 
     /// The index of the active tab.
     active_tab: usize,
@@ -121,20 +119,19 @@ impl TabPanelState {
     }
 
     /// Returns a reference to the active tab.
-    fn active_tab(&self) -> &Entity<TabView> {
+    fn active_tab(&self) -> &TabView {
         &self.tabs[self.active_tab]
     }
 
     /// Adds a new query tab to the panel.
     pub fn add_query_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let variant = TabVariant::Query(self.next_query_number(cx));
+        let variant = TabVariant::Query(self.next_query_number());
         self.add_tab(window, cx, variant);
     }
 
     /// Adds a new tab to the panel.
     pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, variant: TabVariant) {
-        let tab = cx.new(|cx| TabView::new(window, cx, variant));
-        self.tabs.push(tab);
+        self.tabs.push(TabView::new(window, cx, variant));
 
         // Open the newly added tab.
         self.open_tab(window, cx, self.tabs.len() - 1);
@@ -142,7 +139,7 @@ impl TabPanelState {
 
     /// Closes the tab at the given index.
     fn close_tab(&mut self, cx: &App, idx: usize) {
-        self.tabs[idx].read(cx).close(cx);
+        self.tabs[idx].close(cx);
         self.tabs.remove(idx);
 
         // Move the active tab index if the active tab is after the tab that is being closed.
@@ -152,18 +149,14 @@ impl TabPanelState {
     }
 
     /// Returns the index for the tab displaying the given entity, if one is found.
-    pub fn entity_tab(&self, cx: &App, entity: &MigrisEntity) -> Option<usize> {
+    pub fn entity_tab(&self, entity: &MigrisEntity) -> Option<usize> {
         self.tabs
             .iter()
             .enumerate()
-            .find(|(_, tab)| {
-                let tab = tab.read(cx);
-
-                match tab.variant() {
-                    TabVariant::Query(_) => false,
-                    TabVariant::Table(tab_entity) => tab_entity == entity,
-                    TabVariant::View(tab_entity) => tab_entity == entity,
-                }
+            .find(|(_, tab)| match tab.variant() {
+                TabVariant::Query(_) => false,
+                TabVariant::Table(tab_entity) => tab_entity == entity,
+                TabVariant::View(tab_entity) => tab_entity == entity,
             })
             .map(|(idx, _)| idx)
     }
@@ -171,11 +164,11 @@ impl TabPanelState {
     /// Calculates and returns what the next query tab number should be based on the current query tabs.
     ///
     /// The next query tab number should always be equal to the highest current query tab number plus one.
-    fn next_query_number(&self, cx: &App) -> usize {
+    fn next_query_number(&self) -> usize {
         self.tabs
             .iter()
             .filter_map(|tab| {
-                let TabVariant::Query(number) = tab.read(cx).variant() else {
+                let TabVariant::Query(number) = tab.variant() else {
                     return None;
                 };
 
@@ -192,13 +185,11 @@ impl TabPanelState {
         self.scroll_handle.scroll_to_item(idx);
 
         // Focus the opened tab.
-        self.active_tab().update(cx, |tab, cx| {
-            tab.focus(window, cx);
-        });
+        self.active_tab().focus(window, cx);
     }
 
     /// Returns a reference to the tabs within the panel.
-    pub fn tabs(&self) -> &[Entity<TabView>] {
+    pub fn tabs(&self) -> &[TabView] {
         &self.tabs
     }
 }

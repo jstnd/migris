@@ -17,7 +17,7 @@ pub struct ViewTab {
 
 impl ViewTab {
     /// Creates a new [`ViewTab`].
-    pub fn new(window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) -> Self {
+    pub fn new(window: &mut Window, cx: &mut App, entity: MigrisEntity) -> Self {
         let label = SharedString::from(&entity.name);
         let state = cx.new(|cx| ViewTabState::new(window, cx, entity));
         state.update(cx, |state, cx| {

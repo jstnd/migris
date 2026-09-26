@@ -42,7 +42,7 @@ pub struct QueryTab {
 
 impl QueryTab {
     /// Creates a new [`QueryTab`].
-    pub fn new(window: &mut Window, cx: &mut Context<Self>, number: usize) -> Self {
+    pub fn new(window: &mut Window, cx: &mut App, number: usize) -> Self {
         let state = cx.new(|cx| QueryTabState::new(window, cx));
 
         Self {

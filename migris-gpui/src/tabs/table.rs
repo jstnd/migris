@@ -25,7 +25,7 @@ pub struct TableTab {
 
 impl TableTab {
     /// Creates a new [`TableTab`].
-    pub fn new(window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) -> Self {
+    pub fn new(window: &mut Window, cx: &mut App, entity: MigrisEntity) -> Self {
         let label = SharedString::from(&entity.name);
         let state = cx.new(|cx| TableTabState::new(window, cx, entity));
         state.update(cx, |state, cx| {

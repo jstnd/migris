@@ -191,7 +191,7 @@ impl Application {
 
     fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) {
         self.tab_panel.update(cx, |tab_panel, cx| {
-            let existing_tab = tab_panel.entity_tab(cx, &entity);
+            let existing_tab = tab_panel.entity_tab(&entity);
 
             if let Some(tab_idx) = existing_tab {
                 tab_panel.open_tab(window, cx, tab_idx);
