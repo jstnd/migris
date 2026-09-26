@@ -9,6 +9,7 @@ use gpui_kit::{
         v_flex,
     },
     component::{
+        clipboard::Clipboard,
         input::Input,
         list::ListItem,
         scroll::ScrollableElement,
@@ -28,7 +29,7 @@ use crate::{
         text_ellipsis,
     },
     events::{Event, EventManager, EventVariant},
-    history::{QueryHistory, QueryHistoryGroup, QueryStatus},
+    history::{QueryHistory, QueryHistoryGroup, QueryHistoryId, QueryStatus},
     shared,
     state::AppState,
 };
@@ -125,7 +126,7 @@ impl RenderOnce for ConnectionPanel {
             )
             .child(match active_tab {
                 ConnectionPanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
-                ConnectionPanelTab::History => history_tab(cx, &self.state).into_any_element(),
+                ConnectionPanelTab::History => history_tab(window, cx, &self.state).into_any_element(),
             })
             .on_action(window.listener_for(&self.state, |state, action, window, cx| {
                 state.handle_action(window, cx, action);
@@ -201,7 +202,7 @@ fn connection_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl In
         })
 }
 
-fn history_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoElement {
+fn history_tab(window: &mut Window, cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoElement {
     let Some(history) = &state.read(cx).history else {
         return div().into_any_element();
     };
@@ -218,7 +219,9 @@ fn history_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoE
                 .gap_0p5()
                 .child(div().text_xs().child(group.header()))
                 .children(group.items.iter().map(|item| {
-                    let item_query = item.query.clone();
+                    let item_id = item.id;
+                    let item_query = SharedString::from(&item.query);
+                    let is_hovered = state.read(cx).hovered_history == Some(item_id);
                     let tooltip_text = match item.status {
                         QueryStatus::None => "Not Executed".to_string(),
                         QueryStatus::Cancelled => "Query Cancelled".to_string(),
@@ -230,31 +233,55 @@ fn history_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoE
                         ),
                     };
 
-                    h_flex().w_full().gap_0p5().items_center().justify_between().child(
-                        h_flex()
-                            .gap_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .id(format!("item-status-{}", item.id))
-                                    .child(match item.status {
-                                        QueryStatus::None => Icon::new(cx, IconName::Minus),
-                                        QueryStatus::Cancelled => Icon::yellow(cx, IconName::CircleAlert),
-                                        QueryStatus::Failed => Icon::red(cx, IconName::X),
-                                        QueryStatus::Success => Icon::green(cx, IconName::Check),
-                                    })
-                                    .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx)),
-                            )
-                            .child(
-                                div()
-                                    .id(format!("item-query-{}", item.id))
-                                    .truncate()
-                                    .child(SharedString::from(&item.query))
-                                    .tooltip(move |window, cx| {
-                                        Tooltip::new(migris::sql::format(&item_query)).build(window, cx)
-                                    }),
-                            ),
-                    )
+                    h_flex()
+                        .id(format!("item-{}", item.id))
+                        .w_full()
+                        .gap_0p5()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .id(format!("item-status-{}", item.id))
+                                        .child(match item.status {
+                                            QueryStatus::None => Icon::new(cx, IconName::Minus),
+                                            QueryStatus::Cancelled => Icon::yellow(cx, IconName::CircleAlert),
+                                            QueryStatus::Failed => Icon::red(cx, IconName::X),
+                                            QueryStatus::Success => Icon::green(cx, IconName::Check),
+                                        })
+                                        .tooltip(move |window, cx| {
+                                            Tooltip::new(tooltip_text.clone()).build(window, cx)
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .id(format!("item-query-{}", item.id))
+                                        .truncate()
+                                        .child(SharedString::from(&item.query))
+                                        .tooltip({
+                                            let item_query = item_query.clone();
+                                            move |window, cx| {
+                                                Tooltip::new(migris::sql::format(&item_query)).build(window, cx)
+                                            }
+                                        }),
+                                ),
+                        )
+                        .when(is_hovered, {
+                            let item_query = item_query.clone();
+                            move |this| {
+                                this.child(
+                                    Clipboard::new("btn-copy-history")
+                                        .value_fn(move |_, _| migris::sql::format(&item_query).into()),
+                                )
+                            }
+                        })
+                        .on_hover(window.listener_for(state, move |state, is_hovered: &bool, _, cx| {
+                            state.hovered_history = is_hovered.then_some(item_id);
+                            cx.notify();
+                        }))
                 }))
         }))
         .into_any_element()
@@ -287,6 +314,9 @@ pub struct ConnectionPanelState {
 
     /// The query history to show within the history tab.
     history: Option<QueryHistory>,
+
+    /// The currently hovered history within the history tab.
+    hovered_history: Option<QueryHistoryId>,
 }
 
 impl ConnectionPanelState {
@@ -325,6 +355,7 @@ impl ConnectionPanelState {
             entity_map: HashMap::new(),
             expanded: HashSet::new(),
             history: None,
+            hovered_history: None,
         }
     }
 

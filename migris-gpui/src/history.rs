@@ -93,7 +93,7 @@ impl QueryHistoryGroup {
     }
 }
 
-#[derive(Debug, Clone, Copy, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(transparent)]
 pub struct QueryHistoryId(Uuid);
 
