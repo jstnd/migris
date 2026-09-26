@@ -233,12 +233,13 @@ fn history_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoE
                     let item_query = item.query.clone();
                     let tooltip_text = match item.status {
                         QueryStatus::None => "Not Executed".to_string(),
+                        QueryStatus::Cancelled => "Query Cancelled".to_string(),
+                        QueryStatus::Failed => item.error.clone(),
                         QueryStatus::Success => format!(
                             "Success • {} • {}",
                             shared::format_ms(item.duration_ms),
                             item.row_display()
                         ),
-                        QueryStatus::Failed => item.error.clone(),
                     };
 
                     h_flex()
@@ -255,10 +256,13 @@ fn history_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoE
                                         .id(format!("item-status-{}", item.id))
                                         .child(match item.status {
                                             QueryStatus::None => Icon::new(cx, IconName::Minus),
+                                            QueryStatus::Cancelled => {
+                                                Icon::yellow(cx, IconName::CircleAlert)
+                                            }
+                                            QueryStatus::Failed => Icon::red(cx, IconName::X),
                                             QueryStatus::Success => {
                                                 Icon::green(cx, IconName::Check)
                                             }
-                                            QueryStatus::Failed => Icon::red(cx, IconName::X),
                                         })
                                         .tooltip(move |window, cx| {
                                             Tooltip::new(tooltip_text.clone()).build(window, cx)

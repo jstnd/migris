@@ -118,8 +118,9 @@ impl Display for QueryHistoryId {
 pub enum QueryStatus {
     #[default]
     None,
-    Success,
+    Cancelled,
     Failed,
+    Success,
 }
 
 #[derive(Debug, sqlx::FromRow)]

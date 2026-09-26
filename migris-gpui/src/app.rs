@@ -12,7 +12,7 @@ use gpui_kit::{
     prelude::FluentBuilder,
     px,
 };
-use migris::{Entity as MigrisEntity, EntityKind, query::Query};
+use migris::{Entity as MigrisEntity, EntityKind, MigrisError, query::Query};
 
 use crate::{
     assets,
@@ -269,11 +269,15 @@ impl Application {
                         }
                     }
                     Err(err) => {
-                        history.status = QueryStatus::Failed;
-                        history.error = err.to_string();
-
                         continue_execution = false;
-                        callbacks.on_error(window, cx, err.to_string());
+
+                        if let MigrisError::QueryCancelled = err {
+                            history.status = QueryStatus::Cancelled;
+                        } else {
+                            history.status = QueryStatus::Failed;
+                            history.error = err.to_string();
+                            callbacks.on_error(window, cx, err.to_string());
+                        }
                     }
                 });
             }
