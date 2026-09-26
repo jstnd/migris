@@ -43,32 +43,41 @@ impl RenderOnce for TabPanel {
                         .selected_index(state.active_tab)
                         .track_scroll(&state.scroll_handle)
                         .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
-                            Tab::new().child(
-                                h_flex()
-                                    .id(("panel-tab", idx))
-                                    .gap_1p5()
-                                    .items_center()
-                                    .child(Icon::new(cx, tab.icon()))
-                                    .child(tab.label())
-                                    .child(
-                                        Button::new(("button-close", idx))
-                                            .icon(IconName::X)
-                                            .ghost()
-                                            .xsmall()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .on_click(window.listener_for(&self.state, move |state, _, _, cx| {
-                                                state.close_tab(cx, idx);
-                                                cx.stop_propagation();
-                                            })),
-                                    )
-                                    .on_hover(window.listener_for(
-                                        &self.state,
-                                        move |state, is_hovered: &bool, _, cx| {
-                                            state.hovered_tab = is_hovered.then_some(idx);
-                                            cx.notify();
-                                        },
-                                    )),
-                            )
+                            Tab::new()
+                                .child(
+                                    h_flex()
+                                        .id(("panel-tab", idx))
+                                        .gap_1p5()
+                                        .items_center()
+                                        .child(
+                                            Icon::new(cx, tab.icon())
+                                                .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
+                                        )
+                                        .child(tab.label())
+                                        .child(
+                                            Button::new(("button-close", idx))
+                                                .icon(IconName::X)
+                                                .ghost()
+                                                .xsmall()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .on_click(window.listener_for(&self.state, move |state, _, _, cx| {
+                                                    state.close_tab(cx, idx);
+                                                    cx.stop_propagation();
+                                                })),
+                                        ),
+                                )
+                                .on_hover(
+                                    window.listener_for(&self.state, move |state, is_hovered: &bool, _, cx| {
+                                        // Skip handling the unhover event if the currently saved hovered tab does not match this tab.
+                                        // This is to prevent issues where the unhover event for a tab fires after the hover event for a different tab.
+                                        if state.hovered_tab != Some(idx) && !is_hovered {
+                                            return;
+                                        }
+
+                                        state.hovered_tab = is_hovered.then_some(idx);
+                                        cx.notify();
+                                    }),
+                                )
                         }))
                         .prefix(
                             div().p_1().child(
