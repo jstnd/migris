@@ -51,17 +51,22 @@ impl RenderOnce for TabPanel {
                                             .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
                                     )
                                     .child(tab.label())
-                                    .child(
-                                        Button::new(("button-close", idx))
-                                            .icon(IconName::X)
-                                            .ghost()
-                                            .xsmall()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .on_click(window.listener_for(&self.state, move |state, _, window, cx| {
-                                                state.close_tab(window, cx, idx);
-                                                cx.stop_propagation();
-                                            })),
-                                    ),
+                                    .when(state.tabs.len() > 1, |this| {
+                                        this.child(
+                                            Button::new(("btn-close-tab", idx))
+                                                .ghost()
+                                                .xsmall()
+                                                .icon(IconName::X)
+                                                .text_color(cx.theme().muted_foreground)
+                                                .on_click(window.listener_for(
+                                                    &self.state,
+                                                    move |state, _, window, cx| {
+                                                        state.close_tab(window, cx, idx);
+                                                        cx.stop_propagation();
+                                                    },
+                                                )),
+                                        )
+                                    }),
                             )
                             .on_hover(
                                 window.listener_for(&self.state, move |state, is_hovered: &bool, _, cx| {
@@ -138,13 +143,22 @@ impl TabPanelState {
 
     /// Closes the tab at the given index.
     fn close_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
+        // Do not close if there's only one tab remaining.
+        if self.tabs.len() == 1 {
+            return;
+        }
+
         self.tabs[idx].close(cx);
         self.tabs.remove(idx);
 
-        // Move the active tab index if the active tab is after the tab that is being closed.
-        if self.active_tab >= idx && self.active_tab > 0 {
-            self.open_tab(window, cx, self.active_tab - 1);
-        }
+        // Adjust the active tab if needed.
+        let new_tab = if self.active_tab >= idx && self.active_tab > 0 {
+            self.active_tab - 1
+        } else {
+            self.active_tab
+        };
+
+        self.open_tab(window, cx, new_tab);
     }
 
     /// Returns the index for the tab displaying the given entity, if one is found.
