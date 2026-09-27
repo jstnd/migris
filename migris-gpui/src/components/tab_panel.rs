@@ -7,7 +7,6 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         tab::{Tab, TabBar},
     },
-    div,
     prelude::FluentBuilder,
 };
 use migris::Entity as MigrisEntity;
@@ -37,63 +36,49 @@ impl RenderOnce for TabPanel {
         v_flex()
             .size_full()
             .child(
-                h_flex().id("panel-tab-bar").overflow_x_scroll().child(
-                    TabBar::new("panel-tabs")
-                        .flex_1()
-                        .selected_index(state.active_tab)
-                        .track_scroll(&state.scroll_handle)
-                        .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
-                            Tab::new()
-                                .child(
-                                    h_flex()
-                                        .id(("panel-tab", idx))
-                                        .gap_1p5()
-                                        .items_center()
-                                        .child(
-                                            Icon::new(cx, tab.icon())
-                                                .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
-                                        )
-                                        .child(tab.label())
-                                        .child(
-                                            Button::new(("button-close", idx))
-                                                .icon(IconName::X)
-                                                .ghost()
-                                                .xsmall()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .on_click(window.listener_for(&self.state, move |state, _, _, cx| {
-                                                    state.close_tab(cx, idx);
-                                                    cx.stop_propagation();
-                                                })),
-                                        ),
-                                )
-                                .on_hover(
-                                    window.listener_for(&self.state, move |state, is_hovered: &bool, _, cx| {
-                                        // Skip handling the unhover event if the currently saved hovered tab does not match this tab.
-                                        // This is to prevent issues where the unhover event for a tab fires after the hover event for a different tab.
-                                        if state.hovered_tab != Some(idx) && !is_hovered {
-                                            return;
-                                        }
+                TabBar::new("panel-tabs")
+                    .selected_index(state.active_tab)
+                    .track_scroll(&state.scroll_handle)
+                    .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
+                        Tab::new()
+                            .child(
+                                h_flex()
+                                    .id(("panel-tab", idx))
+                                    .gap_1p5()
+                                    .items_center()
+                                    .child(
+                                        Icon::new(cx, tab.icon())
+                                            .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
+                                    )
+                                    .child(tab.label())
+                                    .child(
+                                        Button::new(("button-close", idx))
+                                            .icon(IconName::X)
+                                            .ghost()
+                                            .xsmall()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .on_click(window.listener_for(&self.state, move |state, _, window, cx| {
+                                                state.close_tab(window, cx, idx);
+                                                cx.stop_propagation();
+                                            })),
+                                    ),
+                            )
+                            .on_hover(
+                                window.listener_for(&self.state, move |state, is_hovered: &bool, _, cx| {
+                                    // Skip handling the unhover event if the currently saved hovered tab does not match this tab.
+                                    // This is to prevent issues where the unhover event for a tab fires after the hover event for a different tab.
+                                    if state.hovered_tab != Some(idx) && !is_hovered {
+                                        return;
+                                    }
 
-                                        state.hovered_tab = is_hovered.then_some(idx);
-                                        cx.notify();
-                                    }),
-                                )
-                        }))
-                        .prefix(
-                            div().p_1().child(
-                                Button::new("button-add-tab")
-                                    .icon(IconName::Plus)
-                                    .ghost()
-                                    .small()
-                                    .on_click(window.listener_for(&self.state, |state, _, window, cx| {
-                                        state.add_query_tab(window, cx);
-                                    })),
-                            ),
-                        )
-                        .on_click(window.listener_for(&self.state, |state, idx, window, cx| {
-                            state.open_tab(window, cx, *idx);
-                        })),
-                ),
+                                    state.hovered_tab = is_hovered.then_some(idx);
+                                    cx.notify();
+                                }),
+                            )
+                    }))
+                    .on_click(window.listener_for(&self.state, |state, idx, window, cx| {
+                        state.open_tab(window, cx, *idx);
+                    })),
             )
             .when(!state.tabs.is_empty(), |this| {
                 this.child(state.active_tab().content(window, cx))
@@ -146,14 +131,19 @@ impl TabPanelState {
         self.open_tab(window, cx, self.tabs.len() - 1);
     }
 
+    /// Closes the active tab.
+    pub fn close_active_tab(&mut self, window: &mut Window, cx: &mut App) {
+        self.close_tab(window, cx, self.active_tab);
+    }
+
     /// Closes the tab at the given index.
-    fn close_tab(&mut self, cx: &App, idx: usize) {
+    fn close_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
         self.tabs[idx].close(cx);
         self.tabs.remove(idx);
 
         // Move the active tab index if the active tab is after the tab that is being closed.
         if self.active_tab >= idx && self.active_tab > 0 {
-            self.active_tab -= 1;
+            self.open_tab(window, cx, self.active_tab - 1);
         }
     }
 
@@ -186,6 +176,26 @@ impl TabPanelState {
             .max()
             .unwrap_or_default()
             + 1
+    }
+
+    /// Opens the next tab relative to the active tab.
+    pub fn open_next_tab(&mut self, window: &mut Window, cx: &mut App) {
+        // Do nothing if we're already at the end of the tab bar.
+        if self.active_tab == self.tabs.len() - 1 {
+            return;
+        }
+
+        self.open_tab(window, cx, self.active_tab + 1);
+    }
+
+    /// Opens the previous tab relative to the active tab.
+    pub fn open_previous_tab(&mut self, window: &mut Window, cx: &mut App) {
+        // Do nothing if we're already at the start of the tab bar.
+        if self.active_tab == 0 {
+            return;
+        }
+
+        self.open_tab(window, cx, self.active_tab - 1);
     }
 
     /// Opens the tab at the given index.

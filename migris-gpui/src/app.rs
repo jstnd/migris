@@ -1,8 +1,8 @@
 use std::{path::Path, sync::Arc};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem, ParentElement, Pixels,
-    Render, SharedString, Styled, Window,
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, Menu, MenuItem,
+    ParentElement, Pixels, Render, SharedString, Styled, Window,
     base::{GlobalState, h_flex, h_resizable, resizable_panel, v_flex},
     component::{
         ActiveTheme, Root, Sizable, TitleBar, WindowExt,
@@ -42,6 +42,7 @@ use crate::{
 pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     assets::Themes::init(cx);
     components::init(cx);
+    init_keybindings(cx);
 
     // Set globals for use throughout the application.
     cx.set_global(ConnectionManager::new());
@@ -60,10 +61,23 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     .detach();
 }
 
+fn init_keybindings(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("ctrl-w", ApplicationAction::CloseActiveTab, None),
+        KeyBinding::new("ctrl-tab", ApplicationAction::OpenNextTab, None),
+        KeyBinding::new("ctrl-shift-tab", ApplicationAction::OpenPreviousTab, None),
+        KeyBinding::new("ctrl-t", ApplicationAction::OpenQueryTab, None),
+    ]);
+}
+
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
 enum ApplicationAction {
+    CloseActiveTab,
     OpenConnectionDialog,
+    OpenNextTab,
+    OpenPreviousTab,
+    OpenQueryTab,
 }
 
 pub struct Application {
@@ -105,6 +119,18 @@ impl Application {
 
     fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &ApplicationAction) {
         match action {
+            ApplicationAction::CloseActiveTab
+            | ApplicationAction::OpenNextTab
+            | ApplicationAction::OpenPreviousTab
+            | ApplicationAction::OpenQueryTab => {
+                self.tab_panel.update(cx, |tab_panel, cx| match action {
+                    ApplicationAction::CloseActiveTab => tab_panel.close_active_tab(window, cx),
+                    ApplicationAction::OpenNextTab => tab_panel.open_next_tab(window, cx),
+                    ApplicationAction::OpenPreviousTab => tab_panel.open_previous_tab(window, cx),
+                    ApplicationAction::OpenQueryTab => tab_panel.add_query_tab(window, cx),
+                    _ => {}
+                });
+            }
             ApplicationAction::OpenConnectionDialog => components::open_connection_dialog(window, cx),
         }
     }
