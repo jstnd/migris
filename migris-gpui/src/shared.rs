@@ -23,6 +23,9 @@ pub const DIALOG_WIDTH: Pixels = px(800.0);
 /// The height of primary dialogs (e.g. connections, settings).
 pub const DIALOG_HEIGHT: Pixels = px(600.0);
 
+/// The placeholder text for filter input fields.
+pub const FILTER_PLACEHOLDER: &str = "Filter...";
+
 /// The placeholder text for search input fields.
 pub const SEARCH_PLACEHOLDER: &str = "Search...";
 

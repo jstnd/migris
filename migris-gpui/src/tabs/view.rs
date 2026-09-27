@@ -1,29 +1,23 @@
 use gpui_kit::{
     App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window,
     base::{
-        h_flex,
+        Selectable, h_flex,
         input::{InputEvent, InputState},
         v_flex,
     },
-    component::{
-        ActiveTheme, Sizable,
-        button::{Button, ButtonVariants},
-        input::Input,
-    },
+    component::{ActiveTheme, Sizable, button::Button, input::Input},
     div,
     prelude::FluentBuilder,
-    px,
 };
 use migris::{Entity as MigrisEntity, data::QueryResult};
 
 use crate::{
     components::{
-        editor::{Editor, EditorState},
-        icon::IconName,
+        icon::{Icon, IconName},
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
     events::{Event, EventManager, RunSqlEvent},
-    notifications,
+    notifications, shared,
 };
 
 pub struct ViewTab {
@@ -62,18 +56,19 @@ impl ViewTab {
                                 .gap_1()
                                 .child(
                                     Button::new("btn-filter")
-                                        .icon(IconName::Funnel)
-                                        .tooltip("Filter")
                                         .small()
+                                        .icon(IconName::Funnel)
+                                        .selected(state.show_filter)
+                                        .tooltip("Filter")
                                         .on_click(window.listener_for(&self.state, |state, _, window, cx| {
                                             state.toggle_filter(window, cx);
                                         })),
                                 )
                                 .child(
                                     Button::new("btn-refresh")
+                                        .small()
                                         .icon(IconName::RefreshCw)
                                         .tooltip("Refresh")
-                                        .small()
                                         .on_click(window.listener_for(&self.state, |state, _, window, cx| {
                                             state.refresh(window, cx);
                                         })),
@@ -83,37 +78,44 @@ impl ViewTab {
                     .when(state.show_filter, |this| {
                         this.child(
                             h_flex()
-                                .h(px(68.0))
                                 .gap_1()
-                                .child(Editor::new(&state.filter_editor).bordered(true))
                                 .child(
-                                    v_flex()
-                                        .w_1_5()
-                                        .gap_1()
-                                        .child(Input::new(&state.filter_multicolumn_input).cleanable(true))
-                                        .child(
-                                            h_flex()
-                                                .gap_1()
-                                                .child(
-                                                    Button::new("btn-apply-filter")
-                                                        .flex_1()
-                                                        .label("Apply")
-                                                        .primary()
-                                                        .on_click(window.listener_for(
-                                                            &self.state,
-                                                            |state, _, window, cx| {
-                                                                state.refresh_data(window, cx);
-                                                            },
-                                                        )),
-                                                )
-                                                .child(
-                                                    Button::new("btn-clear-filter").flex_1().label("Clear").on_click(
-                                                        window.listener_for(&self.state, |state, _, window, cx| {
-                                                            state.clear_filter(window, cx);
-                                                        }),
-                                                    ),
-                                                ),
-                                        ),
+                                    Input::new(&state.filter_input)
+                                        .small()
+                                        .cleanable(true)
+                                        .prefix(Icon::new(cx, IconName::Funnel)),
+                                )
+                                .child(
+                                    Button::new("btn-apply")
+                                        .small()
+                                        .icon(IconName::Play)
+                                        .tooltip("Apply")
+                                        .on_click(window.listener_for(&self.state, |state, _, window, cx| {
+                                            state.refresh_data(window, cx);
+                                        })),
+                                )
+                                .child(
+                                    Button::new("btn-toggle-multi")
+                                        .small()
+                                        .icon(IconName::Columns3)
+                                        .selected(state.enable_multi_filter)
+                                        .tooltip(if state.enable_multi_filter {
+                                            "Disable Multi-Column"
+                                        } else {
+                                            "Enable Multi-Column"
+                                        })
+                                        .on_click(window.listener_for(&self.state, |state, _, _, _| {
+                                            state.enable_multi_filter = !state.enable_multi_filter;
+                                        })),
+                                )
+                                .child(
+                                    Button::new("btn-clear-filter")
+                                        .small()
+                                        .icon(IconName::FunnelX)
+                                        .tooltip("Clear Filter")
+                                        .on_click(window.listener_for(&self.state, |state, _, window, cx| {
+                                            state.clear_filter(window, cx);
+                                        })),
                                 ),
                         )
                     }),
@@ -147,11 +149,11 @@ struct ViewTabState {
     /// The entity being shown in the tab.
     entity: MigrisEntity,
 
-    /// The state for the filter editor.
-    filter_editor: Entity<EditorState>,
+    /// Whether to enable multi-column filtering.
+    enable_multi_filter: bool,
 
-    /// The state for the multi-column filter input.
-    filter_multicolumn_input: Entity<InputState>,
+    /// The state for the filter input.
+    filter_input: Entity<InputState>,
 
     /// Whether to show the filter elements.
     show_filter: bool,
@@ -163,17 +165,12 @@ struct ViewTabState {
 impl ViewTabState {
     /// Creates a new [`ViewTabState`].
     fn new(window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) -> Self {
-        let filter_multicolumn_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Enter multi-column filter..."));
-        cx.subscribe_in(
-            &filter_multicolumn_input,
-            window,
-            |this, _, event: &InputEvent, window, cx| match event {
-                InputEvent::Change => this.set_multicolumn_filter(window, cx),
-                InputEvent::PressEnter { .. } => this.refresh_data(window, cx),
-                _ => {}
-            },
-        )
+        let filter_input = cx.new(|cx| InputState::new(window, cx).placeholder(shared::FILTER_PLACEHOLDER));
+        cx.subscribe_in(&filter_input, window, |this, _, event: &InputEvent, window, cx| {
+            if let InputEvent::PressEnter { .. } = event {
+                this.refresh_data(window, cx);
+            }
+        })
         .detach();
 
         let table = cx.new(|cx| QueryTableState::new(window, cx));
@@ -184,8 +181,8 @@ impl ViewTabState {
 
         Self {
             entity,
-            filter_editor: cx.new(|cx| EditorState::new(window, cx)),
-            filter_multicolumn_input,
+            enable_multi_filter: false,
+            filter_input,
             show_filter: false,
             table,
         }
@@ -193,11 +190,8 @@ impl ViewTabState {
 
     /// Clears any active filter.
     fn clear_filter(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.filter_editor.update(cx, |filter_editor, cx| {
-            filter_editor.clear(window, cx);
-        });
-        self.filter_multicolumn_input.update(cx, |input, cx| {
-            input.clean(window, cx);
+        self.filter_input.update(cx, |filter_input, cx| {
+            filter_input.clean(window, cx);
         });
 
         self.refresh_data(window, cx);
@@ -233,48 +227,39 @@ impl ViewTabState {
         EventManager::emit(window, cx, event);
     }
 
-    /// Sets the filter built from the content within the multi-column filter input.
-    fn set_multicolumn_filter(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let filter = self.filter_multicolumn_input.read(cx).value();
-        if filter.is_empty() {
-            self.filter_editor.update(cx, |filter_editor, cx| {
-                filter_editor.clear(window, cx);
-            });
-            return;
-        }
-
-        let filter = filter.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
-        let filters: Vec<String> = self
-            .table
-            .read(cx)
-            .columns(cx)
-            .iter()
-            .map(|column| format!("`{}` LIKE '%{}%'", column.name, filter))
-            .collect();
-
-        self.filter_editor.update(cx, |filter_editor, cx| {
-            filter_editor.set_value(window, cx, &filters.join(" OR "));
-        });
-    }
-
     /// Toggles the visibility of the filter elements.
     fn toggle_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_filter = !self.show_filter;
 
         if self.show_filter {
-            self.filter_editor.update(cx, |filter_editor, cx| {
-                filter_editor.focus(window, cx);
-            })
+            self.filter_input.update(cx, |filter_input, cx| {
+                filter_input.focus(window, cx);
+            });
         }
     }
 
     /// Returns the WHERE clause built from the content within the filter editor.
     fn where_clause(&self, cx: &App) -> String {
-        let filter_editor = self.filter_editor.read(cx);
-        if filter_editor.is_empty(cx) {
+        let filter = self.filter_input.read(cx).value();
+        if filter.trim().is_empty() {
             String::new()
+        } else if self.enable_multi_filter {
+            let filter = filter
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+                .replace('\'', "''");
+            let filters: Vec<String> = self
+                .table
+                .read(cx)
+                .columns(cx)
+                .iter()
+                .map(|column| format!("`{}` LIKE '%{}%'", column.name, filter))
+                .collect();
+
+            format!("WHERE {}", filters.join(" OR "))
         } else {
-            format!("WHERE {}", filter_editor.value(cx))
+            format!("WHERE {}", filter)
         }
     }
 }
