@@ -244,6 +244,12 @@ impl QueryTableState {
         });
     }
 
+    /// Returns the columns within the table.
+    pub fn columns<'a>(&self, cx: &'a App) -> &'a [Column] {
+        // The first column here is the row number column, so we skip that column.
+        &self.table.read(cx).delegate().columns[1..]
+    }
+
     /// Focuses the table content.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         self.table.read(cx).focus_handle(cx).focus(window, cx);

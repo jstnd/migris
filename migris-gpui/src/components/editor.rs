@@ -36,6 +36,9 @@ pub struct Editor {
     /// The state for the editor.
     state: Entity<EditorState>,
 
+    /// Whether the editor should be bordered.
+    bordered: bool,
+
     /// The optional context menu builder.
     context_menu_builder: Option<Rc<dyn Fn(PopupMenu, &mut Window, &mut App) -> PopupMenu + 'static>>,
 }
@@ -45,8 +48,15 @@ impl Editor {
     pub fn new(state: &Entity<EditorState>) -> Self {
         Self {
             state: state.clone(),
+            bordered: false,
             context_menu_builder: None,
         }
+    }
+
+    /// Sets whether the editor should be bordered.
+    pub fn bordered(mut self, bordered: bool) -> Self {
+        self.bordered = bordered;
+        self
     }
 
     /// Sets the context menu for the editor.
@@ -91,7 +101,7 @@ impl RenderOnce for Editor {
                 input::Editor::new(&state.editor)
                     .p_0()
                     .h_full()
-                    .appearance(false)
+                    .appearance(self.bordered)
                     .text_size(SettingsManager::editor_size(cx).font_size(cx)),
             )
             .on_action(window.listener_for(&self.state, |state, action, window, cx| {
@@ -156,6 +166,11 @@ impl EditorState {
                 }
             }
         }
+    }
+
+    /// Clears the content within the editor.
+    pub fn clear(&self, window: &mut Window, cx: &mut App) {
+        self.set_value(window, cx, "");
     }
 
     /// Focuses the editor input.

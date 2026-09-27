@@ -43,8 +43,11 @@ pub fn minify(sql: &str) -> String {
     sqlformat::format(sql, &QueryParams::None, &options)
 }
 
-pub fn select_all(entity: &Entity, order_by: &str) -> String {
-    format!("SELECT * FROM `{}`.`{}` {}", entity.schema, entity.name, order_by)
+pub fn select_all(entity: &Entity, where_clause: &str, order_by: &str) -> String {
+    format!(
+        "SELECT * FROM `{}`.`{}` {} {}",
+        entity.schema, entity.name, where_clause, order_by
+    )
 }
 
 pub fn split(sql: &str) -> Vec<SqlStatement> {
