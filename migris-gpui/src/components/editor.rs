@@ -182,7 +182,12 @@ impl EditorState {
 
     /// Returns whether the editor is empty, excluding whitespace.
     pub fn is_empty(&self, cx: &App) -> bool {
-        self.editor.read(cx).value().trim().is_empty()
+        self.value(cx).trim().is_empty()
+    }
+
+    /// Returns whether the editor has any content selected, excluding whitespace.
+    pub fn is_selected_empty(&self, cx: &App) -> bool {
+        self.selected_value(cx).trim().is_empty()
     }
 
     /// Returns the selected content within the editor.

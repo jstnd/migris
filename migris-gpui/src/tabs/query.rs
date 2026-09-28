@@ -1,6 +1,6 @@
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window,
+    Action, Anchor, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, ParentElement,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
         Sizable,
@@ -8,6 +8,7 @@ use gpui_kit::{
         input,
         tab::{Tab, TabBar},
     },
+    div,
     prelude::FluentBuilder,
 };
 
@@ -20,6 +21,23 @@ use crate::{
     events::{Event, EventId, EventManager, RunSqlEvent},
     notifications,
 };
+
+const KEY_CONTEXT: &str = "QUERY_TAB";
+
+// This is the key context that gpui-kit's Input component uses.
+const INPUT_CONTEXT: &str = "Input";
+
+/// Initializes configuration for the query tab.
+pub fn init(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("ctrl-shift-f", QueryTabAction::FormatSql, Some(KEY_CONTEXT)),
+        KeyBinding::new("ctrl-shift-f", QueryTabAction::FormatSql, Some(INPUT_CONTEXT)),
+        KeyBinding::new("ctrl-enter", QueryTabAction::RunSql, Some(KEY_CONTEXT)),
+        KeyBinding::new("ctrl-enter", QueryTabAction::RunSql, Some(INPUT_CONTEXT)),
+        KeyBinding::new("ctrl-shift-enter", QueryTabAction::RunSqlSelection, Some(KEY_CONTEXT)),
+        KeyBinding::new("ctrl-shift-enter", QueryTabAction::RunSqlSelection, Some(INPUT_CONTEXT)),
+    ]);
+}
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
@@ -61,118 +79,130 @@ impl QueryTab {
     pub fn content(&self, window: &mut Window, cx: &App) -> impl IntoElement {
         let state = self.state.read(cx);
         let is_editor_empty = state.editor.read(cx).is_empty(cx);
-        let is_editor_selected_empty = state.editor.read(cx).selected_value(cx).is_empty();
+        let is_editor_selected_empty = state.editor.read(cx).is_selected_empty(cx);
         let has_active_event = state.active_event.is_some();
 
         let is_run_disabled = is_editor_empty || has_active_event;
         let is_cancel_disabled = !has_active_event;
 
-        v_resizable(format!("query-tab-{}", self.number))
+        div()
+            .key_context(KEY_CONTEXT)
+            .size_full()
             .child(
-                resizable_panel().child(
-                    v_flex()
-                        .size_full()
-                        .child(
-                            h_flex().p_1().child(
-                                h_flex()
-                                    .gap_1()
-                                    .child(
-                                        DropdownButton::new("run-buttons")
-                                            .disabled(is_run_disabled)
-                                            .small()
-                                            .button(
-                                                Button::new("btn-run-query")
-                                                    .icon(Icon::primary(cx, IconName::Play).disabled(is_run_disabled))
-                                                    .label("Run")
-                                                    .on_click(window.listener_for(
-                                                        &self.state,
-                                                        |state, _, window, cx| {
-                                                            state.handle_action(window, cx, &QueryTabAction::RunSql);
-                                                        },
-                                                    )),
+                v_resizable(format!("query-tab-{}", self.number))
+                    .child(
+                        resizable_panel().child(
+                            v_flex()
+                                .size_full()
+                                .child(
+                                    h_flex().p_1().child(
+                                        h_flex()
+                                            .gap_1()
+                                            .child(
+                                                DropdownButton::new("run-buttons")
+                                                    .disabled(is_run_disabled)
+                                                    .small()
+                                                    .button(
+                                                        Button::new("btn-run-query")
+                                                            .icon(
+                                                                Icon::primary(cx, IconName::Play)
+                                                                    .disabled(is_run_disabled),
+                                                            )
+                                                            .label("Run")
+                                                            .on_click(window.listener_for(
+                                                                &self.state,
+                                                                |state, _, window, cx| {
+                                                                    state.handle_action(
+                                                                        window,
+                                                                        cx,
+                                                                        &QueryTabAction::RunSql,
+                                                                    );
+                                                                },
+                                                            )),
+                                                    )
+                                                    .dropdown_menu_with_anchor(Anchor::TopLeft, move |menu, _, cx| {
+                                                        menu.menu_with_icon(
+                                                            "Run",
+                                                            Icon::primary(cx, IconName::Play),
+                                                            Box::new(QueryTabAction::RunSql),
+                                                        )
+                                                        .menu_with_icon_and_disabled(
+                                                            "Run Selection",
+                                                            Icon::primary(cx, IconName::MousePointer2)
+                                                                .disabled(is_editor_selected_empty),
+                                                            Box::new(QueryTabAction::RunSqlSelection),
+                                                            is_editor_selected_empty,
+                                                        )
+                                                    }),
                                             )
-                                            .dropdown_menu(move |menu, _, cx| {
-                                                menu.menu_with_icon(
-                                                    "Run",
-                                                    Icon::primary(cx, IconName::Play),
-                                                    Box::new(QueryTabAction::RunSql),
-                                                )
-                                                .menu_with_icon_and_disabled(
-                                                    "Run Selection",
-                                                    Icon::primary(cx, IconName::MousePointer2)
-                                                        .disabled(is_editor_selected_empty),
-                                                    Box::new(QueryTabAction::RunSqlSelection),
-                                                    is_editor_selected_empty,
-                                                )
-                                            }),
+                                            .child(
+                                                Button::new("btn-cancel-query")
+                                                    .disabled(is_cancel_disabled)
+                                                    .icon(Icon::red(cx, IconName::X).disabled(is_cancel_disabled))
+                                                    .small()
+                                                    .tooltip("Cancel")
+                                                    .on_click(window.listener_for(&self.state, |state, _, _, cx| {
+                                                        state.cancel_event(cx);
+                                                    })),
+                                            ),
+                                    ),
+                                )
+                                .child(Editor::new(&state.editor).context_menu(move |menu, _, cx| {
+                                    menu.menu_with_icon_and_disabled(
+                                        "Run",
+                                        Icon::primary(cx, IconName::Play).disabled(is_run_disabled),
+                                        Box::new(QueryTabAction::RunSql),
+                                        is_run_disabled,
                                     )
-                                    .child(
-                                        Button::new("btn-cancel-query")
-                                            .disabled(is_cancel_disabled)
-                                            .icon(Icon::red(cx, IconName::X).disabled(is_cancel_disabled))
-                                            .small()
-                                            .tooltip("Cancel")
-                                            .on_click(window.listener_for(&self.state, |state, _, _, cx| {
-                                                state.cancel_event(cx);
-                                            })),
+                                    .menu_with_icon_and_disabled(
+                                        "Run Selection",
+                                        Icon::primary(cx, IconName::MousePointer2)
+                                            .disabled(is_editor_selected_empty || is_run_disabled),
+                                        Box::new(QueryTabAction::RunSqlSelection),
+                                        is_editor_selected_empty || is_run_disabled,
+                                    )
+                                    .separator()
+                                    .menu("Cut", Box::new(input::Cut))
+                                    .menu("Copy", Box::new(input::Copy))
+                                    .menu("Paste", Box::new(input::Paste))
+                                    .menu("Select All", Box::new(input::SelectAll))
+                                    .separator()
+                                    .menu_with_icon_and_disabled(
+                                        "Format",
+                                        Icon::primary(cx, IconName::BrushCleaning).disabled(is_editor_empty),
+                                        Box::new(QueryTabAction::FormatSql),
+                                        is_editor_empty,
+                                    )
+                                })),
+                        ),
+                    )
+                    .child(resizable_panel().when(!state.tables.is_empty(), |this| {
+                        this.child(
+                            v_flex()
+                                .size_full()
+                                .child(
+                                    h_flex().id("result-tab-bar").overflow_x_scroll().child(
+                                        TabBar::new("result-tabs")
+                                            .flex_1()
+                                            .selected_index(state.active_table)
+                                            .on_click(window.listener_for(&self.state, |state, idx, _, _| {
+                                                state.active_table = *idx;
+                                            }))
+                                            .children(
+                                                state
+                                                    .tables
+                                                    .iter()
+                                                    .enumerate()
+                                                    .map(|(idx, _)| Tab::new().label(format!("Result #{}", idx + 1))),
+                                            ),
                                     ),
-                            ),
+                                )
+                                .child(QueryTable::new(state.active_table())),
                         )
-                        .child(Editor::new(&state.editor).context_menu(move |menu, _, cx| {
-                            menu.menu_with_icon_and_disabled(
-                                "Run",
-                                Icon::primary(cx, IconName::Play).disabled(is_run_disabled),
-                                Box::new(QueryTabAction::RunSql),
-                                is_run_disabled,
-                            )
-                            .menu_with_icon_and_disabled(
-                                "Run Selection",
-                                Icon::primary(cx, IconName::MousePointer2)
-                                    .disabled(is_editor_selected_empty || is_run_disabled),
-                                Box::new(QueryTabAction::RunSqlSelection),
-                                is_editor_selected_empty || is_run_disabled,
-                            )
-                            .separator()
-                            .menu("Cut", Box::new(input::Cut))
-                            .menu("Copy", Box::new(input::Copy))
-                            .menu("Paste", Box::new(input::Paste))
-                            .menu("Select All", Box::new(input::SelectAll))
-                            .separator()
-                            .menu_with_icon_and_disabled(
-                                "Format",
-                                Icon::primary(cx, IconName::BrushCleaning).disabled(is_editor_empty),
-                                Box::new(QueryTabAction::FormatSql),
-                                is_editor_empty,
-                            )
-                        }))
-                        .on_action(window.listener_for(&self.state, |state, action, window, cx| {
-                            state.handle_action(window, cx, action);
-                        })),
-                ),
+                    })),
             )
-            .child(resizable_panel().when(!state.tables.is_empty(), |this| {
-                this.child(
-                    v_flex()
-                        .size_full()
-                        .child(
-                            h_flex().id("result-tab-bar").overflow_x_scroll().child(
-                                TabBar::new("result-tabs")
-                                    .flex_1()
-                                    .selected_index(state.active_table)
-                                    .on_click(window.listener_for(&self.state, |state, idx, _, _| {
-                                        state.active_table = *idx;
-                                    }))
-                                    .children(
-                                        state
-                                            .tables
-                                            .iter()
-                                            .enumerate()
-                                            .map(|(idx, _)| Tab::new().label(format!("Result #{}", idx + 1))),
-                                    ),
-                            ),
-                        )
-                        .child(QueryTable::new(state.active_table())),
-                )
+            .on_action(window.listener_for(&self.state, |state, action, window, cx| {
+                state.handle_action(window, cx, action);
             }))
     }
 
@@ -213,7 +243,7 @@ struct QueryTabState {
 
 impl QueryTabState {
     /// Creates a new [`QueryTabState`].
-    fn new(window: &mut Window, cx: &mut App) -> Self {
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| EditorState::new(window, cx));
 
         Self {
@@ -230,10 +260,18 @@ impl QueryTabState {
         match action {
             QueryTabAction::FormatSql => self.format_sql(window, cx),
             QueryTabAction::RunSql => {
+                if self.editor.read(cx).is_empty(cx) {
+                    return;
+                }
+
                 self.clear_results();
                 self.run_sql(window, cx, false);
             }
             QueryTabAction::RunSqlSelection => {
+                if self.editor.read(cx).is_selected_empty(cx) {
+                    return;
+                }
+
                 self.clear_results();
                 self.run_sql(window, cx, true);
             }

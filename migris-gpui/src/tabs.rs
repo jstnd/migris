@@ -10,6 +10,11 @@ pub mod query;
 pub mod table;
 pub mod view;
 
+/// Initializes configuration for tabs.
+pub fn init(cx: &mut App) {
+    query::init(cx);
+}
+
 enum TabState {
     Query(QueryTab),
     Table(TableTab),

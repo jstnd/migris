@@ -32,7 +32,7 @@ use crate::{
     settings::SettingsManager,
     shared,
     state::AppState,
-    tabs::TabVariant,
+    tabs::{self, TabVariant},
     types::{OpenConnection, QueryProgress},
 };
 
@@ -42,6 +42,7 @@ use crate::{
 pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     assets::Themes::init(cx);
     components::init(cx);
+    tabs::init(cx);
     init_keybindings(cx);
 
     // Set globals for use throughout the application.
@@ -61,6 +62,7 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
     .detach();
 }
 
+/// Initializes application-wide keybinds.
 fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-w", ApplicationAction::CloseActiveTab, None),
@@ -331,7 +333,7 @@ impl Application {
                 });
             }
 
-            if event.record_history {
+            if event.record_history && !history_group.items.is_empty() {
                 // TODO: log errors here
                 _ = database.insert_query_history_group(&history_group).await;
                 _ = this.update(cx, |this, cx| {
