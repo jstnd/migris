@@ -3,9 +3,10 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
-        Sizable,
+        ActiveTheme, Sizable,
         button::{Button, DropdownButton},
         input,
+        progress::ProgressCircle,
         tab::{Tab, TabBar},
     },
     div,
@@ -20,6 +21,7 @@ use crate::{
     },
     events::{Event, EventId, EventManager, RunSqlEvent},
     notifications,
+    types::QueryProgress,
 };
 
 const KEY_CONTEXT: &str = "QUERY_TAB";
@@ -144,7 +146,20 @@ impl QueryTab {
                                                     .on_click(window.listener_for(&self.state, |state, _, _, cx| {
                                                         state.cancel_event(cx);
                                                     })),
-                                            ),
+                                            )
+                                            .when_some(state.query_progress.as_ref(), |this, progress| {
+                                                this.child(
+                                                    h_flex()
+                                                        .gap_1()
+                                                        .ml_1()
+                                                        .child(
+                                                            ProgressCircle::new("query-progress")
+                                                                .color(cx.theme().primary)
+                                                                .value(progress.value()),
+                                                        )
+                                                        .child(div().text_sm().child(progress.label())),
+                                                )
+                                            }),
                                     ),
                                 )
                                 .child(Editor::new(&state.editor).context_menu(move |menu, _, cx| {
@@ -232,6 +247,9 @@ struct QueryTabState {
     /// The state for the editor.
     editor: Entity<EditorState>,
 
+    /// The progress for the running query.
+    query_progress: Option<QueryProgress>,
+
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
 
@@ -250,6 +268,7 @@ impl QueryTabState {
             active_event: None,
             active_table: 0,
             editor,
+            query_progress: None,
             tables: Vec::new(),
             table_subscriptions: Vec::new(),
         }
@@ -339,13 +358,27 @@ impl QueryTabState {
                 });
             })
             .record_history()
-            .show_progress(),
+            .on_progress({
+                let this = cx.entity();
+                move |_, cx, complete, total| {
+                    this.update(cx, |this, _| {
+                        if let Some(progress) = &mut this.query_progress {
+                            progress.update(complete);
+                        } else {
+                            let mut progress = QueryProgress::new(total);
+                            progress.update(complete);
+                            this.query_progress = Some(progress);
+                        }
+                    });
+                }
+            }),
         )
         .on_complete({
             let this = cx.entity();
             move |_, cx| {
                 this.update(cx, |this, _| {
                     this.active_event = None;
+                    this.query_progress = None;
                 });
             }
         })

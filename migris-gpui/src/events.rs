@@ -178,9 +178,6 @@ pub struct RunSqlEvent {
     /// Whether to record query history.
     pub record_history: bool,
 
-    /// Whether to show query progress.
-    pub show_progress: bool,
-
     /// Whether the results should be returned as a stream.
     pub stream: bool,
 
@@ -188,6 +185,9 @@ pub struct RunSqlEvent {
     ///
     /// This can be used to cancel the running queries if needed.
     pub token: CancellationToken,
+
+    /// An optional callback used when the event reports progress.
+    pub on_progress: Option<Rc<dyn Fn(&mut Window, &mut App, usize, usize) + 'static>>,
 
     /// The callback used when a query result is retrieved.
     pub on_result: Rc<dyn Fn(&mut Window, &mut App, QueryResult) + 'static>,
@@ -199,9 +199,9 @@ impl RunSqlEvent {
         Self {
             sql: sql.into(),
             record_history: false,
-            show_progress: false,
             stream: false,
             token: CancellationToken::new(),
+            on_progress: None,
             on_result: Rc::new(on_result),
         }
     }
@@ -214,9 +214,9 @@ impl RunSqlEvent {
         Self {
             sql: sql.into(),
             record_history: false,
-            show_progress: false,
             stream: true,
             token: CancellationToken::new(),
+            on_progress: None,
             on_result: Rc::new(on_result),
         }
     }
@@ -227,9 +227,9 @@ impl RunSqlEvent {
         self
     }
 
-    /// Sets the event to show progress.
-    pub fn show_progress(mut self) -> Self {
-        self.show_progress = true;
+    /// Sets the callback used when the event reports progress.
+    pub fn on_progress(mut self, f: impl Fn(&mut Window, &mut App, usize, usize) + 'static) -> Self {
+        self.on_progress = Some(Rc::new(f));
         self
     }
 }

@@ -8,7 +8,6 @@ use gpui_kit::{
         ActiveTheme, Root, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
         menu::AppMenuBar,
-        progress::ProgressCircle,
     },
     img,
     prelude::FluentBuilder,
@@ -33,7 +32,7 @@ use crate::{
     shared,
     state::AppState,
     tabs::{self, TabVariant},
-    types::{OpenConnection, QueryProgress},
+    types::OpenConnection,
 };
 
 /// Initializes everything the application needs.
@@ -86,17 +85,14 @@ pub struct Application {
     /// The application's menu bar.
     app_menu_bar: Entity<AppMenuBar>,
 
+    /// The currently open connection, if any.
+    connection: Option<OpenConnection>,
+
     /// The state for the connection panel.
     connection_panel: Entity<ConnectionPanelState>,
 
     /// The state for the tab panel.
     tab_panel: Entity<TabPanelState>,
-
-    /// The currently open connection, if any.
-    connection: Option<OpenConnection>,
-
-    /// The progress of the running query, if any.
-    query_progress: Option<QueryProgress>,
 }
 
 impl Application {
@@ -112,10 +108,9 @@ impl Application {
 
         Self {
             app_menu_bar,
+            connection: None,
             connection_panel: cx.new(|cx| ConnectionPanelState::new(window, cx)),
             tab_panel: cx.new(|_| TabPanelState::new()),
-            connection: None,
-            query_progress: None,
         }
     }
 
@@ -274,17 +269,17 @@ impl Application {
         let database = AppState::database(cx);
 
         cx.spawn_in(window, async move |this, cx| {
+            let mut continue_execution = true;
             let mut history_group = QueryHistoryGroup::new(connection_id);
             let statements = migris::sql::split(&event.sql);
 
             // Initialize the query progress.
-            if event.show_progress {
-                _ = this.update(cx, |this, _| {
-                    this.query_progress = Some(QueryProgress::new(statements.len()));
+            if let Some(on_progress) = event.on_progress.clone() {
+                _ = cx.update(|window, cx| {
+                    on_progress(window, cx, 0, statements.len());
                 });
             }
 
-            let mut continue_execution = true;
             for (idx, statement) in statements.iter().enumerate() {
                 let query = Query::new(&statement.sql, event.token.clone());
                 let history = history_group.add(&migris::sql::minify(&query.sql()));
@@ -301,15 +296,15 @@ impl Application {
                     driver.query(&query).await
                 };
 
-                _ = this.update_in(cx, |this, window, cx| match result {
+                _ = cx.update(|window, cx| match result {
                     Ok(result) => {
                         history.status = QueryStatus::Success;
                         history.duration_ms = result.duration_ms;
                         history.rows_returned = Some(result.data.rows().len() as u64);
 
                         (event.on_result)(window, cx, result);
-                        if event.show_progress {
-                            this.update_query_progress(idx + 1);
+                        if let Some(on_progress) = event.on_progress.clone() {
+                            on_progress(window, cx, idx + 1, statements.len());
                         }
                     }
                     Err(err) => {
@@ -323,13 +318,6 @@ impl Application {
                             callbacks.on_error(window, cx, err.to_string());
                         }
                     }
-                });
-            }
-
-            // Remove the query progress as the statements have finished running.
-            if event.show_progress {
-                _ = this.update(cx, |this, _| {
-                    this.query_progress = None;
                 });
             }
 
@@ -350,12 +338,6 @@ impl Application {
             });
         })
         .detach();
-    }
-
-    fn update_query_progress(&mut self, complete: usize) {
-        if let Some(progress) = &mut self.query_progress {
-            progress.update(complete);
-        }
     }
 }
 
@@ -415,19 +397,7 @@ impl Render for Application {
                             .when_some(self.connection.as_ref(), |this, connection| {
                                 this.child(SharedString::from(&connection.connection.name))
                             }),
-                    )
-                    .when_some(self.query_progress.as_ref(), |this, progress| {
-                        this.child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    ProgressCircle::new("query-progress")
-                                        .color(cx.theme().primary)
-                                        .value(progress.value()),
-                                )
-                                .child(progress.label()),
-                        )
-                    }),
+                    ),
             )
             .children(dialog_layer)
             .on_action(cx.listener(|application, action: &ApplicationAction, window, cx| {
