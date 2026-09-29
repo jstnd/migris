@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, AppContext, BorrowAppContext, Entity, Global, Window,
-    component::{Theme, ThemeMode},
+    App, AppContext, BorrowAppContext, Entity, FocusHandle, Global, Window, component::{Theme, ThemeMode},
 };
 
 use crate::{components::connection_dialog::ConnectionDialogState, database::Database, settings::SettingsManager};
@@ -15,6 +14,9 @@ pub struct AppState {
 
     /// The database for the application.
     pub database: Arc<Database>,
+
+    /// The primary focus handle for the application.
+    pub focus_handle: FocusHandle,
 
     /// The current system theme mode.
     pub system_theme_mode: ThemeMode,
@@ -31,6 +33,7 @@ impl AppState {
         Self {
             connection_dialog,
             database,
+            focus_handle: cx.focus_handle(),
             system_theme_mode: ThemeMode::from(window.appearance()),
         }
     }
@@ -61,6 +64,11 @@ impl AppState {
     /// Returns a cloned pointer instance of the application's database.
     pub fn database(cx: &App) -> Arc<Database> {
         Self::global(cx).database.clone()
+    }
+
+    /// Returns a reference to the primary focus handle for the application.
+    pub fn handle(cx: &App) -> &FocusHandle {
+        &Self::global(cx).focus_handle
     }
 
     /// Loads needed information for the connection dialog.

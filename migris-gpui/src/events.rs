@@ -5,7 +5,7 @@ use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::connections::ConnectionId;
+use crate::{connections::ConnectionId, state::AppState};
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
@@ -54,7 +54,9 @@ impl EventManager {
     pub fn emit(window: &mut Window, cx: &mut App, event: Event) {
         let id = event.id;
         Self::global_mut(cx).push(event);
-        window.dispatch_action(Box::new(EventEmitted(id)), cx);
+        AppState::handle(cx)
+            .clone()
+            .dispatch_action(&EventEmitted(id), window, cx);
     }
 
     /// Returns a reference to the event with the given [`EventId`], if one is found.

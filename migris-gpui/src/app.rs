@@ -5,7 +5,7 @@ use gpui_kit::{
     ParentElement, Pixels, Render, SharedString, Styled, Window,
     base::{GlobalState, h_flex, h_resizable, resizable_panel, v_flex},
     component::{
-        ActiveTheme, Root, Sizable, TitleBar, WindowExt,
+        ActiveTheme, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
         menu::AppMenuBar,
     },
@@ -342,11 +342,10 @@ impl Application {
 }
 
 impl Render for Application {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let dialog_layer = Root::render_dialog_layer(window, cx);
-
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
+            .track_focus(AppState::handle(cx))
             .child(
                 TitleBar::new()
                     .child(img(Path::new("./assets/logo-16x16.png")).size_4().mr_2())
@@ -399,7 +398,6 @@ impl Render for Application {
                             }),
                     ),
             )
-            .children(dialog_layer)
             .on_action(cx.listener(|application, action: &ApplicationAction, window, cx| {
                 application.handle_action(window, cx, action);
             }))
