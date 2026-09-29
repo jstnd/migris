@@ -33,10 +33,6 @@ impl TableTab {
     pub fn new(window: &mut Window, cx: &mut App, entity: MigrisEntity) -> Self {
         let label = SharedString::from(&entity.name);
         let state = cx.new(|cx| TableTabState::new(window, cx, entity));
-        state.update(cx, |state, cx| {
-            state.refresh(window, cx);
-        });
-
         Self { state, label }
     }
 
@@ -181,6 +177,11 @@ impl TableTabState {
             QueryTableEvent::Sort => this.refresh_data(window, cx),
         })
         .detach();
+
+        // Defer the initial refresh of the tab's data.
+        cx.defer_in(window, |this, window, cx| {
+            this.refresh(window, cx);
+        });
 
         Self {
             entity,
