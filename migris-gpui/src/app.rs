@@ -8,6 +8,7 @@ use gpui_kit::{
         ActiveTheme, Sizable, TitleBar, WindowExt,
         button::{Button, ButtonVariants},
         menu::AppMenuBar,
+        sidebar::{Sidebar, SidebarMenuItem},
     },
     img,
     prelude::FluentBuilder,
@@ -19,7 +20,7 @@ use crate::{
     assets,
     components::{
         self,
-        connection_panel::{ConnectionPanel, ConnectionPanelState},
+        connection_panel::{ConnectionPanel, ConnectionPanelState, ConnectionPanelTab},
         icon::IconName,
         settings,
         tab_panel::{TabPanel, TabPanelState},
@@ -342,7 +343,9 @@ impl Application {
 }
 
 impl Render for Application {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let active_panel_tab = self.connection_panel.read(cx).active_tab();
+
         v_flex()
             .size_full()
             .track_focus(AppState::handle(cx))
@@ -352,20 +355,39 @@ impl Render for Application {
                     .child(self.app_menu_bar.clone()),
             )
             .child(
-                h_resizable("application-view")
+                h_flex()
+                    .size_full()
+                    .child(Sidebar::new("application-sidebar").collapsed(true).children(
+                        ConnectionPanelTab::ALL.iter().enumerate().map(|(idx, &tab)| {
+                            SidebarMenuItem::new(tab.label())
+                                .text_lg()
+                                .map(|this| if idx == 0 { this.mt_neg_3() } else { this.mt_1() })
+                                .active(active_panel_tab == tab)
+                                .icon(tab.icon())
+                                .on_click(window.listener_for(
+                                    &self.connection_panel,
+                                    move |connection_panel, _, _, _| {
+                                        connection_panel.open_tab(tab);
+                                    },
+                                ))
+                        }),
+                    ))
                     .child(
-                        resizable_panel()
-                            .size_range(px(250.0)..Pixels::MAX)
-                            .size(px(300.0))
-                            .child(ConnectionPanel::new(&self.connection_panel)),
-                    )
-                    .child(resizable_panel().map(|this| {
-                        this.child(if self.connection.is_some() {
-                            TabPanel::new(&self.tab_panel).into_any_element()
-                        } else {
-                            components::entry_screen(cx).into_any_element()
-                        })
-                    })),
+                        h_resizable("application-view")
+                            .child(
+                                resizable_panel()
+                                    .size_range(px(250.0)..Pixels::MAX)
+                                    .size(px(300.0))
+                                    .child(ConnectionPanel::new(&self.connection_panel)),
+                            )
+                            .child(resizable_panel().map(|this| {
+                                this.child(if self.connection.is_some() {
+                                    TabPanel::new(&self.tab_panel).into_any_element()
+                                } else {
+                                    components::entry_screen(cx).into_any_element()
+                                })
+                            })),
+                    ),
             )
             .child(
                 h_flex()

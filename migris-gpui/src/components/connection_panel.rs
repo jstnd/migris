@@ -9,13 +9,7 @@ use gpui_kit::{
         v_flex,
     },
     component::{
-        clipboard::Clipboard,
-        input::Input,
-        list::ListItem,
-        scroll::ScrollableElement,
-        tab::{Tab, TabBar},
-        tooltip::Tooltip,
-        tree,
+        clipboard::Clipboard, input::Input, list::ListItem, scroll::ScrollableElement, tooltip::Tooltip, tree,
     },
     div,
     prelude::FluentBuilder,
@@ -52,22 +46,22 @@ enum ConnectionPanelAction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ConnectionPanelTab {
+pub enum ConnectionPanelTab {
     Connection,
     History,
 }
 
 impl ConnectionPanelTab {
-    const ALL: [Self; 2] = [Self::Connection, Self::History];
+    pub const ALL: [Self; 2] = [Self::Connection, Self::History];
 
-    fn icon(&self) -> IconName {
+    pub fn icon(&self) -> IconName {
         match self {
             Self::Connection => IconName::Database,
             Self::History => IconName::RotateCcwClock,
         }
     }
 
-    fn label(&self) -> &'static str {
+    pub fn label(&self) -> &'static str {
         match self {
             Self::Connection => "Connection",
             Self::History => "History",
@@ -91,39 +85,11 @@ impl ConnectionPanel {
 impl RenderOnce for ConnectionPanel {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let active_tab = self.state.read(cx).active_tab;
-        let hovered_tab = self.state.read(cx).hovered_tab;
 
-        v_flex()
+        div()
             .key_context(CONNECTION_PANEL)
             .size_full()
-            .gap_1p5()
             .py_1()
-            .child(
-                div().w_full().px_1().child(
-                    TabBar::new("connection-panel-tabs")
-                        .segmented()
-                        .selected_index(active_tab as usize)
-                        .children(ConnectionPanelTab::ALL.iter().map(|&tab| {
-                            Tab::new()
-                                .flex_1()
-                                .child(
-                                    h_flex()
-                                        .gap_1p5()
-                                        .child(
-                                            Icon::primary(cx, tab.icon())
-                                                .disabled(active_tab != tab && hovered_tab != Some(tab)),
-                                        )
-                                        .child(tab.label()),
-                                )
-                                .on_click(window.listener_for(&self.state, move |state, _, _, _| {
-                                    state.active_tab = tab;
-                                }))
-                                .on_hover(window.listener_for(&self.state, move |state, is_hovered: &bool, _, _| {
-                                    state.hovered_tab = is_hovered.then_some(tab);
-                                }))
-                        })),
-                ),
-            )
             .child(match active_tab {
                 ConnectionPanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
                 ConnectionPanelTab::History => history_tab(window, cx, &self.state).into_any_element(),
@@ -292,9 +258,6 @@ pub struct ConnectionPanelState {
     /// The active tab within the panel.
     active_tab: ConnectionPanelTab,
 
-    /// The currently hovered tab within the panel.
-    hovered_tab: Option<ConnectionPanelTab>,
-
     /// The state for the search input.
     search_input: Entity<InputState>,
 
@@ -348,7 +311,6 @@ impl ConnectionPanelState {
 
         Self {
             active_tab: ConnectionPanelTab::Connection,
-            hovered_tab: None,
             search_input,
             tree,
             entities: Vec::new(),
@@ -396,6 +358,11 @@ impl ConnectionPanelState {
                 _ => {}
             }
         }
+    }
+
+    /// Returns the active tab within the panel.
+    pub fn active_tab(&self) -> ConnectionPanelTab {
+        self.active_tab
     }
 
     /// Adds the given history group to the list within the history tab.
@@ -483,6 +450,11 @@ impl ConnectionPanelState {
     fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: &MigrisEntity) {
         let event = Event::new(EventVariant::OpenEntity(entity.clone()));
         EventManager::emit(window, cx, event);
+    }
+
+    /// Opens the given tab within the panel.
+    pub fn open_tab(&mut self, tab: ConnectionPanelTab) {
+        self.active_tab = tab;
     }
 
     /// Returns the selected entity, if any.
