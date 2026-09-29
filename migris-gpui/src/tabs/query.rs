@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use gpui_kit::{
     Action, Anchor, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Window,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, Task, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
         ActiveTheme, Sizable,
@@ -250,6 +252,9 @@ struct QueryTabState {
     /// The progress for the running query.
     query_progress: Option<QueryProgress>,
 
+    /// The task for updating the timer associated with query progress.
+    query_progress_task: Option<Task<()>>,
+
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
 
@@ -269,6 +274,7 @@ impl QueryTabState {
             active_table: 0,
             editor,
             query_progress: None,
+            query_progress_task: None,
             tables: Vec::new(),
             table_subscriptions: Vec::new(),
         }
@@ -361,13 +367,33 @@ impl QueryTabState {
             .on_progress({
                 let this = cx.entity();
                 move |_, cx, complete, total| {
-                    this.update(cx, |this, _| {
+                    this.update(cx, |this, cx| {
                         if let Some(progress) = &mut this.query_progress {
                             progress.update(complete);
                         } else {
                             let mut progress = QueryProgress::new(total);
                             progress.update(complete);
                             this.query_progress = Some(progress);
+                            this.query_progress_task = Some(cx.spawn(async |this, cx| {
+                                loop {
+                                    // Update query progress timer every 100 milliseconds.
+                                    cx.background_executor().timer(Duration::from_millis(100)).await;
+                                    let running = this
+                                        .update(cx, |this, cx| {
+                                            if this.query_progress.is_none() {
+                                                return false;
+                                            }
+
+                                            cx.notify();
+                                            true
+                                        })
+                                        .unwrap_or(false);
+
+                                    if !running {
+                                        break;
+                                    }
+                                }
+                            }));
                         }
                     });
                 }
@@ -379,6 +405,7 @@ impl QueryTabState {
                 this.update(cx, |this, _| {
                     this.active_event = None;
                     this.query_progress = None;
+                    this.query_progress_task = None;
                 });
             }
         })

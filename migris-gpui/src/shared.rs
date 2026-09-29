@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Result, anyhow};
 use directories::BaseDirs;
@@ -75,4 +75,19 @@ pub fn format_number(number: u64) -> String {
         .collect::<Result<Vec<&str>, _>>()
         .unwrap()
         .join(",")
+}
+
+/// Returns the given duration in a timer format (e.g. 00:00.0).
+pub fn format_timer(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+    let tenths = duration.subsec_millis() / 100;
+
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}.{tenths}")
+    } else {
+        format!("{minutes:02}:{seconds:02}.{tenths}")
+    }
 }
