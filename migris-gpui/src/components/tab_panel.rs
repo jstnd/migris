@@ -137,12 +137,12 @@ impl TabPanelState {
     }
 
     /// Closes the active tab.
-    pub fn close_active_tab(&mut self, window: &mut Window, cx: &mut App) {
+    pub fn close_active_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.close_tab(window, cx, self.active_tab);
     }
 
     /// Closes the tab at the given index.
-    fn close_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
+    fn close_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, idx: usize) {
         // Do not close if there's only one tab remaining.
         if self.tabs.len() == 1 {
             return;
@@ -193,7 +193,7 @@ impl TabPanelState {
     }
 
     /// Opens the next tab relative to the active tab.
-    pub fn open_next_tab(&mut self, window: &mut Window, cx: &mut App) {
+    pub fn open_next_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Do nothing if we're already at the end of the tab bar.
         if self.active_tab == self.tabs.len() - 1 {
             return;
@@ -203,7 +203,7 @@ impl TabPanelState {
     }
 
     /// Opens the previous tab relative to the active tab.
-    pub fn open_previous_tab(&mut self, window: &mut Window, cx: &mut App) {
+    pub fn open_previous_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Do nothing if we're already at the start of the tab bar.
         if self.active_tab == 0 {
             return;
@@ -213,12 +213,14 @@ impl TabPanelState {
     }
 
     /// Opens the tab at the given index.
-    pub fn open_tab(&mut self, window: &mut Window, cx: &mut App, idx: usize) {
+    pub fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, idx: usize) {
         self.active_tab = idx;
         self.scroll_handle.scroll_to_item(idx);
 
         // Focus the opened tab.
-        self.active_tab().focus(window, cx);
+        cx.defer_in(window, |this, window, cx| {
+            this.active_tab().focus(window, cx);
+        });
     }
 
     /// Returns a reference to the tabs within the panel.
