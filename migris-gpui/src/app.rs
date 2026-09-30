@@ -68,6 +68,7 @@ fn init_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-tab", ApplicationAction::OpenNextTab, None),
         KeyBinding::new("ctrl-shift-tab", ApplicationAction::OpenPreviousTab, None),
         KeyBinding::new("ctrl-t", ApplicationAction::OpenQueryTab, None),
+        KeyBinding::new("secondary-,", ApplicationAction::OpenSettings, None),
     ]);
 }
 
@@ -79,6 +80,7 @@ enum ApplicationAction {
     OpenNextTab,
     OpenPreviousTab,
     OpenQueryTab,
+    OpenSettings,
 }
 
 pub struct Application {
@@ -117,6 +119,7 @@ impl Application {
                 });
             }
             ApplicationAction::OpenConnectionDialog => components::open_connection_dialog(window, cx),
+            ApplicationAction::OpenSettings => components::open_settings_dialog(window, cx),
         }
     }
 
@@ -427,6 +430,10 @@ fn render_menu_bar() -> impl IntoElement {
             .ghost()
             .small()
             .label("File")
-            .dropdown_menu(|menu, _, _| menu.menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))),
+            .dropdown_menu(|menu, _, _| {
+                menu.menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))
+                    .separator()
+                    .menu("Settings", Box::new(ApplicationAction::OpenSettings))
+            }),
     )
 }
