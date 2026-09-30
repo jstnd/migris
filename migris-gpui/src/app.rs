@@ -64,10 +64,10 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
 /// Initializes application-wide keybinds.
 fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("ctrl-w", ApplicationAction::CloseActiveTab, None),
-        KeyBinding::new("ctrl-tab", ApplicationAction::OpenNextTab, None),
-        KeyBinding::new("ctrl-shift-tab", ApplicationAction::OpenPreviousTab, None),
-        KeyBinding::new("ctrl-t", ApplicationAction::OpenQueryTab, None),
+        KeyBinding::new("secondary-w", ApplicationAction::CloseActiveTab, None),
+        KeyBinding::new("secondary-tab", ApplicationAction::OpenNextTab, None),
+        KeyBinding::new("secondary-shift-tab", ApplicationAction::OpenPreviousTab, None),
+        KeyBinding::new("secondary-t", ApplicationAction::OpenQueryTab, None),
         KeyBinding::new("secondary-,", ApplicationAction::OpenSettings, None),
     ]);
 }

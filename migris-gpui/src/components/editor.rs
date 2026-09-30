@@ -18,8 +18,8 @@ const EDITOR_ID: &str = "EDITOR";
 /// Initializes configuration for the editor component.
 pub fn init(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("ctrl--", EditorAction::DecreaseSize, Some(EDITOR_ID)),
-        KeyBinding::new("ctrl-=", EditorAction::IncreaseSize, Some(EDITOR_ID)),
+        KeyBinding::new("secondary--", EditorAction::DecreaseSize, Some(EDITOR_ID)),
+        KeyBinding::new("secondary-=", EditorAction::IncreaseSize, Some(EDITOR_ID)),
     ]);
 }
 

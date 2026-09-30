@@ -44,8 +44,8 @@ const ROW_NUMBER_COLUMN_KEY: SharedString = SharedString::new_static("#");
 /// Initializes configuration for the table component.
 pub fn init(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("ctrl--", QueryTableAction::DecreaseSize, Some(TABLE_ID)),
-        KeyBinding::new("ctrl-=", QueryTableAction::IncreaseSize, Some(TABLE_ID)),
+        KeyBinding::new("secondary--", QueryTableAction::DecreaseSize, Some(TABLE_ID)),
+        KeyBinding::new("secondary-=", QueryTableAction::IncreaseSize, Some(TABLE_ID)),
     ]);
 }
 
