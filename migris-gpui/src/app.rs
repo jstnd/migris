@@ -5,10 +5,9 @@ use gpui_kit::{
     ParentElement, Pixels, Render, SharedString, Styled, Window,
     base::{GlobalState, h_flex, h_resizable, resizable_panel, v_flex},
     component::{
-        ActiveTheme, Sizable, TitleBar, WindowExt,
-        button::{Button, ButtonVariants},
+        ActiveTheme, TitleBar,
         menu::AppMenuBar,
-        sidebar::{Sidebar, SidebarMenuItem},
+        sidebar::{Sidebar, SidebarItem, SidebarMenuItem},
     },
     img,
     prelude::FluentBuilder,
@@ -22,7 +21,6 @@ use crate::{
         self,
         connection_panel::{ConnectionPanel, ConnectionPanelState, ConnectionPanelTab},
         icon::IconName,
-        settings,
         tab_panel::{TabPanel, TabPanelState},
     },
     connections::{ConnectionId, ConnectionManager},
@@ -357,21 +355,33 @@ impl Render for Application {
             .child(
                 h_flex()
                     .size_full()
-                    .child(Sidebar::new("application-sidebar").collapsed(true).children(
-                        ConnectionPanelTab::ALL.iter().enumerate().map(|(idx, &tab)| {
-                            SidebarMenuItem::new(tab.label())
-                                .text_lg()
-                                .map(|this| if idx == 0 { this.mt_neg_3() } else { this.mt_1() })
-                                .active(active_panel_tab == tab)
-                                .icon(tab.icon())
-                                .on_click(window.listener_for(
-                                    &self.connection_panel,
-                                    move |connection_panel, _, _, _| {
-                                        connection_panel.open_tab(tab);
-                                    },
-                                ))
-                        }),
-                    ))
+                    .child(
+                        Sidebar::new("application-sidebar")
+                            .collapsed(true)
+                            .children(ConnectionPanelTab::ALL.iter().enumerate().map(|(idx, &tab)| {
+                                SidebarMenuItem::new(tab.label())
+                                    .text_lg()
+                                    .map(|this| if idx == 0 { this.mt_neg_2() } else { this.mt_1() })
+                                    .active(active_panel_tab == tab)
+                                    .icon(tab.icon())
+                                    .on_click(window.listener_for(
+                                        &self.connection_panel,
+                                        move |connection_panel, _, _, _| {
+                                            connection_panel.open_tab(tab);
+                                        },
+                                    ))
+                            }))
+                            .footer(
+                                SidebarMenuItem::new("Settings")
+                                    .collapsed(true)
+                                    .text_lg()
+                                    .icon(IconName::Settings)
+                                    .on_click(|_, window, cx| {
+                                        components::open_settings_dialog(window, cx);
+                                    })
+                                    .render("btn-settings", window, cx),
+                            ),
+                    )
                     .child(
                         h_resizable("application-view")
                             .child(
@@ -393,6 +403,7 @@ impl Render for Application {
                 h_flex()
                     .px_2()
                     .w_full()
+                    .h_6()
                     .items_center()
                     .justify_between()
                     .border_t_1()
@@ -403,18 +414,6 @@ impl Render for Application {
                         h_flex()
                             .gap_2()
                             .items_center()
-                            .child(
-                                Button::new("settings")
-                                    .icon(IconName::Settings)
-                                    .ghost()
-                                    .xsmall()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .on_click(|_, window, cx| {
-                                        window.open_dialog(cx, |dialog, window, cx| {
-                                            settings::settings_dialog(dialog, window, cx)
-                                        });
-                                    }),
-                            )
                             .when_some(self.connection.as_ref(), |this, connection| {
                                 this.child(SharedString::from(&connection.connection.name))
                             }),

@@ -77,6 +77,12 @@ pub fn open_connection_dialog(window: &mut Window, cx: &mut App) {
     });
 }
 
+pub fn open_settings_dialog(window: &mut Window, cx: &mut App) {
+    window.open_dialog(cx, |dialog, window, cx| {
+        settings::settings_dialog(dialog, window, cx)
+    });
+}
+
 pub fn text_ellipsis(element: impl IntoElement) -> impl IntoElement {
     div().truncate().child(element)
 }
