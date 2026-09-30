@@ -341,7 +341,7 @@ impl Render for Application {
                     h_flex()
                         .gap_2()
                         .mt_0p5()
-                        .child(img(Path::new("./assets/logo-16x16.png")).size_4())
+                        .child(img(Path::new("./assets/logo-16x16.png")).size_4().ml_1())
                         .child(render_menu_bar()),
                 ),
             )
