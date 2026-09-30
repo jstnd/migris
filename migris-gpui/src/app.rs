@@ -1,12 +1,13 @@
 use std::{path::Path, sync::Arc};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, Menu, MenuItem,
-    ParentElement, Pixels, Render, SharedString, Styled, Window,
-    base::{GlobalState, h_flex, h_resizable, resizable_panel, v_flex},
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels,
+    Render, SharedString, Styled, Window,
+    base::{h_flex, h_resizable, resizable_panel, v_flex},
     component::{
-        ActiveTheme, TitleBar,
-        menu::AppMenuBar,
+        ActiveTheme, Sizable, TitleBar,
+        button::{Button, ButtonVariants},
+        menu::DropdownMenu,
         sidebar::{Sidebar, SidebarItem, SidebarMenuItem},
     },
     img,
@@ -81,9 +82,6 @@ enum ApplicationAction {
 }
 
 pub struct Application {
-    /// The application's menu bar.
-    app_menu_bar: Entity<AppMenuBar>,
-
     /// The currently open connection, if any.
     connection: Option<OpenConnection>,
 
@@ -97,16 +95,7 @@ pub struct Application {
 impl Application {
     /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let app_menu_bar = AppMenuBar::new(cx);
-        let menus = Vec::from([
-            Menu::new("File").items([MenuItem::action("Connections", ApplicationAction::OpenConnectionDialog)])
-        ]);
-
-        GlobalState::global_mut(cx).set_app_menus(menus.into_iter().map(Menu::owned).collect());
-        app_menu_bar.update(cx, |app_menu_bar, cx| app_menu_bar.reload(cx));
-
         Self {
-            app_menu_bar,
             connection: None,
             connection_panel: cx.new(|cx| ConnectionPanelState::new(window, cx)),
             tab_panel: cx.new(|_| TabPanelState::new()),
@@ -348,9 +337,13 @@ impl Render for Application {
             .size_full()
             .track_focus(AppState::handle(cx))
             .child(
-                TitleBar::new()
-                    .child(img(Path::new("./assets/logo-16x16.png")).size_4().mr_2())
-                    .child(self.app_menu_bar.clone()),
+                TitleBar::new().child(
+                    h_flex()
+                        .gap_2()
+                        .mt_0p5()
+                        .child(img(Path::new("./assets/logo-16x16.png")).size_4())
+                        .child(render_menu_bar()),
+                ),
             )
             .child(
                 h_flex()
@@ -426,4 +419,14 @@ impl Render for Application {
                 application.handle_event(window, cx, &action.0);
             }))
     }
+}
+
+fn render_menu_bar() -> impl IntoElement {
+    h_flex().gap_1().child(
+        Button::new("btn-menu-files")
+            .ghost()
+            .small()
+            .label("File")
+            .dropdown_menu(|menu, _, _| menu.menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))),
+    )
 }
