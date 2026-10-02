@@ -28,30 +28,30 @@ use crate::{
     state::AppState,
 };
 
-const CONNECTION_PANEL: &str = "CONNECTION_PANEL";
+const SIDE_PANEL: &str = "SIDE_PANEL";
 
-/// Initializes configuration for the connection panel.
+/// Initializes configuration for the side panel.
 pub fn init(cx: &mut App) {
     cx.bind_keys([KeyBinding::new(
         "enter",
-        ConnectionPanelAction::OpenSelectedEntity,
-        Some(CONNECTION_PANEL),
+        SidePanelAction::OpenSelectedEntity,
+        Some(SIDE_PANEL),
     )]);
 }
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
-enum ConnectionPanelAction {
+enum SidePanelAction {
     OpenSelectedEntity,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ConnectionPanelTab {
+pub enum SidePanelTab {
     Connection,
     History,
 }
 
-impl ConnectionPanelTab {
+impl SidePanelTab {
     pub const ALL: [Self; 2] = [Self::Connection, Self::History];
 
     pub fn icon(&self) -> IconName {
@@ -70,29 +70,29 @@ impl ConnectionPanelTab {
 }
 
 #[derive(IntoElement)]
-pub struct ConnectionPanel {
-    /// The state for the connection panel.
-    state: Entity<ConnectionPanelState>,
+pub struct SidePanel {
+    /// The state for the side panel.
+    state: Entity<SidePanelState>,
 }
 
-impl ConnectionPanel {
-    /// Creates a new [`ConnectionPanel`].
-    pub fn new(state: &Entity<ConnectionPanelState>) -> Self {
+impl SidePanel {
+    /// Creates a new [`SidePanel`].
+    pub fn new(state: &Entity<SidePanelState>) -> Self {
         Self { state: state.clone() }
     }
 }
 
-impl RenderOnce for ConnectionPanel {
+impl RenderOnce for SidePanel {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let active_tab = self.state.read(cx).active_tab;
 
         div()
-            .key_context(CONNECTION_PANEL)
+            .key_context(SIDE_PANEL)
             .size_full()
             .py_1()
             .child(match active_tab {
-                ConnectionPanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
-                ConnectionPanelTab::History => history_tab(window, cx, &self.state).into_any_element(),
+                SidePanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
+                SidePanelTab::History => history_tab(window, cx, &self.state).into_any_element(),
             })
             .on_action(window.listener_for(&self.state, |state, action, window, cx| {
                 state.handle_action(window, cx, action);
@@ -100,7 +100,7 @@ impl RenderOnce for ConnectionPanel {
     }
 }
 
-fn connection_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoElement {
+fn connection_tab(cx: &mut App, state: &Entity<SidePanelState>) -> impl IntoElement {
     v_flex()
         .size_full()
         .gap_1()
@@ -168,7 +168,7 @@ fn connection_tab(cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl In
         })
 }
 
-fn history_tab(window: &mut Window, cx: &mut App, state: &Entity<ConnectionPanelState>) -> impl IntoElement {
+fn history_tab(window: &mut Window, cx: &mut App, state: &Entity<SidePanelState>) -> impl IntoElement {
     let Some(history) = &state.read(cx).history else {
         return div().into_any_element();
     };
@@ -253,10 +253,10 @@ fn history_tab(window: &mut Window, cx: &mut App, state: &Entity<ConnectionPanel
         .into_any_element()
 }
 
-/// The state used with a [`ConnectionPanel`].
-pub struct ConnectionPanelState {
+/// The state used with a [`SidePanel`].
+pub struct SidePanelState {
     /// The active tab within the panel.
-    active_tab: ConnectionPanelTab,
+    active_tab: SidePanelTab,
 
     /// The state for the search input.
     search_input: Entity<InputState>,
@@ -282,8 +282,8 @@ pub struct ConnectionPanelState {
     hovered_history: Option<QueryHistoryId>,
 }
 
-impl ConnectionPanelState {
-    /// Creates a new [`ConnectionPanelState`].
+impl SidePanelState {
+    /// Creates a new [`SidePanelState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
         let tree = cx.new(|cx| TreeState::new(cx));
@@ -310,7 +310,7 @@ impl ConnectionPanelState {
         .detach();
 
         Self {
-            active_tab: ConnectionPanelTab::Connection,
+            active_tab: SidePanelTab::Connection,
             search_input,
             tree,
             entities: Vec::new(),
@@ -321,10 +321,10 @@ impl ConnectionPanelState {
         }
     }
 
-    /// Handles actions originating from the connection panel.
-    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &ConnectionPanelAction) {
+    /// Handles actions originating from the side panel.
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &SidePanelAction) {
         match action {
-            ConnectionPanelAction::OpenSelectedEntity => {
+            SidePanelAction::OpenSelectedEntity => {
                 if let Some(entity) = self.selected_entity(cx)
                     && !entity.is_schema()
                 {
@@ -337,10 +337,7 @@ impl ConnectionPanelState {
     /// Handles keystroke events from inner components.
     fn handle_keystroke(&mut self, cx: &mut Context<Self>, event: &KeystrokeEvent) {
         if let Some(action) = &event.action
-            && event
-                .context_stack
-                .iter()
-                .any(|context| context.contains(CONNECTION_PANEL))
+            && event.context_stack.iter().any(|context| context.contains(SIDE_PANEL))
         {
             match action.name() {
                 "ui::SelectLeft" => {
@@ -361,7 +358,7 @@ impl ConnectionPanelState {
     }
 
     /// Returns the active tab within the panel.
-    pub fn active_tab(&self) -> ConnectionPanelTab {
+    pub fn active_tab(&self) -> SidePanelTab {
         self.active_tab
     }
 
@@ -453,7 +450,7 @@ impl ConnectionPanelState {
     }
 
     /// Opens the given tab within the panel.
-    pub fn open_tab(&mut self, tab: ConnectionPanelTab) {
+    pub fn open_tab(&mut self, tab: SidePanelTab) {
         self.active_tab = tab;
     }
 

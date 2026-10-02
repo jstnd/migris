@@ -12,17 +12,17 @@ use crate::{
 };
 
 pub mod connection_dialog;
-pub mod connection_panel;
 pub mod editor;
 pub mod icon;
 pub mod settings;
+pub mod side_panel;
 pub mod tab_panel;
 pub mod table;
 
 /// Initializes configuration for components.
 pub fn init(cx: &mut App) {
-    connection_panel::init(cx);
     editor::init(cx);
+    side_panel::init(cx);
     table::init(cx);
 }
 
@@ -72,15 +72,11 @@ pub fn open_connection_dialog(window: &mut Window, cx: &mut App) {
         app_state.load_connection_dialog(cx);
     });
 
-    window.open_dialog(cx, |dialog, window, cx| {
-        connection_dialog::connection_dialog(dialog, window, cx)
-    });
+    window.open_dialog(cx, connection_dialog::connection_dialog);
 }
 
 pub fn open_settings_dialog(window: &mut Window, cx: &mut App) {
-    window.open_dialog(cx, |dialog, window, cx| {
-        settings::settings_dialog(dialog, window, cx)
-    });
+    window.open_dialog(cx, settings::settings_dialog);
 }
 
 pub fn text_ellipsis(element: impl IntoElement) -> impl IntoElement {

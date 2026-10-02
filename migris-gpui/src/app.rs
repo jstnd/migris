@@ -20,8 +20,8 @@ use crate::{
     assets,
     components::{
         self,
-        connection_panel::{ConnectionPanel, ConnectionPanelState, ConnectionPanelTab},
         icon::IconName,
+        side_panel::{SidePanel, SidePanelState, SidePanelTab},
         tab_panel::{TabPanel, TabPanelState},
     },
     connections::{ConnectionId, ConnectionManager},
@@ -87,8 +87,8 @@ pub struct Application {
     /// The currently open connection, if any.
     connection: Option<OpenConnection>,
 
-    /// The state for the connection panel.
-    connection_panel: Entity<ConnectionPanelState>,
+    /// The state for the side panel.
+    side_panel: Entity<SidePanelState>,
 
     /// The state for the tab panel.
     tab_panel: Entity<TabPanelState>,
@@ -99,7 +99,7 @@ impl Application {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
             connection: None,
-            connection_panel: cx.new(|cx| ConnectionPanelState::new(window, cx)),
+            side_panel: cx.new(|cx| SidePanelState::new(window, cx)),
             tab_panel: cx.new(|_| TabPanelState::new()),
         }
     }
@@ -208,8 +208,8 @@ impl Application {
 
             _ = this.update_in(cx, |this, window, cx| {
                 this.connection = Some(OpenConnection { connection, driver });
-                this.connection_panel.update(cx, |connection_panel, cx| {
-                    connection_panel.load_entities(cx, entities);
+                this.side_panel.update(cx, |side_panel, cx| {
+                    side_panel.load_entities(cx, entities);
                 });
 
                 // Open a query tab after opening the connection.
@@ -316,8 +316,8 @@ impl Application {
                 // TODO: log errors here
                 _ = database.insert_query_history_group(&history_group).await;
                 _ = this.update(cx, |this, cx| {
-                    this.connection_panel.update(cx, |connection_panel, cx| {
-                        connection_panel.add_history(history_group);
+                    this.side_panel.update(cx, |side_panel, cx| {
+                        side_panel.add_history(history_group);
                         cx.notify();
                     });
                 });
@@ -334,7 +334,7 @@ impl Application {
 
 impl Render for Application {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let active_panel_tab = self.connection_panel.read(cx).active_tab();
+        let active_panel_tab = self.side_panel.read(cx).active_tab();
 
         v_flex()
             .size_full()
@@ -354,18 +354,15 @@ impl Render for Application {
                     .child(
                         Sidebar::new("application-sidebar")
                             .collapsed(true)
-                            .children(ConnectionPanelTab::ALL.iter().enumerate().map(|(idx, &tab)| {
+                            .children(SidePanelTab::ALL.iter().enumerate().map(|(idx, &tab)| {
                                 SidebarMenuItem::new(tab.label())
                                     .text_lg()
                                     .map(|this| if idx == 0 { this.mt_neg_2() } else { this.mt_1() })
                                     .active(active_panel_tab == tab)
                                     .icon(tab.icon())
-                                    .on_click(window.listener_for(
-                                        &self.connection_panel,
-                                        move |connection_panel, _, _, _| {
-                                            connection_panel.open_tab(tab);
-                                        },
-                                    ))
+                                    .on_click(window.listener_for(&self.side_panel, move |side_panel, _, _, _| {
+                                        side_panel.open_tab(tab);
+                                    }))
                             }))
                             .footer(
                                 SidebarMenuItem::new("Settings")
@@ -384,7 +381,7 @@ impl Render for Application {
                                 resizable_panel()
                                     .size_range(px(250.0)..Pixels::MAX)
                                     .size(px(300.0))
-                                    .child(ConnectionPanel::new(&self.connection_panel)),
+                                    .child(SidePanel::new(&self.side_panel)),
                             )
                             .child(resizable_panel().map(|this| {
                                 this.child(if self.connection.is_some() {
