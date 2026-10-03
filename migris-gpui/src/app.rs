@@ -395,6 +395,7 @@ impl Render for Application {
                     .h_6()
                     .items_center()
                     .justify_between()
+                    .bg(cx.theme().sidebar)
                     .border_t_1()
                     .border_color(cx.theme().border)
                     .text_color(cx.theme().muted_foreground)
