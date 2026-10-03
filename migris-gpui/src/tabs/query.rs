@@ -23,7 +23,7 @@ use crate::{
     },
     events::{Event, EventId, EventManager, RunSqlEvent},
     notifications,
-    types::QueryProgress,
+    progress::QueryProgress,
 };
 
 const KEY_CONTEXT: &str = "QUERY_TAB";
@@ -38,8 +38,16 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-shift-f", QueryTabAction::FormatSql, Some(INPUT_CONTEXT)),
         KeyBinding::new("secondary-enter", QueryTabAction::RunSql, Some(KEY_CONTEXT)),
         KeyBinding::new("secondary-enter", QueryTabAction::RunSql, Some(INPUT_CONTEXT)),
-        KeyBinding::new("secondary-shift-enter", QueryTabAction::RunSqlSelection, Some(KEY_CONTEXT)),
-        KeyBinding::new("secondary-shift-enter", QueryTabAction::RunSqlSelection, Some(INPUT_CONTEXT)),
+        KeyBinding::new(
+            "secondary-shift-enter",
+            QueryTabAction::RunSqlSelection,
+            Some(KEY_CONTEXT),
+        ),
+        KeyBinding::new(
+            "secondary-shift-enter",
+            QueryTabAction::RunSqlSelection,
+            Some(INPUT_CONTEXT),
+        ),
     ]);
 }
 

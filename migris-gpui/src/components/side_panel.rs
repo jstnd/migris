@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use gpui_kit::{
     Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, KeystrokeEvent,
@@ -113,7 +113,7 @@ fn connection_tab(cx: &mut App, state: &Entity<SidePanelState>) -> impl IntoElem
         .child({
             let state = state.clone();
             tree::tree(&state.read(cx).tree, move |idx, entry, _, window, cx| {
-                let entity = state.read(cx).entity(&entry.item().id);
+                let entity = AppState::connection_unchecked(cx).entity(&entry.item().id);
 
                 ListItem::new(idx)
                     .ml_1()
@@ -153,12 +153,12 @@ fn connection_tab(cx: &mut App, state: &Entity<SidePanelState>) -> impl IntoElem
                         let entry = entry.clone();
                         move |state, _, window, cx| {
                             let id = entry.item().id.clone();
-                            let entity = state.entity(&id);
+                            let entity = AppState::connection_unchecked(cx).entity(&id);
 
                             match entity.kind {
                                 EntityKind::Schema => state.toggle_expand(id),
                                 EntityKind::Table | EntityKind::View => {
-                                    state.open_entity(window, cx, entity);
+                                    state.open_entity(window, cx, entity.clone());
                                 }
                                 _ => {}
                             }
@@ -258,18 +258,6 @@ pub struct SidePanelState {
     /// The active tab within the panel.
     active_tab: SidePanelTab,
 
-    /// The state for the search input.
-    search_input: Entity<InputState>,
-
-    /// The state for the tree.
-    tree: Entity<TreeState>,
-
-    /// The underlying objects used to build the displayed tree.
-    entities: Vec<MigrisEntity>,
-
-    /// Tracks the locations of entities within the full list by id.
-    entity_map: HashMap<SharedString, usize>,
-
     /// Tracks the expanded entity tree items.
     ///
     /// This is used to persist expanded items between actions such as searching.
@@ -280,6 +268,12 @@ pub struct SidePanelState {
 
     /// The currently hovered history within the history tab.
     hovered_history: Option<QueryHistoryId>,
+
+    /// The state for the search input.
+    search_input: Entity<InputState>,
+
+    /// The state for the tree.
+    tree: Entity<TreeState>,
 }
 
 impl SidePanelState {
@@ -294,7 +288,7 @@ impl SidePanelState {
         .detach();
         cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
-                this.load_tree(cx);
+                this.load_entities(cx);
             }
         })
         .detach();
@@ -311,13 +305,11 @@ impl SidePanelState {
 
         Self {
             active_tab: SidePanelTab::Connection,
-            search_input,
-            tree,
-            entities: Vec::new(),
-            entity_map: HashMap::new(),
             expanded: HashSet::new(),
             history: None,
             hovered_history: None,
+            search_input,
+            tree,
         }
     }
 
@@ -328,7 +320,7 @@ impl SidePanelState {
                 if let Some(entity) = self.selected_entity(cx)
                     && !entity.is_schema()
                 {
-                    self.open_entity(window, cx, entity);
+                    self.open_entity(window, cx, entity.clone());
                 }
             }
         }
@@ -371,34 +363,11 @@ impl SidePanelState {
         history.groups.insert(0, group);
     }
 
-    /// Loads the given entities into the tree.
-    pub fn load_entities(&mut self, cx: &mut Context<Self>, entities: Vec<MigrisEntity>) {
-        self.entities = entities;
-        self.load_maps();
-        self.load_tree(cx);
-    }
-
-    fn load_maps(&mut self) {
-        self.entity_map.clear();
-
-        for (idx, entity) in self.entities.iter().enumerate() {
-            self.entity_map.insert(SharedString::from(entity.id()), idx);
-        }
-    }
-
-    fn load_tree(&mut self, cx: &mut Context<Self>) {
-        let filter = self.search_input.read(cx).value().to_lowercase();
-        let filters: Vec<&str> = filter.split('|').filter(|s| !s.is_empty()).collect();
-        let items = self.build_tree_items(&filters);
-        self.tree.update(cx, |tree, cx| {
-            tree.set_items(items, cx);
-        });
-    }
-
-    fn build_tree_items(&self, filters: &[&str]) -> Vec<TreeItem> {
+    /// Builds the displayed tree items.
+    fn build_tree_items(&self, cx: &App, filters: &[&str]) -> Vec<TreeItem> {
         let mut items = Vec::new();
-        let entities_by_schema = self
-            .entities
+        let entities_by_schema = AppState::connection_unchecked(cx)
+            .entities()
             .iter()
             .filter(|entity| entity.kind != EntityKind::Schema)
             .fold(BTreeMap::new(), |mut map, entity| {
@@ -432,10 +401,14 @@ impl SidePanelState {
         items
     }
 
-    /// Returns the entity with the given id.
-    fn entity(&self, id: &SharedString) -> &MigrisEntity {
-        let idx = self.entity_map[id];
-        &self.entities[idx]
+    /// Loads the entities from the application's connection into the tree.
+    pub fn load_entities(&mut self, cx: &mut Context<Self>) {
+        let filter = self.search_input.read(cx).value().to_lowercase();
+        let filters: Vec<&str> = filter.split('|').filter(|s| !s.is_empty()).collect();
+        let items = self.build_tree_items(cx, &filters);
+        self.tree.update(cx, |tree, cx| {
+            tree.set_items(items, cx);
+        });
     }
 
     /// Returns whether the entity with the given id is expanded.
@@ -444,8 +417,8 @@ impl SidePanelState {
     }
 
     /// Emits an event to open the given entity.
-    fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: &MigrisEntity) {
-        let event = Event::new(EventVariant::OpenEntity(entity.clone()));
+    fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) {
+        let event = Event::new(EventVariant::OpenEntity(entity));
         EventManager::emit(window, cx, event);
     }
 
@@ -455,16 +428,16 @@ impl SidePanelState {
     }
 
     /// Returns the selected entity, if any.
-    fn selected_entity(&self, cx: &App) -> Option<&MigrisEntity> {
+    fn selected_entity<'a>(&self, cx: &'a App) -> Option<&'a MigrisEntity> {
         if let Some(item) = self.tree.read(cx).selected_item() {
-            Some(self.entity(&item.id))
+            Some(AppState::connection_unchecked(cx).entity(&item.id))
         } else {
             None
         }
     }
 
     /// Returns the selected schema entity, if any.
-    fn selected_schema(&self, cx: &App) -> Option<&MigrisEntity> {
+    fn selected_schema<'a>(&self, cx: &'a App) -> Option<&'a MigrisEntity> {
         if let Some(entity) = self.selected_entity(cx)
             && entity.is_schema()
         {

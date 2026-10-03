@@ -84,9 +84,6 @@ enum ApplicationAction {
 }
 
 pub struct Application {
-    /// The currently open connection, if any.
-    connection: Option<OpenConnection>,
-
     /// The state for the side panel.
     side_panel: Entity<SidePanelState>,
 
@@ -98,7 +95,6 @@ impl Application {
     /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
-            connection: None,
             side_panel: cx.new(|cx| SidePanelState::new(window, cx)),
             tab_panel: cx.new(|_| TabPanelState::new()),
         }
@@ -153,9 +149,7 @@ impl Application {
         event: LoadEntityEvent,
         callbacks: EventCallbacks,
     ) {
-        // TODO: remove this unwrap
-        let driver = self.connection.as_ref().unwrap().driver.clone();
-
+        let driver = AppState::connection_unchecked(cx).driver();
         cx.spawn_in(window, async move |_, cx| {
             let result = driver.entity_data(&event.entity).await;
             _ = cx.update(|window, cx| {
@@ -184,7 +178,6 @@ impl Application {
         callbacks: EventCallbacks,
     ) {
         let connection = ConnectionManager::global(cx).connection(&connection_id).clone();
-
         cx.spawn_in(window, async move |this, cx| {
             let driver = match shared::create_driver(&connection).await {
                 Ok(driver) => driver,
@@ -207,9 +200,12 @@ impl Application {
             };
 
             _ = this.update_in(cx, |this, window, cx| {
-                this.connection = Some(OpenConnection { connection, driver });
+                let open_connection = OpenConnection::new(connection, driver, entities);
+                AppState::set_connection(cx, open_connection);
+
+                // Load the connection's entities into the side panel.
                 this.side_panel.update(cx, |side_panel, cx| {
-                    side_panel.load_entities(cx, entities);
+                    side_panel.load_entities(cx);
                 });
 
                 // Open a query tab after opening the connection.
@@ -254,9 +250,9 @@ impl Application {
         event: RunSqlEvent,
         callbacks: EventCallbacks,
     ) {
-        // TODO: remove this unwrap
-        let connection_id = self.connection.as_ref().unwrap().connection.id;
-        let driver = self.connection.as_ref().unwrap().driver.clone();
+        let connection = AppState::connection_unchecked(cx);
+        let connection_id = connection.id();
+        let driver = connection.driver();
         let database = AppState::database(cx);
 
         cx.spawn_in(window, async move |this, cx| {
@@ -384,7 +380,7 @@ impl Render for Application {
                                     .child(SidePanel::new(&self.side_panel)),
                             )
                             .child(resizable_panel().map(|this| {
-                                this.child(if self.connection.is_some() {
+                                this.child(if AppState::connection(cx).is_some() {
                                     TabPanel::new(&self.tab_panel).into_any_element()
                                 } else {
                                     components::entry_screen(cx).into_any_element()
@@ -407,8 +403,8 @@ impl Render for Application {
                         h_flex()
                             .gap_2()
                             .items_center()
-                            .when_some(self.connection.as_ref(), |this, connection| {
-                                this.child(SharedString::from(&connection.connection.name))
+                            .when_some(AppState::connection(cx), |this, connection| {
+                                this.child(SharedString::from(connection.name()))
                             }),
                     ),
             )

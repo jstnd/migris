@@ -4322,6 +4322,7 @@ dependencies = [
  "gpui-kit",
  "indexmap",
  "keyring-core",
+ "lsp-types",
  "migris",
  "rust-embed",
  "serde",

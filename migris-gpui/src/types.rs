@@ -1,60 +1,63 @@
-use std::{sync::Arc, time::Instant};
+use std::{collections::HashMap, sync::Arc};
 
-use migris::drivers::Driver;
+use gpui_kit::SharedString;
+use migris::{Entity, drivers::Driver};
 
-use crate::{connections::Connection, shared};
+use crate::connections::{Connection, ConnectionId};
 
 pub struct OpenConnection {
     /// The information for the connection.
-    pub connection: Connection,
+    connection: Connection,
 
     /// The driver for the connection.
-    pub driver: Arc<dyn Driver>,
+    driver: Arc<dyn Driver>,
+
+    /// The entity list for the connection.
+    entities: Vec<Entity>,
+
+    /// Tracks the locations of entities within the full list by id.
+    entity_map: HashMap<SharedString, usize>,
 }
 
-pub struct QueryProgress {
-    /// The time the queries were started at.
-    started_at: Instant,
+impl OpenConnection {
+    /// Creates a new [`OpenConnection`].
+    pub fn new(connection: Connection, driver: Arc<dyn Driver>, entities: Vec<Entity>) -> Self {
+        let mut entity_map = HashMap::new();
+        for (idx, entity) in entities.iter().enumerate() {
+            entity_map.insert(SharedString::from(entity.id()), idx);
+        }
 
-    /// The number of queries completed.
-    complete: usize,
-
-    /// The total number of queries.
-    total: usize,
-
-    /// The percentage value of the current progress.
-    value: f32,
-}
-
-impl QueryProgress {
-    /// Creates a new [`QueryProgress`].
-    pub fn new(total: usize) -> Self {
         Self {
-            started_at: Instant::now(),
-            complete: 0,
-            total,
-            value: 0.0,
+            connection,
+            driver,
+            entities,
+            entity_map,
         }
     }
 
-    /// Returns the label describing the current progress.
-    pub fn label(&self) -> String {
-        format!(
-            "Running query #{} of {}... {}",
-            self.complete + 1,
-            self.total,
-            shared::format_timer(self.started_at.elapsed())
-        )
+    /// Returns the driver for the connection.
+    pub fn driver(&self) -> Arc<dyn Driver> {
+        self.driver.clone()
     }
 
-    /// Updates the progress with the given complete number.
-    pub fn update(&mut self, complete: usize) {
-        self.complete = complete;
-        self.value = (complete as f32 / self.total as f32) * 100.0;
+    /// Returns the entity list for the connection.
+    pub fn entities(&self) -> &[Entity] {
+        &self.entities
     }
 
-    /// Returns the current progress percentage.
-    pub fn value(&self) -> f32 {
-        self.value
+    /// Returns the entity with the given id.
+    pub fn entity(&self, id: &SharedString) -> &Entity {
+        let idx = self.entity_map[id];
+        &self.entities[idx]
+    }
+
+    /// Returns the [`ConnectionId`] for the connection.
+    pub fn id(&self) -> ConnectionId {
+        self.connection.id
+    }
+
+    /// Returns the name of the connection.
+    pub fn name(&self) -> &str {
+        &self.connection.name
     }
 }

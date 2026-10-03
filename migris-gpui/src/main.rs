@@ -6,6 +6,7 @@ mod database;
 mod events;
 mod history;
 mod notifications;
+mod progress;
 mod secrets;
 mod settings;
 mod shared;

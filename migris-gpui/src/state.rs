@@ -1,12 +1,19 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, AppContext, BorrowAppContext, Entity, FocusHandle, Global, Window, component::{Theme, ThemeMode},
+    App, AppContext, BorrowAppContext, Entity, FocusHandle, Global, Window,
+    component::{Theme, ThemeMode},
 };
 
-use crate::{components::connection_dialog::ConnectionDialogState, database::Database, settings::SettingsManager};
+use crate::{
+    components::connection_dialog::ConnectionDialogState, database::Database, settings::SettingsManager,
+    types::OpenConnection,
+};
 
 pub struct AppState {
+    /// The currently open connection.
+    pub connection: Option<OpenConnection>,
+
     /// The state for the application's connection dialog.
     ///
     /// This is stored here to be available globally so that the dialog can be opened from anywhere.
@@ -31,16 +38,12 @@ impl AppState {
         Self::init(window);
 
         Self {
+            connection: None,
             connection_dialog,
             database,
             focus_handle: cx.focus_handle(),
             system_theme_mode: ThemeMode::from(window.appearance()),
         }
-    }
-
-    /// Returns a reference to the global [`AppState`].
-    pub fn global(cx: &App) -> &Self {
-        cx.global::<Self>()
     }
 
     /// Initializes functionality needed for the global [`AppState`].
@@ -61,6 +64,26 @@ impl AppState {
             .detach();
     }
 
+    /// Returns a reference to the global [`AppState`].
+    pub fn global(cx: &App) -> &Self {
+        cx.global::<Self>()
+    }
+
+    /// Returns a mutable reference to the global [`AppState`].
+    fn global_mut(cx: &mut App) -> &mut Self {
+        cx.global_mut::<Self>()
+    }
+
+    /// Returns a reference to the open connection, if one exists.
+    pub fn connection(cx: &App) -> Option<&OpenConnection> {
+        Self::global(cx).connection.as_ref()
+    }
+
+    /// Returns a reference to the open connection, panicking if one does not exist.
+    pub fn connection_unchecked(cx: &App) -> &OpenConnection {
+        Self::global(cx).connection.as_ref().unwrap()
+    }
+
     /// Returns a cloned pointer instance of the application's database.
     pub fn database(cx: &App) -> Arc<Database> {
         Self::global(cx).database.clone()
@@ -76,5 +99,10 @@ impl AppState {
         self.connection_dialog.update(cx, |connection_dialog, cx| {
             connection_dialog.load_tree(cx);
         });
+    }
+
+    /// Sets the open connection for the application.
+    pub fn set_connection(cx: &mut App, connection: OpenConnection) {
+        Self::global_mut(cx).connection = Some(connection);
     }
 }
