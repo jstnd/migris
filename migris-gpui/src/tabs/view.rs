@@ -16,7 +16,7 @@ use crate::{
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
-    events::{Event, EventManager, RunSqlEvent},
+    events::{Event, EventManager, EventVariant, RunSqlEvent},
     notifications, shared,
 };
 
@@ -34,6 +34,13 @@ impl ViewTab {
         let label = SharedString::from(&entity.name);
         let state = cx.new(|cx| ViewTabState::new(window, cx, entity));
         Self { state, label }
+    }
+
+    /// Performs any needed behavior for closing the tab.
+    pub fn close(&self, window: &mut Window, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.kill_process(window, cx);
+        });
     }
 
     /// Returns the content for the tab.
@@ -196,6 +203,13 @@ impl ViewTabState {
         });
 
         self.refresh_data(window, cx);
+    }
+
+    /// Kills the process associated with the tab's result stream.
+    fn kill_process(&self, window: &mut Window, cx: &mut App) {
+        let process_id = self.table.read(cx).process_id(cx);
+        let event = Event::new(EventVariant::KillProcess(process_id));
+        EventManager::emit(window, cx, event);
     }
 
     /// Loads the given query result into the tab.

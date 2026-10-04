@@ -65,6 +65,10 @@ impl Driver for SqliteConnection {
         Ok(vec![])
     }
 
+    async fn kill_process(&self, _: u64) -> MigrisResult<()> {
+        Ok(())
+    }
+
     async fn query(&self, query: &Query) -> MigrisResult<QueryResult> {
         let columns = self.columns_from_query(query.sql()).await?;
         let instant = Instant::now();
@@ -79,6 +83,7 @@ impl Driver for SqliteConnection {
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, rows?)),
             duration_ms: duration.as_millis() as u64,
+            process_id: 0,
             stream: None,
         })
     }
@@ -89,7 +94,6 @@ impl Driver for SqliteConnection {
         let columns = self.columns_from_query(sql.clone()).await?;
         let stream = async_stream::stream! {
             let mut stream = sqlx::query(AssertSqlSafe(sql)).fetch(&pool);
-
             while let Some(row) = stream.next().await {
                 let row = row
                     .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
@@ -102,6 +106,7 @@ impl Driver for SqliteConnection {
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, Vec::new())),
             duration_ms: 0,
+            process_id: 0,
             stream: Some(Box::pin(stream)),
         })
     }

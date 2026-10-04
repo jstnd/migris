@@ -13,6 +13,9 @@ pub trait Driver: Send + Sync {
     /// Returns the indexes associated with the given entity.
     async fn indexes(&self, entity: &Entity) -> MigrisResult<Vec<Index>>;
 
+    /// Kills the process identified by the given process id.
+    async fn kill_process(&self, process_id: u64) -> MigrisResult<()>;
+
     async fn query(&self, query: &Query) -> MigrisResult<QueryResult>;
     async fn query_stream(&self, query: &Query) -> MigrisResult<QueryResult>;
 }

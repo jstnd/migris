@@ -49,6 +49,9 @@ pub struct QueryResult {
     /// The execution time of the query in milliseconds.
     pub duration_ms: u64,
 
+    /// The process id associated with the result.
+    pub process_id: u64,
+
     /// The optional stream where the data will be sourced from.
     pub stream: Option<Pin<Box<dyn Stream<Item = MigrisResult<Row>> + Send>>>,
 }

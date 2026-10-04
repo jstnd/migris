@@ -73,6 +73,7 @@ impl EventManager {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventId(Uuid);
 
+#[derive(Clone)]
 pub struct Event {
     /// The id of the event.
     pub id: EventId,
@@ -140,7 +141,9 @@ impl EventCallbacks {
     }
 }
 
+#[derive(Clone)]
 pub enum EventVariant {
+    KillProcess(u64),
     LoadEntity(LoadEntityEvent),
     OpenConnection(ConnectionId),
     OpenEntity(MigrisEntity),

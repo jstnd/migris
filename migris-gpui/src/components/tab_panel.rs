@@ -148,7 +148,7 @@ impl TabPanelState {
             return;
         }
 
-        self.tabs[idx].close(cx);
+        self.tabs[idx].close(window, cx);
         self.tabs.remove(idx);
 
         // Adjust the active tab if needed.

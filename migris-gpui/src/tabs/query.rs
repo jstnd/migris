@@ -318,11 +318,9 @@ impl QueryTabState {
 
     /// Cancels the running query event.
     fn cancel_event(&self, cx: &App) {
-        let Some(event_id) = self.active_event else {
-            return;
-        };
-
-        EventManager::cancel(cx, event_id);
+        if let Some(event_id) = self.active_event {
+            EventManager::cancel(cx, event_id);
+        }
     }
 
     /// Clears the results from the tab.

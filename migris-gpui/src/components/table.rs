@@ -274,6 +274,11 @@ impl QueryTableState {
         format!("ORDER BY {}", orders.join(", "))
     }
 
+    /// Returns the process id associated with the stored result.
+    pub fn process_id(&self, cx: &App) -> u64 {
+        self.table.read(cx).delegate().process_id()
+    }
+
     /// Sorts the column with the given index.
     ///
     /// This will handle updating the column's sort direction and
@@ -587,6 +592,17 @@ impl QueryTableDelegate {
     fn resize_columns(&mut self, widths: &[Pixels]) {
         for (idx, width) in widths.iter().enumerate() {
             self.columns[idx].width = *width;
+        }
+    }
+
+    /// Returns the process id associated with the stored result.
+    fn process_id(&self) -> u64 {
+        if let Some(result) = &self.result_buffer {
+            result.process_id
+        } else if let Some(result) = &self.result {
+            result.process_id
+        } else {
+            0
         }
     }
 

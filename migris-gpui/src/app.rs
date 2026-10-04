@@ -26,7 +26,7 @@ use crate::{
     },
     connections::{ConnectionId, ConnectionManager},
     database::Database,
-    events::{EventCallbacks, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent, RunSqlEvent},
+    events::{Event, EventEmitted, EventId, EventManager, EventVariant, LoadEntityEvent, RunSqlEvent},
     history::{QueryHistoryGroup, QueryStatus},
     settings::SettingsManager,
     shared,
@@ -151,66 +151,70 @@ impl Application {
             return;
         };
 
-        match &event.variant {
+        let event = event.clone();
+        let event_variant = event.variant.clone();
+        match event_variant {
+            EventVariant::KillProcess(process_id) => self.kill_process(window, cx, event, process_id),
             EventVariant::LoadEntity(inner) => {
-                self.load_entity(window, cx, event.id, inner.clone(), event.callbacks.clone());
+                self.load_entity(window, cx, event, inner);
             }
-            EventVariant::OpenConnection(id) => {
-                self.open_connection(window, cx, event.id, *id, event.callbacks.clone())
-            }
+            EventVariant::OpenConnection(id) => self.open_connection(window, cx, event, id),
             EventVariant::OpenEntity(entity) => {
-                self.open_entity(window, cx, entity.clone());
+                self.open_entity(window, cx, entity);
                 EventManager::complete(cx, id);
             }
             EventVariant::RunSql(inner) => {
-                self.run_sql(window, cx, event.id, inner.clone(), event.callbacks.clone());
+                self.run_sql(window, cx, event, inner);
             }
         }
     }
 
-    fn load_entity(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        event_id: EventId,
-        event: LoadEntityEvent,
-        callbacks: EventCallbacks,
-    ) {
+    fn kill_process(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, process_id: u64) {
         let driver = AppState::connection_unchecked(cx).driver();
         cx.spawn_in(window, async move |_, cx| {
-            let result = driver.entity_data(&event.entity).await;
+            let result = driver.kill_process(process_id).await;
+            _ = cx.update(|window, cx| {
+                if let Err(err) = result {
+                    println!("{}", err);
+                    event.callbacks.on_error(window, cx, err.to_string());
+                }
+
+                event.callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event.id);
+            });
+        })
+        .detach();
+    }
+
+    fn load_entity(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, load_event: LoadEntityEvent) {
+        let driver = AppState::connection_unchecked(cx).driver();
+        cx.spawn_in(window, async move |_, cx| {
+            let result = driver.entity_data(&load_event.entity).await;
             _ = cx.update(|window, cx| {
                 match result {
                     Ok(data) => {
-                        (event.on_result)(window, cx, data);
+                        (load_event.on_result)(window, cx, data);
                     }
                     Err(err) => {
-                        callbacks.on_error(window, cx, err.to_string());
+                        event.callbacks.on_error(window, cx, err.to_string());
                     }
                 }
 
-                callbacks.on_complete(window, cx);
-                EventManager::complete(cx, &event_id);
+                event.callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event.id);
             })
         })
         .detach();
     }
 
-    fn open_connection(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        event_id: EventId,
-        connection_id: ConnectionId,
-        callbacks: EventCallbacks,
-    ) {
+    fn open_connection(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, connection_id: ConnectionId) {
         let connection = ConnectionManager::global(cx).connection(&connection_id).clone();
         cx.spawn_in(window, async move |this, cx| {
             let driver = match shared::create_driver(&connection).await {
                 Ok(driver) => driver,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(window, cx, err.to_string());
+                        event.callbacks.on_error(window, cx, err.to_string());
                     });
                     return;
                 }
@@ -220,7 +224,7 @@ impl Application {
                 Ok(entities) => entities,
                 Err(err) => {
                     _ = cx.update(|window, cx| {
-                        callbacks.on_error(window, cx, err.to_string());
+                        event.callbacks.on_error(window, cx, err.to_string());
                     });
                     return;
                 }
@@ -242,8 +246,8 @@ impl Application {
                     }
                 });
 
-                callbacks.on_complete(window, cx);
-                EventManager::complete(cx, &event_id);
+                event.callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event.id);
             });
         })
         .detach();
@@ -269,14 +273,7 @@ impl Application {
         })
     }
 
-    fn run_sql(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        event_id: EventId,
-        event: RunSqlEvent,
-        callbacks: EventCallbacks,
-    ) {
+    fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, run_event: RunSqlEvent) {
         let connection = AppState::connection_unchecked(cx);
         let connection_id = connection.id();
         let driver = connection.driver();
@@ -285,17 +282,17 @@ impl Application {
         cx.spawn_in(window, async move |this, cx| {
             let mut continue_execution = true;
             let mut history_group = QueryHistoryGroup::new(connection_id);
-            let statements = migris::sql::split(&event.sql);
+            let statements = migris::sql::split(&run_event.sql);
 
             // Initialize the query progress.
-            if let Some(on_progress) = event.on_progress.clone() {
+            if let Some(on_progress) = run_event.on_progress.clone() {
                 _ = cx.update(|window, cx| {
                     on_progress(window, cx, 0, statements.len());
                 });
             }
 
             for (idx, statement) in statements.iter().enumerate() {
-                let query = Query::new(&statement.sql, event.token.clone());
+                let query = Query::new(&statement.sql, run_event.token.clone());
                 let history = history_group.add(&migris::sql::minify(&query.sql()));
 
                 // We want to continue iterating through the statements even if we stopped execution
@@ -304,7 +301,7 @@ impl Application {
                     continue;
                 }
 
-                let result = if event.stream {
+                let result = if run_event.stream {
                     driver.query_stream(&query).await
                 } else {
                     driver.query(&query).await
@@ -316,8 +313,8 @@ impl Application {
                         history.duration_ms = result.duration_ms;
                         history.rows_returned = Some(result.data.rows().len() as u64);
 
-                        (event.on_result)(window, cx, result);
-                        if let Some(on_progress) = event.on_progress.clone() {
+                        (run_event.on_result)(window, cx, result);
+                        if let Some(on_progress) = run_event.on_progress.clone() {
                             on_progress(window, cx, idx + 1, statements.len());
                         }
                     }
@@ -329,13 +326,13 @@ impl Application {
                         } else {
                             history.status = QueryStatus::Failed;
                             history.error = err.to_string();
-                            callbacks.on_error(window, cx, err.to_string());
+                            event.callbacks.on_error(window, cx, err.to_string());
                         }
                     }
                 });
             }
 
-            if event.record_history && !history_group.items.is_empty() {
+            if run_event.record_history && !history_group.items.is_empty() {
                 // TODO: log errors here
                 _ = database.insert_query_history_group(&history_group).await;
                 _ = this.update(cx, |this, cx| {
@@ -347,8 +344,8 @@ impl Application {
             }
 
             _ = this.update_in(cx, |_, window, cx| {
-                callbacks.on_complete(window, cx);
-                EventManager::complete(cx, &event_id);
+                event.callbacks.on_complete(window, cx);
+                EventManager::complete(cx, &event.id);
             });
         })
         .detach();

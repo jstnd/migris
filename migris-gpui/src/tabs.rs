@@ -48,10 +48,11 @@ impl TabView {
     }
 
     /// Performs any needed behavior for closing the tab.
-    pub fn close(&self, cx: &App) {
+    pub fn close(&self, window: &mut Window, cx: &mut App) {
         match &self.tab {
             TabState::Query(tab) => tab.close(cx),
-            _ => {}
+            TabState::Table(tab) => tab.close(window, cx),
+            TabState::View(tab) => tab.close(window, cx),
         }
     }
 

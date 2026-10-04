@@ -50,14 +50,6 @@ impl MySqlConnection {
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
     }
-
-    async fn kill_query(&self, id: u32) -> MigrisResult<()> {
-        sqlx::query(AssertSqlSafe(format!("KILL QUERY {}", id)))
-            .execute(&self.pool)
-            .await
-            .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -157,9 +149,17 @@ impl Driver for MySqlConnection {
         Ok(indexes.into_values().collect())
     }
 
+    async fn kill_process(&self, process_id: u64) -> MigrisResult<()> {
+        sqlx::query(AssertSqlSafe(format!("KILL QUERY {}", process_id)))
+            .execute(&self.pool)
+            .await
+            .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+        Ok(())
+    }
+
     async fn query(&self, query: &Query) -> MigrisResult<QueryResult> {
         let mut connection = self.connection().await?;
-        let connection_id: u32 = sqlx::query_scalar("SELECT CONNECTION_ID()")
+        let connection_id: u64 = sqlx::query_scalar("SELECT CONNECTION_ID()")
             .fetch_one(&mut *connection)
             .await
             .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
@@ -172,29 +172,33 @@ impl Driver for MySqlConnection {
             }
 
             _ = query.cancelled() => {
-                self.kill_query(connection_id).await?;
+                self.kill_process(connection_id).await?;
                 Err(MigrisError::QueryCancelled)
             }
         }?;
 
         let duration = instant.elapsed();
         let rows: MigrisResult<Vec<Row>> = rows.iter().map(|row| Row::from_mysql(row, &columns)).collect();
-
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, rows?)),
             duration_ms: duration.as_millis() as u64,
+            process_id: connection_id,
             stream: None,
         })
     }
 
     async fn query_stream(&self, query: &Query) -> MigrisResult<QueryResult> {
-        let pool = self.pool.clone();
+        let mut connection = self.connection().await?;
+        let connection_id: u64 = sqlx::query_scalar("SELECT CONNECTION_ID()")
+            .fetch_one(&mut *connection)
+            .await
+            .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))?;
+
         let sql = query.sql();
         let columns = self.columns_from_query(sql.clone()).await?;
         let stream_columns = columns.clone();
         let stream = async_stream::stream! {
-            let mut stream = sqlx::query(AssertSqlSafe(sql)).fetch(&pool);
-
+            let mut stream = sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection);
             while let Some(row) = stream.next().await {
                 let row = row
                     .map_err(|err| MigrisError::DatabaseReadFailed(err.to_string()))
@@ -207,6 +211,7 @@ impl Driver for MySqlConnection {
         Ok(QueryResult {
             data: Arc::new(QueryData::new(columns, Vec::new())),
             duration_ms: 0,
+            process_id: connection_id,
             stream: Some(Box::pin(stream)),
         })
     }
