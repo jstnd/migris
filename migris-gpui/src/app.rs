@@ -15,6 +15,7 @@ use gpui_kit::{
     px,
 };
 use migris::{Entity as MigrisEntity, EntityKind, MigrisError, query::Query};
+use sqlx::types::chrono::Utc;
 
 use crate::{
     assets,
@@ -208,7 +209,8 @@ impl Application {
     }
 
     fn open_connection(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, connection_id: ConnectionId) {
-        let connection = ConnectionManager::global(cx).connection(&connection_id).clone();
+        let mut connection = ConnectionManager::global(cx).connection(&connection_id).clone();
+        let database = AppState::database(cx);
         cx.spawn_in(window, async move |this, cx| {
             let driver = match shared::create_driver(&connection).await {
                 Ok(driver) => driver,
@@ -229,6 +231,10 @@ impl Application {
                     return;
                 }
             };
+
+            // Update the last connected date of the connection.
+            connection.last_connected = Some(Utc::now());
+            _ = database.update_connection(&connection).await;
 
             _ = this.update_in(cx, |this, window, cx| {
                 let open_connection = OpenConnection::new(connection, driver, entities);

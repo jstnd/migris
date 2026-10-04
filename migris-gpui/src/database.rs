@@ -160,7 +160,7 @@ impl Database {
             .bind(connection.port)
             .bind(&connection.username)
             .bind(&connection.password)
-            .bind(connection.last_connected)
+            .bind(connection.last_connected.map(|dt| dt.format(DATE_FORMAT).to_string()))
             .bind(connection.id)
             .execute(self.connection.pool())
             .await?;
