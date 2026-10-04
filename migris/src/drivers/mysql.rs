@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc, time::Instant};
 use futures_util::StreamExt;
 use sqlx::{
     AssertSqlSafe, Column as SqlxColumn, Executor, MySql, MySqlPool, Row as SqlxRow, SqlSafeStr, TypeInfo,
-    mysql::{MySqlColumn, MySqlTypeInfo},
+    mysql::{MySqlColumn, MySqlPoolOptions, MySqlTypeInfo},
     pool::PoolConnection,
 };
 
@@ -26,7 +26,8 @@ impl MySqlConnection {
     /// Creates a new [`MySqlConnection`] with the given connection URL.
     pub async fn new(url: impl Into<String>) -> MigrisResult<Self> {
         let url = url.into();
-        let pool = sqlx::MySqlPool::connect(&url)
+        let pool = MySqlPoolOptions::new()
+            .connect(&url)
             .await
             .map_err(|err| MigrisError::DatabaseConnectFailed(err.to_string()))?;
 
