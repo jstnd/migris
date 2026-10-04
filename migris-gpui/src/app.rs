@@ -1,9 +1,9 @@
 use std::{path::Path, sync::Arc};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, ParentElement, Pixels,
-    Render, SharedString, Styled, Window,
-    base::{h_flex, h_resizable, resizable_panel, v_flex},
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement,
+    Pixels, Render, SharedString, Styled, Window,
+    base::{ResizablePanelEvent, ResizableState, h_flex, h_resizable, resizable_panel, v_flex},
     component::{
         ActiveTheme, Sizable, TitleBar,
         button::{Button, ButtonVariants},
@@ -83,9 +83,20 @@ enum ApplicationAction {
     OpenSettings,
 }
 
+const DEFAULT_SIDE_PANEL_WIDTH: Pixels = px(300.0);
+
 pub struct Application {
+    /// The state for the resizable panels.
+    resizable: Entity<ResizableState>,
+
     /// The state for the side panel.
     side_panel: Entity<SidePanelState>,
+
+    /// Whether the side panel is expanded.
+    side_panel_expanded: bool,
+
+    /// The width of the side panel.
+    side_panel_width: Pixels,
 
     /// The state for the tab panel.
     tab_panel: Entity<TabPanelState>,
@@ -94,8 +105,24 @@ pub struct Application {
 impl Application {
     /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let resizable = cx.new(|_| ResizableState::default());
+        cx.subscribe(&resizable, |this, resizable, event, cx| {
+            match event {
+                ResizablePanelEvent::Resized => {
+                    // Track any size changes to the side panel while it's visible.
+                    if this.side_panel_expanded {
+                        this.side_panel_width = resizable.read(cx).sizes()[0];
+                    }
+                }
+            }
+        })
+        .detach();
+
         Self {
+            resizable,
             side_panel: cx.new(|cx| SidePanelState::new(window, cx)),
+            side_panel_expanded: true,
+            side_panel_width: DEFAULT_SIDE_PANEL_WIDTH,
             tab_panel: cx.new(|_| TabPanelState::new()),
         }
     }
@@ -326,6 +353,19 @@ impl Application {
         })
         .detach();
     }
+
+    /// Toggles the visibility of the side panel.
+    fn toggle_side_panel(&mut self, cx: &mut Context<Self>) {
+        self.side_panel_expanded = !self.side_panel_expanded;
+        if self.side_panel_expanded {
+            self.resizable.update(cx, |resizable, cx| {
+                // Add back the panel with its previous width.
+                resizable.insert_panel(Some(self.side_panel_width), Some(0), cx);
+            });
+        }
+
+        cx.notify();
+    }
 }
 
 impl Render for Application {
@@ -338,10 +378,37 @@ impl Render for Application {
             .child(
                 TitleBar::new().child(
                     h_flex()
-                        .gap_2()
+                        .w_full()
                         .mt_0p5()
-                        .child(img(Path::new("./assets/logo-16x16.png")).size_4().ml_1())
-                        .child(render_menu_bar()),
+                        .mx_1()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .child(img(Path::new("./assets/logo-16x16.png")).size_4())
+                                .child(render_menu_bar()),
+                        )
+                        .child(
+                            h_flex()
+                                .child(
+                                    Button::new("btn-toggle-side-panel")
+                                        .ghost()
+                                        .small()
+                                        .icon(if self.side_panel_expanded {
+                                            IconName::PanelLeftClose
+                                        } else {
+                                            IconName::PanelLeftOpen
+                                        })
+                                        .tooltip("Toggle Side Panel")
+                                        .on_click(cx.listener(|application, _, _, cx| {
+                                            application.toggle_side_panel(cx);
+                                        })),
+                                )
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                    // This is needed to stop drag events from the title bar taking priority over button clicks.
+                                    cx.stop_propagation();
+                                }),
+                        ),
                 ),
             )
             .child(
@@ -373,12 +440,14 @@ impl Render for Application {
                     )
                     .child(
                         h_resizable("application-view")
-                            .child(
-                                resizable_panel()
-                                    .size_range(px(250.0)..Pixels::MAX)
-                                    .size(px(300.0))
-                                    .child(SidePanel::new(&self.side_panel)),
-                            )
+                            .with_state(&self.resizable)
+                            .when(self.side_panel_expanded, |this| {
+                                this.child(
+                                    resizable_panel()
+                                        .size(DEFAULT_SIDE_PANEL_WIDTH)
+                                        .child(SidePanel::new(&self.side_panel)),
+                                )
+                            })
                             .child(resizable_panel().map(|this| {
                                 this.child(if AppState::connection(cx).is_some() {
                                     TabPanel::new(&self.tab_panel).into_any_element()
