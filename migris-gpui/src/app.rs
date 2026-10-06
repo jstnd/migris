@@ -1,12 +1,16 @@
 use std::{path::Path, sync::Arc};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement,
-    Pixels, Render, SharedString, Styled, Window,
-    base::{ResizablePanelEvent, ResizableState, h_flex, h_resizable, resizable_panel, v_flex},
+    Action, App, AppContext, Context, Entity, Hsla, InteractiveElement, IntoElement, KeyBinding, MouseButton,
+    ParentElement, Pixels, Render, SharedString, Styled, Window,
+    base::{
+        ColorPickerEvent, ColorPickerState, ResizablePanelEvent, ResizableState, h_flex, h_resizable, resizable_panel,
+        v_flex,
+    },
     component::{
-        ActiveTheme, Sizable, TitleBar,
+        ActiveTheme, Colorize, Sizable, TitleBar,
         button::{Button, ButtonVariants},
+        color_picker::ColorPicker,
         menu::DropdownMenu,
         sidebar::{Sidebar, SidebarItem, SidebarMenuItem},
     },
@@ -86,6 +90,11 @@ enum ApplicationAction {
 const DEFAULT_SIDE_PANEL_WIDTH: Pixels = px(300.0);
 
 pub struct Application {
+    /// The state for the color picker.
+    ///
+    /// This is used for easily changing the connection's associated color.
+    color_picker: Entity<ColorPickerState>,
+
     /// The state for the resizable panels.
     resizable: Entity<ResizableState>,
 
@@ -105,6 +114,24 @@ pub struct Application {
 impl Application {
     /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let color_picker = cx.new(|cx| ColorPickerState::new(window, cx));
+        cx.subscribe(&color_picker, |_, _, event, cx| match event {
+            ColorPickerEvent::Change(color) => {
+                // Update the open connection's color after change.
+                let color = color.as_ref().map(|hsla| hsla.to_hex());
+                let connection_id = AppState::connection_unchecked(cx).id();
+                cx.spawn(async move |_, cx| {
+                    _ = cx
+                        .read_global(|manager: &ConnectionManager, cx| {
+                            manager.update_connection_color(cx, connection_id, color)
+                        })
+                        .await;
+                })
+                .detach();
+            }
+        })
+        .detach();
+
         let resizable = cx.new(|_| ResizableState::default());
         cx.subscribe(&resizable, |this, resizable, event, cx| {
             match event {
@@ -119,6 +146,7 @@ impl Application {
         .detach();
 
         Self {
+            color_picker,
             resizable,
             side_panel: cx.new(|cx| SidePanelState::new(window, cx)),
             side_panel_expanded: true,
@@ -241,6 +269,16 @@ impl Application {
             _ = this.update_in(cx, |this, window, cx| {
                 let open_connection = OpenConnection::new(connection_id, driver, entities);
                 AppState::set_connection(cx, open_connection);
+
+                // Load the connection's color into the color picker.
+                let connection = ConnectionManager::global(cx).connection(&connection_id);
+                if let Some(color) = &connection.color
+                    && let Ok(hsla) = Hsla::parse_hex(color)
+                {
+                    this.color_picker.update(cx, |color_picker, cx| {
+                        color_picker.set_value(hsla, window, cx);
+                    });
+                }
 
                 // Load the connection's entities into the side panel.
                 this.side_panel.update(cx, |side_panel, cx| {
@@ -478,9 +516,12 @@ impl Render for Application {
                         this.when_some(connection.color(cx), |this, color| this.bg(color))
                             .child(
                                 h_flex()
+                                    .w_full()
                                     .gap_2()
                                     .items_center()
-                                    .child(SharedString::from(connection.name(cx))),
+                                    .justify_between()
+                                    .child(SharedString::from(connection.name(cx)))
+                                    .child(ColorPicker::new(&self.color_picker).small().icon(IconName::Palette)),
                             )
                     }),
             )

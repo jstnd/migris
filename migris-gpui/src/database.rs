@@ -27,7 +27,7 @@ impl Database {
     }
 
     pub async fn connections(&self) -> Result<Vec<Connection>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 id, folder_id,
                 name, kind, host, port,
@@ -37,56 +37,56 @@ impl Database {
             FROM connections
         "#;
 
-        Ok(sqlx::query_as::<_, Connection>(query)
+        Ok(sqlx::query_as::<_, Connection>(sql)
             .fetch_all(self.connection.pool())
             .await?)
     }
 
     pub async fn connection_folders(&self) -> Result<Vec<ConnectionFolder>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 id, folder_id, name
             FROM connection_folders
         "#;
 
-        Ok(sqlx::query_as::<_, ConnectionFolder>(query)
+        Ok(sqlx::query_as::<_, ConnectionFolder>(sql)
             .fetch_all(self.connection.pool())
             .await?)
     }
 
     pub async fn delete_connection(&self, id: &ConnectionId) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             DELETE
             FROM connections
             WHERE
                 id = ?
         "#;
 
-        sqlx::query(query).bind(id).execute(self.connection.pool()).await?;
+        sqlx::query(sql).bind(id).execute(self.connection.pool()).await?;
         Ok(())
     }
 
     pub async fn delete_connection_folder(&self, id: &ConnectionFolderId) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             DELETE
             FROM connection_folders
             WHERE
                 id = ?
         "#;
 
-        sqlx::query(query).bind(id).execute(self.connection.pool()).await?;
+        sqlx::query(sql).bind(id).execute(self.connection.pool()).await?;
         Ok(())
     }
 
     pub async fn insert_connection(&self, connection: &Connection) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             INSERT INTO connections
                 (id, folder_id, name, kind, host, port, username, password, color)
             VALUES
                 (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#;
 
-        sqlx::query(query)
+        sqlx::query(sql)
             .bind(connection.id)
             .bind(connection.folder_id)
             .bind(&connection.name)
@@ -102,14 +102,14 @@ impl Database {
     }
 
     pub async fn insert_connection_folder(&self, folder: &ConnectionFolder) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             INSERT INTO connection_folders
                 (id, folder_id, name)
             VALUES
                 (?, ?, ?)
         "#;
 
-        sqlx::query(query)
+        sqlx::query(sql)
             .bind(folder.id)
             .bind(folder.folder_id)
             .bind(&folder.name)
@@ -142,7 +142,7 @@ impl Database {
     }
 
     pub async fn update_connection(&self, connection: &Connection) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             UPDATE connections
             SET
                 folder_id = ?,
@@ -158,7 +158,7 @@ impl Database {
                 id = ?
         "#;
 
-        sqlx::query(query)
+        sqlx::query(sql)
             .bind(connection.folder_id)
             .bind(&connection.name)
             .bind(connection.kind)
@@ -174,8 +174,25 @@ impl Database {
         Ok(())
     }
 
+    pub async fn update_connection_color(&self, id: &ConnectionId, color: &Option<String>) -> Result<()> {
+        let sql = r#"
+            UPDATE connections
+            SET
+                color = ?
+            WHERE
+                id = ?
+        "#;
+
+        sqlx::query(sql)
+            .bind(color)
+            .bind(id)
+            .execute(self.connection.pool())
+            .await?;
+        Ok(())
+    }
+
     pub async fn update_connection_folder(&self, folder: &ConnectionFolder) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             UPDATE connection_folders
             SET
                 folder_id = ?,
@@ -184,7 +201,7 @@ impl Database {
                 id = ?
         "#;
 
-        sqlx::query(query)
+        sqlx::query(sql)
             .bind(folder.folder_id)
             .bind(&folder.name)
             .bind(folder.id)
@@ -198,7 +215,7 @@ impl Database {
         id: &ConnectionId,
         last_connected: &DateTime<Utc>,
     ) -> Result<()> {
-        let query = r#"
+        let sql = r#"
             UPDATE connections
             SET
                 last_connected = ?
@@ -206,7 +223,7 @@ impl Database {
                 id = ?
         "#;
 
-        sqlx::query(query)
+        sqlx::query(sql)
             .bind(last_connected.format(DATE_FORMAT).to_string())
             .bind(id)
             .execute(self.connection.pool())
@@ -215,7 +232,7 @@ impl Database {
     }
 
     pub async fn query_history(&self) -> Result<Vec<QueryHistoryItem>> {
-        let query = r#"
+        let sql = r#"
             SELECT
                 id, execute_id, connection_id,
                 query, executed_at, duration_ms,
@@ -226,7 +243,7 @@ impl Database {
                 executed_at
         "#;
 
-        Ok(sqlx::query_as::<_, QueryHistoryItem>(query)
+        Ok(sqlx::query_as::<_, QueryHistoryItem>(sql)
             .fetch_all(self.connection.pool())
             .await?)
     }

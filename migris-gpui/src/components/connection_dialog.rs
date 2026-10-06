@@ -1230,7 +1230,6 @@ impl ConnectionEditorState {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
         self.set_name(window, cx, &connection.name);
 
-        //
         if let Some(color) = &connection.color
             && let Ok(hsla) = Hsla::parse_hex(color)
         {

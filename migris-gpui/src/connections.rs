@@ -344,6 +344,20 @@ impl ConnectionManager {
         })
     }
 
+    /// Updates the color for the connection with the given [`ConnectionId`].
+    pub fn update_connection_color(&self, cx: &App, connection_id: ConnectionId, color: Option<String>) -> Task<Result<()>> {
+        let database = AppState::database(cx);
+        cx.spawn(async move |cx| {
+            database.update_connection_color(&connection_id, &color).await?;
+            cx.update_global(|this: &mut Self, _| {
+                let idx = this.connection_map[&connection_id];
+                this.connections[idx].color = color;
+            });
+
+            Ok(())
+        })
+    }
+
     /// Updates the last connected date for the connection with the given [`ConnectionId`].
     pub fn update_connection_last_connected(&self, cx: &App, connection_id: ConnectionId) -> Task<Result<()>> {
         let database = AppState::database(cx);
