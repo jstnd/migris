@@ -526,20 +526,23 @@ impl Render for Application {
                     .text_color(cx.theme().muted_foreground)
                     .text_sm()
                     .when_some(AppState::connection(cx), |this, connection| {
-                        this.when_some(connection.color(cx), |this, color| this.bg(color))
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .gap_2()
-                                    .items_center()
-                                    .justify_between()
-                                    .child(SharedString::from(connection.name(cx)))
-                                    .child(
-                                        div().track_focus(&self.color_picker_focus_handle).child(
-                                            ColorPicker::new(&self.color_picker).icon(IconName::Palette).small(),
-                                        ),
-                                    ),
-                            )
+                        this.when_some(connection.color(cx), |this, color| {
+                            this.bg(color)
+                                .text_color(shared::colors::foreground_for_hsla(cx, color))
+                        })
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .items_center()
+                                .justify_between()
+                                .child(SharedString::from(connection.name(cx)))
+                                .child(
+                                    div()
+                                        .track_focus(&self.color_picker_focus_handle)
+                                        .child(ColorPicker::new(&self.color_picker).icon(IconName::Palette).small()),
+                                ),
+                        )
                     }),
             )
             .on_action(cx.listener(|application, action: &ApplicationAction, window, cx| {

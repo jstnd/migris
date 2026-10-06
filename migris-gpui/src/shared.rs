@@ -91,3 +91,50 @@ pub fn format_timer(duration: Duration) -> String {
         format!("{minutes:02}:{seconds:02}.{tenths}")
     }
 }
+
+pub mod colors {
+    use gpui_kit::{
+        App, Hsla,
+        component::{ActiveTheme, try_parse_color},
+    };
+
+    /// Returns the foreground color for the given background HSLA color.
+    pub fn foreground_for_hsla(cx: &App, hsla: Hsla) -> Hsla {
+        let luminance = relative_luminance(hsla);
+
+        // The 0.179 value here is derived from the contrast-ratio formula defined by W3C.
+        //
+        // https://dev.to/louis7/how-to-choose-the-font-color-based-on-the-background-color-402a
+        // https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio
+        let color = if luminance > 0.179 {
+            &cx.theme().light_theme.colors.foreground
+        } else {
+            &cx.theme().dark_theme.colors.foreground
+        };
+
+        if let Some(color) = color {
+            try_parse_color(color).unwrap_or(cx.theme().foreground)
+        } else {
+            cx.theme().foreground
+        }
+    }
+
+    /// Returns the linearized value calculated from the given RGB value.
+    ///
+    /// https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
+    fn linearize(value: f32) -> f32 {
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    /// Returns the relative luminance of the given HSLA.
+    ///
+    /// https://en.wikipedia.org/wiki/Relative_luminance
+    pub fn relative_luminance(hsla: Hsla) -> f32 {
+        let rgb = hsla.to_rgb();
+        0.2126 * linearize(rgb.r) + 0.7152 * linearize(rgb.g) + 0.0722 * linearize(rgb.b)
+    }
+}
