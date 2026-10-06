@@ -1,8 +1,8 @@
 use std::{path::Path, sync::Arc};
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, Hsla, InteractiveElement, IntoElement, KeyBinding, MouseButton,
-    ParentElement, Pixels, Render, SharedString, Styled, Window,
+    Action, App, AppContext, Context, Entity, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyBinding,
+    MouseButton, ParentElement, Pixels, Render, SharedString, Styled, Window,
     base::{
         ColorPickerEvent, ColorPickerState, ResizablePanelEvent, ResizableState, h_flex, h_resizable, resizable_panel,
         v_flex,
@@ -14,7 +14,7 @@ use gpui_kit::{
         menu::DropdownMenu,
         sidebar::{Sidebar, SidebarItem, SidebarMenuItem},
     },
-    img,
+    div, img,
     prelude::FluentBuilder,
     px,
 };
@@ -95,6 +95,9 @@ pub struct Application {
     /// This is used for easily changing the connection's associated color.
     color_picker: Entity<ColorPickerState>,
 
+    /// The focus handle for the color picker.
+    color_picker_focus_handle: FocusHandle,
+
     /// The state for the resizable panels.
     resizable: Entity<ResizableState>,
 
@@ -115,20 +118,29 @@ impl Application {
     /// Creates a new [`Application`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let color_picker = cx.new(|cx| ColorPickerState::new(window, cx));
+        let color_picker_focus_handle = cx.focus_handle();
         cx.subscribe(&color_picker, |_, _, event, cx| match event {
             ColorPickerEvent::Change(color) => {
-                // Update the open connection's color after change.
+                // This event fires after every single color change (including when changing color via sliders),
+                // so we want to only update the color in memory for the connection.
                 let color = color.as_ref().map(|hsla| hsla.to_hex());
                 let connection_id = AppState::connection_unchecked(cx).id();
-                cx.spawn(async move |_, cx| {
-                    _ = cx
-                        .read_global(|manager: &ConnectionManager, cx| {
-                            manager.update_connection_color(cx, connection_id, color)
-                        })
-                        .await;
-                })
-                .detach();
+                ConnectionManager::global_mut(cx).connection_mut(&connection_id).color = color;
             }
+        })
+        .detach();
+        cx.on_focus_out(&color_picker_focus_handle, window, |this, _, _, cx| {
+            // Persist the selected color within the application's database only after the user finishes picking the color.
+            let color = this.color_picker.read(cx).value().map(|hsla| hsla.to_hex());
+            let connection_id = AppState::connection_unchecked(cx).id();
+            cx.spawn(async move |_, cx| {
+                _ = cx
+                    .read_global(|manager: &ConnectionManager, cx| {
+                        manager.update_connection_color(cx, connection_id, color)
+                    })
+                    .await;
+            })
+            .detach();
         })
         .detach();
 
@@ -147,6 +159,7 @@ impl Application {
 
         Self {
             color_picker,
+            color_picker_focus_handle,
             resizable,
             side_panel: cx.new(|cx| SidePanelState::new(window, cx)),
             side_panel_expanded: true,
@@ -521,7 +534,11 @@ impl Render for Application {
                                     .items_center()
                                     .justify_between()
                                     .child(SharedString::from(connection.name(cx)))
-                                    .child(ColorPicker::new(&self.color_picker).small().icon(IconName::Palette)),
+                                    .child(
+                                        div().track_focus(&self.color_picker_focus_handle).child(
+                                            ColorPicker::new(&self.color_picker).icon(IconName::Palette).small(),
+                                        ),
+                                    ),
                             )
                     }),
             )

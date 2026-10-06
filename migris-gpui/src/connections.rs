@@ -93,6 +93,11 @@ impl ConnectionManager {
         cx.global::<Self>()
     }
 
+    /// Returns a mutable reference to the global [`ConnectionManager`].
+    pub fn global_mut(cx: &mut App) -> &mut Self {
+        cx.global_mut::<Self>()
+    }
+
     /// Adds a new connection to the saved connections.
     pub fn add_connection(&self, cx: &App, connection: Connection) -> Task<Result<()>> {
         let database = AppState::database(cx);
@@ -138,7 +143,7 @@ impl ConnectionManager {
     }
 
     /// Returns a mutable reference to the connection matching the given [`ConnectionId`].
-    fn connection_mut(&mut self, id: &ConnectionId) -> &mut Connection {
+    pub fn connection_mut(&mut self, id: &ConnectionId) -> &mut Connection {
         let idx = self.connection_map[id];
         &mut self.connections[idx]
     }
