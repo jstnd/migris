@@ -15,7 +15,6 @@ use gpui_kit::{
     px,
 };
 use migris::{Entity as MigrisEntity, EntityKind, MigrisError, query::Query};
-use sqlx::types::chrono::Utc;
 
 use crate::{
     assets,
@@ -209,8 +208,7 @@ impl Application {
     }
 
     fn open_connection(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, connection_id: ConnectionId) {
-        let mut connection = ConnectionManager::global(cx).connection(&connection_id).clone();
-        let database = AppState::database(cx);
+        let connection = ConnectionManager::global(cx).connection(&connection_id).clone();
         cx.spawn_in(window, async move |this, cx| {
             let driver = match shared::create_driver(&connection).await {
                 Ok(driver) => driver,
@@ -233,11 +231,15 @@ impl Application {
             };
 
             // Update the last connected date of the connection.
-            connection.last_connected = Some(Utc::now());
-            _ = database.update_connection(&connection).await;
+            _ = cx
+                .read_global(|manager: &ConnectionManager, _, cx| {
+                    manager.update_connection_last_connected(cx, connection_id)
+                })
+                .unwrap()
+                .await;
 
             _ = this.update_in(cx, |this, window, cx| {
-                let open_connection = OpenConnection::new(connection, driver, entities);
+                let open_connection = OpenConnection::new(connection_id, driver, entities);
                 AppState::set_connection(cx, open_connection);
 
                 // Load the connection's entities into the side panel.
@@ -472,14 +474,15 @@ impl Render for Application {
                     .border_color(cx.theme().border)
                     .text_color(cx.theme().muted_foreground)
                     .text_sm()
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .when_some(AppState::connection(cx), |this, connection| {
-                                this.child(SharedString::from(connection.name()))
-                            }),
-                    ),
+                    .when_some(AppState::connection(cx), |this, connection| {
+                        this.when_some(connection.color(cx), |this, color| this.bg(color))
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .items_center()
+                                    .child(SharedString::from(connection.name(cx))),
+                            )
+                    }),
             )
             .on_action(cx.listener(|application, action: &ApplicationAction, window, cx| {
                 application.handle_action(window, cx, action);

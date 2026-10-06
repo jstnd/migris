@@ -1,17 +1,18 @@
 use std::{collections::HashSet, time::Duration};
 
 use gpui_kit::{
-    Action, App, AppContext, ClickEvent, Context, Div, Entity, InteractiveElement, IntoElement, KeystrokeEvent,
+    Action, App, AppContext, ClickEvent, Context, Div, Entity, Hsla, InteractiveElement, IntoElement, KeystrokeEvent,
     MouseButton, ParentElement, Pixels, Render, RenderOnce, SharedString, StatefulInteractiveElement, Styled,
     Subscription, Task, Window,
     base::{
-        Disableable, TreeItem, TreeState, h_flex, h_resizable,
+        ColorPickerState, Disableable, TreeItem, TreeState, h_flex, h_resizable,
         input::{InputEvent, InputState, MaskPattern},
         resizable_panel, v_flex,
     },
     component::{
-        ActiveTheme, Sizable, WindowExt,
+        ActiveTheme, Colorize, Sizable, WindowExt,
         button::{Button, ButtonVariants},
+        color_picker::ColorPicker,
         dialog::{Dialog, DialogFooter},
         input::Input,
         list::ListItem,
@@ -1116,25 +1117,34 @@ impl RenderOnce for ConnectionEditor {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
 
-        v_flex().gap_1().p_3().w_full().map(|this| {
+        v_flex().gap_2().p_3().w_full().map(|this| {
             if let Some(variant) = &state.variant {
-                this.child(labeled("Name", Input::new(&state.name_input)))
-                    //.child(labeled("Connection Type", Select::new(&state.type_select)))
-                    .map(|this| match variant {
-                        ConnectionEditorVariant::MySql(state) => this
-                            .child(
-                                h_flex()
-                                    .gap_3()
-                                    .child(labeled("Host", Input::new(&state.host_input)))
-                                    .child(h_flex().w_1_4().child(labeled("Port", Input::new(&state.port_input)))),
-                            )
-                            .child(
-                                h_flex()
-                                    .gap_3()
-                                    .child(labeled("User", Input::new(&state.username_input)))
-                                    .child(labeled("Password", Input::new(&state.password_input).mask_toggle())),
-                            ),
-                    })
+                this.child(
+                    h_flex().gap_3().items_end().child(labeled(
+                        h_flex()
+                            .w_full()
+                            .justify_between()
+                            .child("Name")
+                            .child(ColorPicker::new(&state.color_picker).small()),
+                        Input::new(&state.name_input),
+                    )),
+                )
+                //.child(labeled("Connection Type", Select::new(&state.type_select)))
+                .map(|this| match variant {
+                    ConnectionEditorVariant::MySql(state) => this
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .child(labeled("Host", Input::new(&state.host_input)))
+                                .child(h_flex().w_1_4().child(labeled("Port", Input::new(&state.port_input)))),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .child(labeled("User", Input::new(&state.username_input)))
+                                .child(labeled("Password", Input::new(&state.password_input).mask_toggle())),
+                        ),
+                })
             } else {
                 this
             }
@@ -1148,6 +1158,9 @@ enum ConnectionEditorVariant {
 
 /// The state used with a [`ConnectionEditor`].
 struct ConnectionEditorState {
+    /// The state for the color picker.
+    color_picker: Entity<ColorPickerState>,
+
     /// The state for the name input.
     name_input: Entity<InputState>,
 
@@ -1167,6 +1180,7 @@ impl ConnectionEditorState {
         let type_select = cx.new(|cx| SelectState::new(vec![SharedString::from("test")], None, window, cx));
 
         Self {
+            color_picker: cx.new(|cx| ColorPickerState::new(window, cx)),
             name_input,
             type_select,
             variant: None,
@@ -1176,6 +1190,11 @@ impl ConnectionEditorState {
     /// Closes the connection open inside the editor.
     fn close(&mut self) {
         self.variant = None;
+    }
+
+    /// Returns the color selected inside the editor.
+    fn color(&self, cx: &App) -> Option<String> {
+        self.color_picker.read(cx).value().map(|color| color.to_hex())
     }
 
     /// Returns the [`Connection`] populated with the editor's entry fields.
@@ -1188,6 +1207,7 @@ impl ConnectionEditorState {
             ConnectionEditorVariant::MySql(state) => {
                 let mut connection = state.connection(cx);
                 connection.name = self.name(cx).to_string();
+                connection.color = self.color(cx);
                 Some(connection)
             }
         }
@@ -1209,6 +1229,15 @@ impl ConnectionEditorState {
     fn open(&mut self, window: &mut Window, cx: &mut App, id: ConnectionId) {
         let connection = ConnectionManager::global(cx).connection(&id).clone();
         self.set_name(window, cx, &connection.name);
+
+        //
+        if let Some(color) = &connection.color
+            && let Ok(hsla) = Hsla::parse_hex(color)
+        {
+            self.color_picker.update(cx, |color_picker, cx| {
+                color_picker.set_value(hsla, window, cx);
+            });
+        }
 
         self.type_select.update(cx, |type_select, cx| {
             type_select.set_selected_value(&SharedString::from(""), window, cx);

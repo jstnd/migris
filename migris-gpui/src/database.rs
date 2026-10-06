@@ -1,6 +1,9 @@
 use anyhow::Result;
 use migris::sqlite::SqliteConnection;
-use sqlx::QueryBuilder;
+use sqlx::{
+    QueryBuilder,
+    types::chrono::{DateTime, Utc},
+};
 
 use crate::{
     connections::{Connection, ConnectionFolder, ConnectionFolderId, ConnectionId},
@@ -29,7 +32,8 @@ impl Database {
                 id, folder_id,
                 name, kind, host, port,
                 username, password,
-                created_at, last_connected
+                created_at, last_connected,
+                color
             FROM connections
         "#;
 
@@ -77,9 +81,9 @@ impl Database {
     pub async fn insert_connection(&self, connection: &Connection) -> Result<()> {
         let query = r#"
             INSERT INTO connections
-                (id, folder_id, name, kind, host, port, username, password)
+                (id, folder_id, name, kind, host, port, username, password, color)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#;
 
         sqlx::query(query)
@@ -91,6 +95,7 @@ impl Database {
             .bind(connection.port)
             .bind(&connection.username)
             .bind(&connection.password)
+            .bind(&connection.color)
             .execute(self.connection.pool())
             .await?;
         Ok(())
@@ -147,7 +152,8 @@ impl Database {
                 port = ?,
                 username = ?,
                 password = ?,
-                last_connected = ?
+                last_connected = ?,
+                color = ?
             WHERE
                 id = ?
         "#;
@@ -161,6 +167,7 @@ impl Database {
             .bind(&connection.username)
             .bind(&connection.password)
             .bind(connection.last_connected.map(|dt| dt.format(DATE_FORMAT).to_string()))
+            .bind(&connection.color)
             .bind(connection.id)
             .execute(self.connection.pool())
             .await?;
@@ -181,6 +188,27 @@ impl Database {
             .bind(folder.folder_id)
             .bind(&folder.name)
             .bind(folder.id)
+            .execute(self.connection.pool())
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_connection_last_connected(
+        &self,
+        id: &ConnectionId,
+        last_connected: &DateTime<Utc>,
+    ) -> Result<()> {
+        let query = r#"
+            UPDATE connections
+            SET
+                last_connected = ?
+            WHERE
+                id = ?
+        "#;
+
+        sqlx::query(query)
+            .bind(last_connected.format(DATE_FORMAT).to_string())
+            .bind(id)
             .execute(self.connection.pool())
             .await?;
         Ok(())

@@ -57,12 +57,12 @@ pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: &str) -> AlertDial
         .description(SharedString::new(error))
 }
 
-pub fn labeled(label: impl Into<SharedString>, element: impl IntoElement) -> impl IntoElement {
+pub fn labeled(label: impl IntoElement, element: impl IntoElement) -> impl IntoElement {
     v_flex()
         .gap_0p5()
         .w_full()
         .text_sm()
-        .child(h_flex().pl_1().child(label.into()))
+        .child(h_flex().pl_1().child(label))
         .child(h_flex().child(element))
 }
 

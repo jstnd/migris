@@ -331,13 +331,28 @@ impl ConnectionManager {
         let database = AppState::database(cx);
         cx.spawn(async move |cx| {
             let mut connection = connection;
-            connection.set_password();
+            connection.set_password_optional();
             database.update_connection(&connection).await?;
             cx.update_global(|this: &mut Self, _| {
                 // Update in-memory connection to passed instance.
                 let idx = this.connection_map[&connection.id];
                 this.connections[idx] = connection;
                 this.load_maps();
+            });
+
+            Ok(())
+        })
+    }
+
+    /// Updates the last connected date for the connection with the given [`ConnectionId`].
+    pub fn update_connection_last_connected(&self, cx: &App, connection_id: ConnectionId) -> Task<Result<()>> {
+        let database = AppState::database(cx);
+        cx.spawn(async move |cx| {
+            let last_connected = Utc::now();
+            database.update_connection_last_connected(&connection_id, &last_connected).await?;
+            cx.update_global(|this: &mut Self, _| {
+                let idx = this.connection_map[&connection_id];
+                this.connections[idx].last_connected = Some(last_connected);
             });
 
             Ok(())
@@ -413,6 +428,9 @@ pub struct Connection {
 
     /// The date and time the connection was last opened.
     pub last_connected: Option<DateTime<Utc>>,
+
+    /// The color for the connection.
+    pub color: Option<String>,
 }
 
 impl Connection {
@@ -429,6 +447,7 @@ impl Connection {
             password: String::new(),
             created_at: Utc::now(),
             last_connected: None,
+            color: None,
         }
     }
 
@@ -446,6 +465,13 @@ impl Connection {
         }
     }
 
+    /// Deletes the password for the connection.
+    ///
+    /// This will delete the password from the system key storage.
+    fn delete_password(&self) {
+        _ = secrets::delete_secret(&self.password);
+    }
+
     /// Duplicates the connection, using the given name as the new connection's name.
     pub fn duplicate_with_name(&self, name: impl Into<String>) -> Self {
         let mut connection = self.clone();
@@ -461,13 +487,6 @@ impl Connection {
         connection
     }
 
-    /// Deletes the password for the connection.
-    ///
-    /// This will delete the password from the system key storage.
-    fn delete_password(&self) {
-        _ = secrets::delete_secret(&self.password);
-    }
-
     /// Returns the password for the connection.
     ///
     /// This will attempt to retrieve the password from the system key storage,
@@ -476,14 +495,28 @@ impl Connection {
         secrets::get_secret(&self.password).unwrap_or(self.password.clone())
     }
 
+    /// Returns the name of the secret used to retrieve and store the connection's password.
+    fn password_secret(&self) -> String {
+        format!("{}:password", self.id)
+    }
+
     /// Sets the password for the connection.
     ///
     /// This will attempt to store the password in the system key storage,
     /// and fallback to keeping the plain password if that fails.
     fn set_password(&mut self) {
-        let secret = format!("{}:password", self.id);
+        let secret = self.password_secret();
         if secrets::set_secret(&secret, &self.password).is_ok() {
             self.password = secret;
+        }
+    }
+
+    /// Optionally sets the password for the connection.
+    /// 
+    /// This only sets the password the stored password doesn't match the password secret name.
+    fn set_password_optional(&mut self) {
+        if self.password != self.password_secret() {
+            self.set_password();
         }
     }
 }
