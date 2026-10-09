@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use futures_util::StreamExt;
 use sqlx::{
@@ -714,7 +714,7 @@ impl Encode<'_, MySql> for Value {
     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
         match self {
             Value::Null => Ok(sqlx::encode::IsNull::Yes),
-            Value::Bytes(value) => <Vec<u8> as Encode<'_, MySql>>::encode_by_ref(value, buf),
+            Value::Bytes(value) => <Arc<[u8]> as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Date(value) => <NaiveDate as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::DateTime(value) => <NaiveDateTime as Encode<'_, MySql>>::encode_by_ref(value, buf),
             Value::Decimal(value) => <Decimal as Encode<'_, MySql>>::encode_by_ref(value, buf),

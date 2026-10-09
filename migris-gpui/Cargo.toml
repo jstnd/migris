@@ -15,6 +15,7 @@ chrono = { workspace = true }
 directories = "6.0.0"
 futures-util = { workspace = true }
 gpui-kit = { git = "https://github.com/longbridge/gpui-kit", features = ["tree-sitter-sql"] }
+image = "0.25.10"
 indexmap = "2.14.0"
 keyring-core = "1.0.0"
 lsp-types = "0.97.0"

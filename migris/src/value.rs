@@ -1,12 +1,16 @@
+use std::sync::Arc;
+
 use sqlx::types::{
     Decimal,
     chrono::{NaiveDate, NaiveDateTime, NaiveTime},
 };
 
+use crate::shared;
+
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value {
     Null,
-    Bytes(Vec<u8>),
+    Bytes(Arc<[u8]>),
     Date(NaiveDate),
     DateTime(NaiveDateTime),
     Decimal(Decimal),
@@ -28,7 +32,13 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let display = match self {
             Value::Null => String::from("(NULL)"),
-            Value::Bytes(value) => String::from_utf8(value.to_vec()).unwrap_or_default(),
+            Value::Bytes(value) => {
+                if let Ok(s) = str::from_utf8(value) {
+                    s.to_owned()
+                } else {
+                    format!("0x{}", shared::bytes_to_hex(value))
+                }
+            }
             Value::Date(value) => value.to_string(),
             Value::DateTime(value) => value.to_string(),
             Value::Decimal(value) => value.to_string(),

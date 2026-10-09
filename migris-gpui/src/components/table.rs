@@ -1,17 +1,18 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use futures_util::StreamExt;
 use gpui_kit::{
-    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable, InteractiveElement, IntoElement,
-    KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled,
-    Subscription, Window,
+    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable, Image, InteractiveElement,
+    IntoElement, KeyBinding, ParentElement, Pixels, RenderImage, RenderOnce, ScrollWheelEvent, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Window,
     base::h_flex,
     component::{
         ActiveTheme, Sizable,
+        menu::ContextMenuExt,
         progress::Progress,
         table::{Column, ColumnSort, DataTable, TableDelegate, TableEvent, TableState},
     },
-    div,
+    div, img,
     prelude::FluentBuilder,
     px,
 };
@@ -47,6 +48,25 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary--", QueryTableAction::DecreaseSize, Some(TABLE_ID)),
         KeyBinding::new("secondary-=", QueryTableAction::IncreaseSize, Some(TABLE_ID)),
     ]);
+}
+
+#[derive(Action, Clone, PartialEq, Eq)]
+#[action(no_json)]
+enum QueryTableAction {
+    DecreaseSize,
+    IncreaseSize,
+    UpdateColumnDisplay(SharedString, ColumnDisplay),
+}
+
+pub enum QueryTableEvent {
+    Sort,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum ColumnDisplay {
+    #[default]
+    Default,
+    Image,
 }
 
 #[derive(IntoElement)]
@@ -95,19 +115,11 @@ impl RenderOnce for QueryTable {
             .relative()
             .size_full()
             .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .child(DataTable::new(&state.table).bordered(false).map(
-                        |this| match SettingsManager::table_size(cx) {
-                            Size::XSmall | Size::Small | Size::Medium => this.xsmall(),
-                            Size::Large | Size::XLarge => this.small(),
-                            Size::XXLarge => this,
-                            Size::XXXLarge => this.large(),
-                        },
-                    )),
+                div().absolute().top_0().left_0().size_full().child(
+                    DataTable::new(&state.table)
+                        .bordered(false)
+                        .with_size(SettingsManager::table_size(cx).table_size()),
+                ),
             )
             .when(table.delegate().loading, |this| {
                 this.child(
@@ -127,17 +139,6 @@ impl RenderOnce for QueryTable {
                 cx.notify();
             }))
     }
-}
-
-#[derive(Action, Clone, Copy, PartialEq, Eq)]
-#[action(no_json)]
-enum QueryTableAction {
-    DecreaseSize,
-    IncreaseSize,
-}
-
-pub enum QueryTableEvent {
-    Sort,
 }
 
 /// The state used with a [`QueryTable`].
@@ -163,6 +164,16 @@ impl QueryTableState {
                 .cell_selectable(true)
                 .row_header(false)
         });
+        cx.subscribe(&table, |this, _, event, cx| match event {
+            TableEvent::ColumnWidthsChanged(widths) => {
+                this.table.update(cx, |table, _| {
+                    table.delegate_mut().resize_columns(widths);
+                });
+            }
+            TableEvent::SelectColumn(column_idx) => this.sort_column(cx, *column_idx),
+            _ => {}
+        })
+        .detach();
 
         let _settings_subscription = SettingsManager::subscribe(cx, {
             let table = table.clone();
@@ -176,17 +187,6 @@ impl QueryTableState {
                 }
             }
         });
-
-        cx.subscribe(&table, |this, _, event, cx| match event {
-            TableEvent::ColumnWidthsChanged(widths) => {
-                this.table.update(cx, |table, _| {
-                    table.delegate_mut().resize_columns(widths);
-                });
-            }
-            TableEvent::SelectColumn(column_idx) => this.sort_column(cx, *column_idx),
-            _ => {}
-        })
-        .detach();
 
         Self {
             table,
@@ -210,6 +210,7 @@ impl QueryTableState {
                 let new_size = match action {
                     QueryTableAction::DecreaseSize => current_size.decrease(),
                     QueryTableAction::IncreaseSize => current_size.increase(),
+                    _ => unreachable!(),
                 };
 
                 if current_size != new_size {
@@ -217,6 +218,12 @@ impl QueryTableState {
                     SettingsManager::save(cx);
                     cx.notify();
                 }
+            }
+            QueryTableAction::UpdateColumnDisplay(column, display) => {
+                self.table.update(cx, |table, cx| {
+                    table.delegate_mut().update_column_display(column.clone(), *display);
+                    cx.notify();
+                });
             }
         }
     }
@@ -375,6 +382,9 @@ struct QueryTableDelegate {
     /// The columns for the table.
     columns: Vec<Column>,
 
+    /// Tracks the display mode for columns.
+    column_displays: HashMap<SharedString, ColumnDisplay>,
+
     /// Tracks the index kind to display for columns.
     column_index_map: HashMap<SharedString, IndexKind>,
 
@@ -383,6 +393,9 @@ struct QueryTableDelegate {
 
     /// Whether more data is available to load into the table.
     has_more_data: bool,
+
+    /// The cache for images displayed when a column is in the image display mode.
+    image_cache: ImageCache,
 
     /// Whether loading work, such as sorting, is being performed.
     loading: bool,
@@ -401,9 +414,11 @@ impl QueryTableDelegate {
             result: None,
             result_buffer: None,
             columns: Vec::new(),
+            column_displays: HashMap::new(),
             column_index_map: HashMap::new(),
             column_sorts: IndexMap::new(),
             has_more_data: false,
+            image_cache: ImageCache::new(),
             loading: false,
             row_display_order: None,
         }
@@ -569,6 +584,9 @@ impl QueryTableDelegate {
                     result.extend(rows);
                     result.stream = Some(peekable);
                     table.delegate_mut().result = Some(result);
+
+                    // Clear image cache when loading new result into table.
+                    table.delegate_mut().image_cache.clear();
                 } else if let Some(result) = &mut table.delegate_mut().result {
                     result.extend(rows);
                     result.stream = Some(peekable);
@@ -588,13 +606,6 @@ impl QueryTableDelegate {
         .detach();
     }
 
-    /// Resizes the columns with the given widths.
-    fn resize_columns(&mut self, widths: &[Pixels]) {
-        for (idx, width) in widths.iter().enumerate() {
-            self.columns[idx].width = *width;
-        }
-    }
-
     /// Returns the process id associated with the stored result.
     fn process_id(&self) -> u64 {
         if let Some(result) = &self.result_buffer {
@@ -603,6 +614,13 @@ impl QueryTableDelegate {
             result.process_id
         } else {
             0
+        }
+    }
+
+    /// Resizes the columns with the given widths.
+    fn resize_columns(&mut self, widths: &[Pixels]) {
+        for (idx, width) in widths.iter().enumerate() {
+            self.columns[idx].width = *width;
         }
     }
 
@@ -631,6 +649,11 @@ impl QueryTableDelegate {
                 self.column_sorts.shift_remove(&column.key);
             }
         }
+    }
+
+    /// Updates the display mode for the given column.
+    fn update_column_display(&mut self, column: SharedString, display: ColumnDisplay) {
+        self.column_displays.insert(column, display);
     }
 }
 
@@ -669,8 +692,8 @@ impl TableDelegate for QueryTableDelegate {
 
     fn render_td(
         &mut self,
-        row_ix: usize,
-        col_ix: usize,
+        row_idx: usize,
+        col_idx: usize,
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
@@ -678,8 +701,9 @@ impl TableDelegate for QueryTableDelegate {
             return div();
         };
 
-        let font_size = SettingsManager::table_size(cx).font_size(cx);
-        if col_ix == ROW_NUMBER_COLUMN_IDX {
+        let table_size = SettingsManager::table_size(cx);
+        let font_size = table_size.font_size(cx);
+        if col_idx == ROW_NUMBER_COLUMN_IDX {
             return div()
                 .size_full()
                 .pr_1p5()
@@ -689,17 +713,17 @@ impl TableDelegate for QueryTableDelegate {
                 .text_color(cx.theme().muted_foreground)
                 .text_right()
                 .text_size(font_size)
-                .child((row_ix + 1).to_string());
+                .child((row_idx + 1).to_string());
         }
 
-        let row_ix = if let Some(display_order) = &self.row_display_order {
-            display_order[row_ix]
+        let row_idx = if let Some(display_order) = &self.row_display_order {
+            display_order[row_idx]
         } else {
-            row_ix
+            row_idx
         };
 
-        let row = &data.rows()[row_ix];
-        let value = &row.values[col_ix - 1];
+        let row = &data.rows()[row_idx];
+        let value = &row.values[col_idx - 1];
         let color = match value {
             Value::Bytes(_) => cx.theme().magenta,
             Value::Date(_) | Value::DateTime(_) | Value::Time(_) => cx.theme().red,
@@ -718,12 +742,77 @@ impl TableDelegate for QueryTableDelegate {
             Value::String(_) => cx.theme().green,
         };
 
+        let column = &self.columns[col_idx];
+        let display = self.column_displays.get(&column.key).cloned().unwrap_or_default();
+        let default_display = text_ellipsis(value.to_string()).into_any_element();
+        let value_display = match display {
+            ColumnDisplay::Default => default_display,
+            ColumnDisplay::Image => {
+                let key = ImageCacheKey {
+                    column: column.key.clone(),
+                    row_idx,
+                };
+
+                if let Some(cache_value) = self.image_cache.get(&key) {
+                    if let Some(image) = cache_value {
+                        let image_size = image.size(0);
+                        let aspect_ratio = image_size.width.0 as f32 / image_size.height.0 as f32;
+                        let row_height = table_size.table_size().table_row_height();
+                        let width = row_height * aspect_ratio;
+
+                        h_flex()
+                            .size_full()
+                            .justify_center()
+                            .child(img(image).w(width))
+                            .into_any_element()
+                    } else {
+                        default_display
+                    }
+                } else {
+                    if let Value::Bytes(bytes) = value {
+                        let bytes = bytes.clone();
+                        cx.spawn(async move |this, cx| {
+                            let format = if let Ok(format) = image::guess_format(&bytes) {
+                                match format {
+                                    image::ImageFormat::Bmp => Some(gpui_kit::ImageFormat::Bmp),
+                                    image::ImageFormat::Gif => Some(gpui_kit::ImageFormat::Gif),
+                                    image::ImageFormat::Ico => Some(gpui_kit::ImageFormat::Ico),
+                                    image::ImageFormat::Jpeg => Some(gpui_kit::ImageFormat::Jpeg),
+                                    image::ImageFormat::Png => Some(gpui_kit::ImageFormat::Png),
+                                    image::ImageFormat::Pnm => Some(gpui_kit::ImageFormat::Pnm),
+                                    image::ImageFormat::Tiff => Some(gpui_kit::ImageFormat::Tiff),
+                                    image::ImageFormat::WebP => Some(gpui_kit::ImageFormat::Webp),
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            };
+
+                            _ = this.update(cx, |this, cx| {
+                                let image = format.map(|format| {
+                                    Arc::new(Image::from_bytes(format, bytes.to_vec()))
+                                        .to_image_data(cx.svg_renderer())
+                                        .ok()
+                                });
+
+                                this.delegate_mut().image_cache.set(key, image.flatten());
+                                cx.notify();
+                            });
+                        })
+                        .detach();
+                    }
+
+                    default_display
+                }
+            }
+        };
+
         div()
             .size_full()
             .content_center()
             .text_color(color)
             .text_size(font_size)
-            .child(text_ellipsis(value.to_string()))
+            .child(value_display)
     }
 
     fn render_th(&mut self, col_ix: usize, _: &mut Window, cx: &mut Context<TableState<Self>>) -> impl IntoElement {
@@ -734,7 +823,8 @@ impl TableDelegate for QueryTableDelegate {
                 .w_full()
                 .text_color(cx.theme().muted_foreground)
                 .text_size(font_size)
-                .child("#");
+                .child("#")
+                .into_any_element();
         }
 
         let column = &self.columns[col_ix];
@@ -811,5 +901,64 @@ impl TableDelegate for QueryTableDelegate {
                         })
                     }),
             )
+            .context_menu({
+                let column_key = column.key.clone();
+                move |menu, _, _| {
+                    menu.menu(
+                        "View as Image",
+                        Box::new(QueryTableAction::UpdateColumnDisplay(
+                            column_key.clone(),
+                            ColumnDisplay::Image,
+                        )),
+                    )
+                    .menu(
+                        "Reset View",
+                        Box::new(QueryTableAction::UpdateColumnDisplay(
+                            column_key.clone(),
+                            ColumnDisplay::Default,
+                        )),
+                    )
+                }
+            })
+            .into_any_element()
+    }
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ImageCacheKey {
+    /// The name of the column.
+    column: SharedString,
+
+    /// The index of the row.
+    row_idx: usize,
+}
+
+struct ImageCache {
+    /// Contains the cached images by key.
+    ///
+    /// A given key can also contain [`None`] within the cache, meaning an image failed to create for the data corresponding to the key.
+    /// This saves us from having to constantly do the work otherwise to determine whether the data is able to be converted into an image.
+    cache: HashMap<ImageCacheKey, Option<Arc<RenderImage>>>,
+}
+
+impl ImageCache {
+    /// Creates a new [`ImageCache`].
+    fn new() -> Self {
+        Self { cache: HashMap::new() }
+    }
+
+    /// Clears the image cache.
+    fn clear(&mut self) {
+        self.cache.clear();
+    }
+
+    /// Returns the image for the given key.
+    fn get(&self, key: &ImageCacheKey) -> Option<Option<Arc<RenderImage>>> {
+        self.cache.get(key).cloned()
+    }
+
+    /// Inserts the given image for the given key.
+    fn set(&mut self, key: ImageCacheKey, value: Option<Arc<RenderImage>>) {
+        self.cache.insert(key, value);
     }
 }

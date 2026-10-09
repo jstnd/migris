@@ -54,4 +54,14 @@ impl Size {
             Self::XXXLarge => Self::XXXLarge,
         }
     }
+
+    /// Returns the corresponding GPUI size to use for table components.
+    pub fn table_size(&self) -> gpui_kit::component::Size {
+        match self {
+            Size::XSmall | Size::Small | Size::Medium => gpui_kit::component::Size::XSmall,
+            Size::Large | Size::XLarge => gpui_kit::component::Size::Small,
+            Size::XXLarge => gpui_kit::component::Size::Medium,
+            Size::XXXLarge => gpui_kit::component::Size::Large,
+        }
+    }
 }
