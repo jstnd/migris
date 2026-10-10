@@ -6,6 +6,7 @@ use gpui_kit::{
 
 #[derive(rust_embed::RustEmbed)]
 #[folder = "assets"]
+#[include = "*.png"]
 #[include = "icons/*.svg"]
 pub struct Assets;
 

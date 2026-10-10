@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use gpui_kit::{
     Action, App, AppContext, Context, Entity, FocusHandle, Hsla, InteractiveElement, IntoElement, KeyBinding,
@@ -441,7 +441,7 @@ impl Render for Application {
                         .child(
                             h_flex()
                                 .gap_2()
-                                .child(img(Path::new("./assets/logo-16x16.png")).size_4())
+                                .child(img("logo-16x16.png").size_4())
                                 .child(render_menu_bar()),
                         )
                         .child(
