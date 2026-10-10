@@ -55,15 +55,22 @@ pub fn init(cx: &mut App) {
 enum QueryTableAction {
     DecreaseSize,
     IncreaseSize,
-    UpdateColumnDisplay(SharedString, ColumnDisplay),
+    UpdateCellDisplay(Cell, ValueDisplay),
+    UpdateColumnDisplay(SharedString, ValueDisplay),
 }
 
 pub enum QueryTableEvent {
     Sort,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct Cell {
+    column_name: SharedString,
+    row_idx: usize,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum ColumnDisplay {
+enum ValueDisplay {
     #[default]
     Default,
     Image,
@@ -218,6 +225,12 @@ impl QueryTableState {
                     SettingsManager::save(cx);
                     cx.notify();
                 }
+            }
+            QueryTableAction::UpdateCellDisplay(cell, display) => {
+                self.table.update(cx, |table, cx| {
+                    table.delegate_mut().update_cell_display(cell.clone(), *display);
+                    cx.notify();
+                });
             }
             QueryTableAction::UpdateColumnDisplay(column, display) => {
                 self.table.update(cx, |table, cx| {
@@ -379,11 +392,14 @@ struct QueryTableDelegate {
     /// This will be moved to [`Self::result`] after it is initialized with data.
     result_buffer: Option<QueryResult>,
 
+    /// Tracks the display mode for cells.
+    cell_displays: HashMap<Cell, ValueDisplay>,
+
     /// The columns for the table.
     columns: Vec<Column>,
 
     /// Tracks the display mode for columns.
-    column_displays: HashMap<SharedString, ColumnDisplay>,
+    column_displays: HashMap<SharedString, ValueDisplay>,
 
     /// Tracks the index kind to display for columns.
     column_index_map: HashMap<SharedString, IndexKind>,
@@ -413,6 +429,7 @@ impl QueryTableDelegate {
         Self {
             result: None,
             result_buffer: None,
+            cell_displays: HashMap::new(),
             columns: Vec::new(),
             column_displays: HashMap::new(),
             column_index_map: HashMap::new(),
@@ -539,6 +556,17 @@ impl QueryTableDelegate {
         }
     }
 
+    /// Returns the display mode for the given cell.
+    fn cell_display(&self, cell: &Cell) -> ValueDisplay {
+        if let Some(display) = self.cell_displays.get(cell) {
+            *display
+        } else if let Some(display) = self.column_displays.get(&cell.column_name) {
+            *display
+        } else {
+            ValueDisplay::Default
+        }
+    }
+
     /// Returns a reference to the query data.
     fn data(&self) -> Option<&QueryData> {
         let Some(result) = &self.result else {
@@ -651,8 +679,15 @@ impl QueryTableDelegate {
         }
     }
 
+    /// Updates the display mode for the given cell.
+    fn update_cell_display(&mut self, cell: Cell, display: ValueDisplay) {
+        self.cell_displays.insert(cell, display);
+    }
+
     /// Updates the display mode for the given column.
-    fn update_column_display(&mut self, column: SharedString, display: ColumnDisplay) {
+    fn update_column_display(&mut self, column: SharedString, display: ValueDisplay) {
+        // Remove saved display modes for cells within the column being updated.
+        self.cell_displays.retain(|cell, _| cell.column_name != column);
         self.column_displays.insert(column, display);
     }
 }
@@ -693,17 +728,17 @@ impl TableDelegate for QueryTableDelegate {
     fn render_td(
         &mut self,
         row_idx: usize,
-        col_idx: usize,
+        column_idx: usize,
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
         let Some(data) = self.data() else {
-            return div();
+            return div().into_any_element();
         };
 
         let table_size = SettingsManager::table_size(cx);
         let font_size = table_size.font_size(cx);
-        if col_idx == ROW_NUMBER_COLUMN_IDX {
+        if column_idx == ROW_NUMBER_COLUMN_IDX {
             return div()
                 .size_full()
                 .pr_1p5()
@@ -713,7 +748,8 @@ impl TableDelegate for QueryTableDelegate {
                 .text_color(cx.theme().muted_foreground)
                 .text_right()
                 .text_size(font_size)
-                .child((row_idx + 1).to_string());
+                .child((row_idx + 1).to_string())
+                .into_any_element();
         }
 
         let row_idx = if let Some(display_order) = &self.row_display_order {
@@ -722,8 +758,9 @@ impl TableDelegate for QueryTableDelegate {
             row_idx
         };
 
+        let column = &self.columns[column_idx];
         let row = &data.rows()[row_idx];
-        let value = &row.values[col_idx - 1];
+        let value = &row.values[column_idx - 1];
         let color = match value {
             Value::Bytes(_) => cx.theme().magenta,
             Value::Date(_) | Value::DateTime(_) | Value::Time(_) => cx.theme().red,
@@ -742,18 +779,16 @@ impl TableDelegate for QueryTableDelegate {
             Value::String(_) => cx.theme().green,
         };
 
-        let column = &self.columns[col_idx];
-        let display = self.column_displays.get(&column.key).cloned().unwrap_or_default();
+        let cell = Cell {
+            column_name: column.key.clone(),
+            row_idx,
+        };
         let default_display = text_ellipsis(value.to_string()).into_any_element();
-        let value_display = match display {
-            ColumnDisplay::Default => default_display,
-            ColumnDisplay::Image => {
-                let key = ImageCacheKey {
-                    column: column.key.clone(),
-                    row_idx,
-                };
-
-                if let Some(cache_value) = self.image_cache.get(&key) {
+        let value_display_mode = self.cell_display(&cell);
+        let value_display = match value_display_mode {
+            ValueDisplay::Default => default_display,
+            ValueDisplay::Image => {
+                if let Some(cache_value) = self.image_cache.get(&cell) {
                     if let Some(image) = cache_value {
                         let image_size = image.size(0);
                         let aspect_ratio = image_size.width.0 as f32 / image_size.height.0 as f32;
@@ -771,6 +806,7 @@ impl TableDelegate for QueryTableDelegate {
                 } else {
                     if let Value::Bytes(bytes) = value {
                         let bytes = bytes.clone();
+                        let cell = cell.clone();
                         cx.spawn(async move |this, cx| {
                             let format = if let Ok(format) = image::guess_format(&bytes) {
                                 match format {
@@ -795,7 +831,7 @@ impl TableDelegate for QueryTableDelegate {
                                         .ok()
                                 });
 
-                                this.delegate_mut().image_cache.set(key, image.flatten());
+                                this.delegate_mut().image_cache.set(cell, image.flatten());
                                 cx.notify();
                             });
                         })
@@ -813,12 +849,26 @@ impl TableDelegate for QueryTableDelegate {
             .text_color(color)
             .text_size(font_size)
             .child(value_display)
+            .context_menu({
+                let cell = cell.clone();
+                move |menu, _, _| {
+                    menu.menu(
+                        "View as Image",
+                        Box::new(QueryTableAction::UpdateCellDisplay(cell.clone(), ValueDisplay::Image)),
+                    )
+                    .menu(
+                        "Reset View",
+                        Box::new(QueryTableAction::UpdateCellDisplay(cell.clone(), ValueDisplay::Default)),
+                    )
+                }
+            })
+            .into_any_element()
     }
 
-    fn render_th(&mut self, col_ix: usize, _: &mut Window, cx: &mut Context<TableState<Self>>) -> impl IntoElement {
+    fn render_th(&mut self, column_idx: usize, _: &mut Window, cx: &mut Context<TableState<Self>>) -> impl IntoElement {
         let table_size = SettingsManager::table_size(cx);
         let font_size = table_size.font_size(cx);
-        if col_ix == ROW_NUMBER_COLUMN_IDX {
+        if column_idx == ROW_NUMBER_COLUMN_IDX {
             return div()
                 .w_full()
                 .text_color(cx.theme().muted_foreground)
@@ -827,7 +877,7 @@ impl TableDelegate for QueryTableDelegate {
                 .into_any_element();
         }
 
-        let column = &self.columns[col_ix];
+        let column = &self.columns[column_idx];
         let column_index_kind = self.column_index_map.get(&column.key);
         let column_sort = self.column_sorts.get_full(&column.key);
 
@@ -842,7 +892,11 @@ impl TableDelegate for QueryTableDelegate {
                     .min_w_0()
                     .items_center()
                     .text_color(cx.theme().foreground)
-                    .child(div().text_color(cx.theme().muted_foreground).child(col_ix.to_string()))
+                    .child(
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(column_idx.to_string()),
+                    )
                     .child(text_ellipsis(column.name.clone())),
             )
             .child(
@@ -908,14 +962,14 @@ impl TableDelegate for QueryTableDelegate {
                         "View as Image",
                         Box::new(QueryTableAction::UpdateColumnDisplay(
                             column_key.clone(),
-                            ColumnDisplay::Image,
+                            ValueDisplay::Image,
                         )),
                     )
                     .menu(
                         "Reset View",
                         Box::new(QueryTableAction::UpdateColumnDisplay(
                             column_key.clone(),
-                            ColumnDisplay::Default,
+                            ValueDisplay::Default,
                         )),
                     )
                 }
@@ -924,21 +978,12 @@ impl TableDelegate for QueryTableDelegate {
     }
 }
 
-#[derive(Hash, PartialEq, Eq)]
-struct ImageCacheKey {
-    /// The name of the column.
-    column: SharedString,
-
-    /// The index of the row.
-    row_idx: usize,
-}
-
 struct ImageCache {
     /// Contains the cached images by key.
     ///
     /// A given key can also contain [`None`] within the cache, meaning an image failed to create for the data corresponding to the key.
     /// This saves us from having to constantly do the work otherwise to determine whether the data is able to be converted into an image.
-    cache: HashMap<ImageCacheKey, Option<Arc<RenderImage>>>,
+    cache: HashMap<Cell, Option<Arc<RenderImage>>>,
 }
 
 impl ImageCache {
@@ -953,12 +998,12 @@ impl ImageCache {
     }
 
     /// Returns the image for the given key.
-    fn get(&self, key: &ImageCacheKey) -> Option<Option<Arc<RenderImage>>> {
+    fn get(&self, key: &Cell) -> Option<Option<Arc<RenderImage>>> {
         self.cache.get(key).cloned()
     }
 
     /// Inserts the given image for the given key.
-    fn set(&mut self, key: ImageCacheKey, value: Option<Arc<RenderImage>>) {
+    fn set(&mut self, key: Cell, value: Option<Arc<RenderImage>>) {
         self.cache.insert(key, value);
     }
 }
