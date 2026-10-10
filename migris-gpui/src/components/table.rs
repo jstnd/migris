@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use futures_util::StreamExt;
 use gpui_kit::{
@@ -65,7 +69,7 @@ pub enum QueryTableEvent {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Cell {
-    column_name: SharedString,
+    column: SharedString,
     row_idx: usize,
 }
 
@@ -413,6 +417,11 @@ struct QueryTableDelegate {
     /// The cache for images displayed when a column is in the image display mode.
     image_cache: ImageCache,
 
+    /// Tracks the cells that have pending images being created for display.
+    ///
+    /// This is utilized to prevent starting duplicate processes to create the cell's image.
+    images_pending: HashSet<Cell>,
+
     /// Whether loading work, such as sorting, is being performed.
     loading: bool,
 
@@ -436,6 +445,7 @@ impl QueryTableDelegate {
             column_sorts: IndexMap::new(),
             has_more_data: false,
             image_cache: ImageCache::new(),
+            images_pending: HashSet::new(),
             loading: false,
             row_display_order: None,
         }
@@ -560,7 +570,7 @@ impl QueryTableDelegate {
     fn cell_display(&self, cell: &Cell) -> ValueDisplay {
         if let Some(display) = self.cell_displays.get(cell) {
             *display
-        } else if let Some(display) = self.column_displays.get(&cell.column_name) {
+        } else if let Some(display) = self.column_displays.get(&cell.column) {
             *display
         } else {
             ValueDisplay::Default
@@ -681,13 +691,21 @@ impl QueryTableDelegate {
 
     /// Updates the display mode for the given cell.
     fn update_cell_display(&mut self, cell: Cell, display: ValueDisplay) {
+        if display != ValueDisplay::Image {
+            self.image_cache.clear_cell(&cell);
+        }
+
         self.cell_displays.insert(cell, display);
     }
 
     /// Updates the display mode for the given column.
     fn update_column_display(&mut self, column: SharedString, display: ValueDisplay) {
+        if display != ValueDisplay::Image {
+            self.image_cache.clear_column(&column);
+        }
+
         // Remove saved display modes for cells within the column being updated.
-        self.cell_displays.retain(|cell, _| cell.column_name != column);
+        self.cell_displays.retain(|cell, _| cell.column != column);
         self.column_displays.insert(column, display);
     }
 }
@@ -780,7 +798,7 @@ impl TableDelegate for QueryTableDelegate {
         };
 
         let cell = Cell {
-            column_name: column.key.clone(),
+            column: column.key.clone(),
             row_idx,
         };
         let default_display = text_ellipsis(value.to_string()).into_any_element();
@@ -803,10 +821,11 @@ impl TableDelegate for QueryTableDelegate {
                     } else {
                         default_display
                     }
-                } else {
+                } else if !self.images_pending.contains(&cell) {
                     if let Value::Bytes(bytes) = value {
                         let bytes = bytes.clone();
                         let cell = cell.clone();
+                        self.images_pending.insert(cell.clone());
                         cx.spawn(async move |this, cx| {
                             let format = if let Ok(format) = image::guess_format(&bytes) {
                                 match format {
@@ -831,6 +850,7 @@ impl TableDelegate for QueryTableDelegate {
                                         .ok()
                                 });
 
+                                this.delegate_mut().images_pending.remove(&cell);
                                 this.delegate_mut().image_cache.set(cell, image.flatten());
                                 cx.notify();
                             });
@@ -838,6 +858,8 @@ impl TableDelegate for QueryTableDelegate {
                         .detach();
                     }
 
+                    default_display
+                } else {
                     default_display
                 }
             }
@@ -995,6 +1017,16 @@ impl ImageCache {
     /// Clears the image cache.
     fn clear(&mut self) {
         self.cache.clear();
+    }
+
+    /// Clears the image cache for the given cell.
+    fn clear_cell(&mut self, cell: &Cell) {
+        self.cache.remove(cell);
+    }
+
+    /// Clears the image cache for the given column.
+    fn clear_column(&mut self, column: &SharedString) {
+        self.cache.retain(|cell, _| &cell.column != column);
     }
 
     /// Returns the image for the given key.
