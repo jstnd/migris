@@ -222,12 +222,19 @@ impl CompletionProvider for LspStore {
             return Task::ready(Ok(CompletionResponse::Array(vec![])));
         }
 
-        let range = Range::new(text.offset_to_position(start), text.offset_to_position(offset));
         let word = word.as_str().unwrap_or_default().to_lowercase();
+        let (schema, name) = word.split_once('.').unwrap_or(("", word.as_str()));
+        let range = Range::new(text.offset_to_position(start), text.offset_to_position(offset));
         let mut items: Vec<CompletionItem> = AppState::connection_unchecked(cx)
             .entities()
             .iter()
-            .filter(|entity| entity.name_search.starts_with(&word))
+            .filter(|entity| {
+                if !schema.is_empty() && entity.is_schema() {
+                    return false;
+                }
+
+                (schema.is_empty() || entity.schema == schema) && entity.name_search.starts_with(name)
+            })
             .map(|entity| CompletionItem {
                 label: entity.name.clone(),
                 detail: Some(entity.schema.clone()),
