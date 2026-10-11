@@ -501,23 +501,25 @@ impl Render for Application {
                             ),
                     )
                     .child(
-                        h_resizable("application-view")
-                            .with_state(&self.resizable)
-                            .when(self.side_panel_expanded, |this| {
-                                this.child(
-                                    resizable_panel()
-                                        .size(DEFAULT_SIDE_PANEL_WIDTH)
-                                        .size_range(DEFAULT_SIDE_PANEL_WIDTH..Pixels::MAX)
-                                        .child(SidePanel::new(&self.side_panel)),
-                                )
-                            })
-                            .child(resizable_panel().map(|this| {
-                                this.child(if AppState::connection(cx).is_some() {
-                                    TabPanel::new(&self.tab_panel).into_any_element()
-                                } else {
-                                    components::entry_screen(cx).into_any_element()
+                        h_flex().size_full().min_w_0().child(
+                            h_resizable("application-view")
+                                .with_state(&self.resizable)
+                                .when(self.side_panel_expanded, |this| {
+                                    this.child(
+                                        resizable_panel()
+                                            .size(DEFAULT_SIDE_PANEL_WIDTH)
+                                            .size_range(DEFAULT_SIDE_PANEL_WIDTH..Pixels::MAX)
+                                            .child(SidePanel::new(&self.side_panel)),
+                                    )
                                 })
-                            })),
+                                .child(resizable_panel().map(|this| {
+                                    this.child(if AppState::connection(cx).is_some() {
+                                        TabPanel::new(&self.tab_panel).into_any_element()
+                                    } else {
+                                        components::entry_screen(cx).into_any_element()
+                                    })
+                                })),
+                        ),
                     ),
             )
             .child(
