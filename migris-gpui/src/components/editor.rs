@@ -227,7 +227,7 @@ impl CompletionProvider for LspStore {
         let mut items: Vec<CompletionItem> = AppState::connection_unchecked(cx)
             .entities()
             .iter()
-            .filter(|entity| entity.name.to_lowercase().starts_with(&word))
+            .filter(|entity| entity.name_search.starts_with(&word))
             .map(|entity| CompletionItem {
                 label: entity.name.clone(),
                 detail: Some(entity.schema.clone()),

@@ -8,8 +8,11 @@ pub struct Entity {
     /// The schema containing the entity.
     pub schema: String,
 
-    /// The name of the entity within its schema.
+    /// The name of the entity.
     pub name: String,
+
+    /// The name of the entity, converted to be utilized for searches.
+    pub name_search: String,
 }
 
 impl Entity {
@@ -18,12 +21,12 @@ impl Entity {
             kind: EntityKind::Schema,
             schema: schema.into(),
             name: String::new(),
+            name_search: String::new(),
         }
     }
 
     pub fn id(&self) -> String {
         let mut id = self.schema.clone();
-
         if !self.name.is_empty() {
             id.push_str(&self.name);
         }

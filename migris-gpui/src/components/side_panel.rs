@@ -475,8 +475,7 @@ impl SidePanelState {
                         return true;
                     }
 
-                    let name = entity.name.to_lowercase();
-                    filters.iter().any(|f| name.contains(f))
+                    filters.iter().any(|f| entity.name_search.contains(f))
                 })
                 .map(|entity| TreeItem::new(SharedString::from(entity.id()), &entity.name))
                 .collect();

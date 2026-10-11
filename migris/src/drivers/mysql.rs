@@ -58,33 +58,38 @@ impl Driver for MySqlConnection {
     async fn entities(&self) -> MigrisResult<Vec<Entity>> {
         let query = r#"
             SELECT
+                'event' AS `kind`,
                 EVENT_SCHEMA AS `schema`,
                 EVENT_NAME AS `name`,
-                'event' AS `kind`
+                LOWER(EVENT_NAME) AS `name_search`
             FROM information_schema.EVENTS
             UNION
             SELECT
+                IF(ROUTINE_TYPE = 'FUNCTION', 'function', 'procedure') AS `kind`,
                 ROUTINE_SCHEMA AS `schema`,
                 ROUTINE_NAME AS `name`,
-                IF(ROUTINE_TYPE = 'FUNCTION', 'function', 'procedure') AS `kind`
+                LOWER(ROUTINE_NAME) AS `name_search`
             FROM information_schema.ROUTINES
             UNION
             SELECT
+                'schema' AS `kind`,
                 SCHEMA_NAME AS `schema`,
                 '' AS `name`,
-                'schema' AS `kind`
+                '' AS `name_search`
             FROM information_schema.SCHEMATA
             UNION
             SELECT
+                IF(TABLE_TYPE = 'BASE TABLE', 'table', 'view') AS `kind`,
                 TABLE_SCHEMA AS `schema`,
                 TABLE_NAME AS `name`,
-                IF(TABLE_TYPE = 'BASE TABLE', 'table', 'view') AS `kind`
+                LOWER(TABLE_NAME) AS `name_search`
             FROM information_schema.TABLES
             UNION
             SELECT
+                'trigger' AS `kind`,
                 TRIGGER_SCHEMA AS `schema`,
                 TRIGGER_NAME AS `name`,
-                'trigger' AS `kind`
+                LOWER(TRIGGER_NAME) AS `name_search`
             FROM information_schema.TRIGGERS
         "#;
 
