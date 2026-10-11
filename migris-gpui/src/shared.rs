@@ -52,7 +52,25 @@ pub async fn create_driver(connection: &Connection) -> Result<Arc<dyn Driver>> {
     })
 }
 
-/// Formats the given milliseconds into a more human-readable string.
+/// Formats the given bytes into a human-readable string.
+pub fn format_bytes(bytes: usize) -> String {
+    const UNITS: &[&str] = &["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{size:.2} {}", UNITS[unit])
+    }
+}
+
+/// Formats the given milliseconds into a human-readable string.
 pub fn format_ms(ms: u64) -> String {
     if ms == 0 {
         "<1ms".to_string()
@@ -133,8 +151,43 @@ pub mod colors {
     /// Returns the relative luminance of the given HSLA.
     ///
     /// https://en.wikipedia.org/wiki/Relative_luminance
-    pub fn relative_luminance(hsla: Hsla) -> f32 {
+    fn relative_luminance(hsla: Hsla) -> f32 {
         let rgb = hsla.to_rgb();
         0.2126 * linearize(rgb.r) + 0.7152 * linearize(rgb.g) + 0.0722 * linearize(rgb.b)
+    }
+}
+
+pub mod types {
+    use std::sync::Arc;
+
+    use gpui_kit::{ImageFormat, RenderImage};
+
+    #[derive(Clone)]
+    pub struct Image {
+        /// The processed render image.
+        pub render_image: Arc<RenderImage>,
+
+        /// The format of the image.
+        pub format: ImageFormat,
+
+        /// The size of the image in bytes.
+        pub size: usize,
+    }
+
+    impl Image {
+        /// Returns the displayed format for the image.
+        pub fn format(&self) -> &'static str {
+            match self.format {
+                ImageFormat::Bmp => "BMP",
+                ImageFormat::Gif => "GIF",
+                ImageFormat::Ico => "ICO",
+                ImageFormat::Jpeg => "JPEG",
+                ImageFormat::Png => "PNG",
+                ImageFormat::Pnm => "PNM",
+                ImageFormat::Svg => "SVG",
+                ImageFormat::Tiff => "TIFF",
+                ImageFormat::Webp => "WEBP",
+            }
+        }
     }
 }

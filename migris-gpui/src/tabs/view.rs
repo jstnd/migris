@@ -178,6 +178,10 @@ impl ViewTabState {
 
         let table = cx.new(|cx| QueryTableState::new(window, cx));
         cx.subscribe_in(&table, window, |this, _, event, window, cx| match event {
+            QueryTableEvent::OpenImage(image) => {
+                let event = Event::new(EventVariant::OpenImage(image.clone()));
+                EventManager::emit(window, cx, event);
+            }
             QueryTableEvent::Sort => this.refresh_data(window, cx),
         })
         .detach();

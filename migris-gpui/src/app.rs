@@ -204,6 +204,12 @@ impl Application {
                 self.open_entity(window, cx, entity);
                 EventManager::complete(cx, id);
             }
+            EventVariant::OpenImage(image) => {
+                self.side_panel.update(cx, |side_panel, cx| {
+                    side_panel.open_image(cx, image);
+                });
+                EventManager::complete(cx, id);
+            }
             EventVariant::RunSql(inner) => {
                 self.run_sql(window, cx, event, inner);
             }
@@ -216,7 +222,6 @@ impl Application {
             let result = driver.kill_process(process_id).await;
             _ = cx.update(|window, cx| {
                 if let Err(err) = result {
-                    println!("{}", err);
                     event.callbacks.on_error(window, cx, err.to_string());
                 }
 
@@ -470,6 +475,7 @@ impl Render for Application {
             .child(
                 h_flex()
                     .size_full()
+                    .min_h_0()
                     .child(
                         Sidebar::new("application-sidebar")
                             .collapsed(true)
@@ -501,6 +507,7 @@ impl Render for Application {
                                 this.child(
                                     resizable_panel()
                                         .size(DEFAULT_SIDE_PANEL_WIDTH)
+                                        .size_range(DEFAULT_SIDE_PANEL_WIDTH..Pixels::MAX)
                                         .child(SidePanel::new(&self.side_panel)),
                                 )
                             })

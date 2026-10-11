@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use gpui_kit::{
     Action, Anchor, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, Task, Window,
+    SharedString, StatefulInteractiveElement, Styled, Task, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
         ActiveTheme, Sizable,
@@ -21,7 +21,7 @@ use crate::{
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
-    events::{Event, EventId, EventManager, RunSqlEvent},
+    events::{Event, EventId, EventManager, EventVariant, RunSqlEvent},
     notifications,
     progress::QueryProgress,
 };
@@ -265,11 +265,6 @@ struct QueryTabState {
 
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
-
-    /// The subscriptions that handle events originating from the query tables, such as sorting.
-    ///
-    /// These are saved here since we want to drop the subscriptions when new queries are ran.
-    table_subscriptions: Vec<Subscription>,
 }
 
 impl QueryTabState {
@@ -284,7 +279,6 @@ impl QueryTabState {
             query_progress: None,
             query_progress_task: None,
             tables: Vec::new(),
-            table_subscriptions: Vec::new(),
         }
     }
 
@@ -326,7 +320,6 @@ impl QueryTabState {
     /// Clears the results from the tab.
     fn clear_results(&mut self) {
         self.tables.clear();
-        self.table_subscriptions.clear();
         self.active_table = 0;
     }
 
@@ -352,8 +345,12 @@ impl QueryTabState {
             RunSqlEvent::new(sql, move |window, cx, result| {
                 this.update(cx, |this, cx| {
                     let table = cx.new(|cx| QueryTableState::with_result(window, cx, result));
-                    let subscription = cx.subscribe(&table, |_, table, event, cx| {
+                    cx.subscribe_in(&table, window, |_, table, event, window, cx| {
                         match event {
+                            QueryTableEvent::OpenImage(image) => {
+                                let event = Event::new(EventVariant::OpenImage(image.clone()));
+                                EventManager::emit(window, cx, event);
+                            }
                             QueryTableEvent::Sort => {
                                 // When sorting within a result table on a query tab, we just want to perform the sort in-memory
                                 // as attempting to hit the database again for the sorted data would be quite complex.
@@ -362,10 +359,10 @@ impl QueryTabState {
                                 });
                             }
                         }
-                    });
+                    })
+                    .detach();
 
                     this.tables.push(table);
-                    this.table_subscriptions.push(subscription);
                     cx.notify();
                 });
             })

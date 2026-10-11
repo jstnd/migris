@@ -5,7 +5,7 @@ use migris::{Entity as MigrisEntity, EntityData, data::QueryResult};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{connections::ConnectionId, state::AppState};
+use crate::{connections::ConnectionId, shared::types::Image, state::AppState};
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
@@ -147,6 +147,7 @@ pub enum EventVariant {
     LoadEntity(LoadEntityEvent),
     OpenConnection(ConnectionId),
     OpenEntity(MigrisEntity),
+    OpenImage(Option<Image>),
     RunSql(RunSqlEvent),
 }
 

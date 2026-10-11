@@ -6,9 +6,9 @@ use std::{
 
 use futures_util::StreamExt;
 use gpui_kit::{
-    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable, Image, InteractiveElement,
-    IntoElement, KeyBinding, ParentElement, Pixels, RenderImage, RenderOnce, ScrollWheelEvent, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window,
+    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable, InteractiveElement, IntoElement,
+    KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window,
     base::h_flex,
     component::{
         ActiveTheme, Sizable,
@@ -32,6 +32,7 @@ use crate::{
         text_ellipsis,
     },
     settings::{Setting, SettingsManager},
+    shared::types::Image,
     size::Size,
 };
 
@@ -59,11 +60,13 @@ pub fn init(cx: &mut App) {
 enum QueryTableAction {
     DecreaseSize,
     IncreaseSize,
+    OpenImage(Cell),
     UpdateCellDisplay(Cell, ValueDisplay),
     UpdateColumnDisplay(SharedString, ValueDisplay),
 }
 
 pub enum QueryTableEvent {
+    OpenImage(Option<Image>),
     Sort,
 }
 
@@ -229,6 +232,14 @@ impl QueryTableState {
                     SettingsManager::save(cx);
                     cx.notify();
                 }
+            }
+            QueryTableAction::OpenImage(cell) => {
+                self.table.update(cx, |table, cx| {
+                    table.delegate_mut().create_cell_image(cx, cell);
+                });
+
+                let image = self.table.read(cx).delegate().image_cache.get(cell).flatten();
+                cx.emit(QueryTableEvent::OpenImage(image));
             }
             QueryTableAction::UpdateCellDisplay(cell, display) => {
                 self.table.update(cx, |table, cx| {
@@ -577,6 +588,61 @@ impl QueryTableDelegate {
         }
     }
 
+    /// Returns the value for the given cell.
+    fn cell_value(&self, cell: &Cell) -> &Value {
+        let data = self.data().unwrap();
+        let row = &data.rows()[cell.row_idx];
+        let column_idx = self
+            .columns
+            .iter()
+            .position(|column| column.key == cell.column)
+            .unwrap();
+
+        &row.values[column_idx - 1]
+    }
+
+    /// Creates the image for the given cell.
+    fn create_cell_image(&mut self, cx: &App, cell: &Cell) {
+        if self.image_cache.contains(cell) {
+            return;
+        }
+
+        let value = self.cell_value(cell);
+        let image = if let Value::Bytes(bytes) = value {
+            let format = match image::guess_format(bytes) {
+                Ok(image::ImageFormat::Bmp) => Some(gpui_kit::ImageFormat::Bmp),
+                Ok(image::ImageFormat::Gif) => Some(gpui_kit::ImageFormat::Gif),
+                Ok(image::ImageFormat::Ico) => Some(gpui_kit::ImageFormat::Ico),
+                Ok(image::ImageFormat::Jpeg) => Some(gpui_kit::ImageFormat::Jpeg),
+                Ok(image::ImageFormat::Png) => Some(gpui_kit::ImageFormat::Png),
+                Ok(image::ImageFormat::Pnm) => Some(gpui_kit::ImageFormat::Pnm),
+                Ok(image::ImageFormat::Tiff) => Some(gpui_kit::ImageFormat::Tiff),
+                Ok(image::ImageFormat::WebP) => Some(gpui_kit::ImageFormat::Webp),
+                _ => None,
+            };
+
+            format.and_then(|format| {
+                let image = Arc::new(gpui_kit::Image::from_bytes(format, bytes.to_vec()));
+                let format = image.format;
+                let size = image.bytes.len();
+
+                if let Ok(image) = image.to_image_data(cx.svg_renderer()) {
+                    Some(Image {
+                        render_image: image,
+                        format,
+                        size,
+                    })
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+
+        self.image_cache.set(cell.clone(), image);
+    }
+
     /// Returns a reference to the query data.
     fn data(&self) -> Option<&QueryData> {
         let Some(result) = &self.result else {
@@ -750,10 +816,6 @@ impl TableDelegate for QueryTableDelegate {
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
-        let Some(data) = self.data() else {
-            return div().into_any_element();
-        };
-
         let table_size = SettingsManager::table_size(cx);
         let font_size = table_size.font_size(cx);
         if column_idx == ROW_NUMBER_COLUMN_IDX {
@@ -777,8 +839,11 @@ impl TableDelegate for QueryTableDelegate {
         };
 
         let column = &self.columns[column_idx];
-        let row = &data.rows()[row_idx];
-        let value = &row.values[column_idx - 1];
+        let cell = Cell {
+            column: column.key.clone(),
+            row_idx,
+        };
+        let value = self.cell_value(&cell);
         let color = match value {
             Value::Bytes(_) => cx.theme().magenta,
             Value::Date(_) | Value::DateTime(_) | Value::Time(_) => cx.theme().red,
@@ -797,10 +862,6 @@ impl TableDelegate for QueryTableDelegate {
             Value::String(_) => cx.theme().green,
         };
 
-        let cell = Cell {
-            column: column.key.clone(),
-            row_idx,
-        };
         let default_display = text_ellipsis(value.to_string()).into_any_element();
         let value_display_mode = self.cell_display(&cell);
         let value_display = match value_display_mode {
@@ -808,55 +869,25 @@ impl TableDelegate for QueryTableDelegate {
             ValueDisplay::Image => {
                 if let Some(cache_value) = self.image_cache.get(&cell) {
                     if let Some(image) = cache_value {
-                        let image_size = image.size(0);
-                        let aspect_ratio = image_size.width.0 as f32 / image_size.height.0 as f32;
-                        let row_height = table_size.table_size().table_row_height();
-                        let width = row_height * aspect_ratio;
-
                         h_flex()
                             .size_full()
                             .justify_center()
-                            .child(img(image).w(width))
+                            .child(img(image.render_image).max_size_full())
                             .into_any_element()
                     } else {
                         default_display
                     }
                 } else if !self.images_pending.contains(&cell) {
-                    if let Value::Bytes(bytes) = value {
-                        let bytes = bytes.clone();
-                        let cell = cell.clone();
-                        self.images_pending.insert(cell.clone());
-                        cx.spawn(async move |this, cx| {
-                            let format = if let Ok(format) = image::guess_format(&bytes) {
-                                match format {
-                                    image::ImageFormat::Bmp => Some(gpui_kit::ImageFormat::Bmp),
-                                    image::ImageFormat::Gif => Some(gpui_kit::ImageFormat::Gif),
-                                    image::ImageFormat::Ico => Some(gpui_kit::ImageFormat::Ico),
-                                    image::ImageFormat::Jpeg => Some(gpui_kit::ImageFormat::Jpeg),
-                                    image::ImageFormat::Png => Some(gpui_kit::ImageFormat::Png),
-                                    image::ImageFormat::Pnm => Some(gpui_kit::ImageFormat::Pnm),
-                                    image::ImageFormat::Tiff => Some(gpui_kit::ImageFormat::Tiff),
-                                    image::ImageFormat::WebP => Some(gpui_kit::ImageFormat::Webp),
-                                    _ => None,
-                                }
-                            } else {
-                                None
-                            };
-
-                            _ = this.update(cx, |this, cx| {
-                                let image = format.map(|format| {
-                                    Arc::new(Image::from_bytes(format, bytes.to_vec()))
-                                        .to_image_data(cx.svg_renderer())
-                                        .ok()
-                                });
-
-                                this.delegate_mut().images_pending.remove(&cell);
-                                this.delegate_mut().image_cache.set(cell, image.flatten());
-                                cx.notify();
-                            });
-                        })
-                        .detach();
-                    }
+                    let cell = cell.clone();
+                    self.images_pending.insert(cell.clone());
+                    cx.spawn(async move |this, cx| {
+                        _ = this.update(cx, |this, cx| {
+                            this.delegate_mut().create_cell_image(cx, &cell);
+                            this.delegate_mut().images_pending.remove(&cell);
+                            cx.notify();
+                        });
+                    })
+                    .detach();
 
                     default_display
                 } else {
@@ -874,14 +905,16 @@ impl TableDelegate for QueryTableDelegate {
             .context_menu({
                 let cell = cell.clone();
                 move |menu, _, _| {
-                    menu.menu(
-                        "View as Image",
-                        Box::new(QueryTableAction::UpdateCellDisplay(cell.clone(), ValueDisplay::Image)),
-                    )
-                    .menu(
-                        "Reset View",
-                        Box::new(QueryTableAction::UpdateCellDisplay(cell.clone(), ValueDisplay::Default)),
-                    )
+                    menu.menu("Open Image", Box::new(QueryTableAction::OpenImage(cell.clone())))
+                        .separator()
+                        .menu(
+                            "View as Image",
+                            Box::new(QueryTableAction::UpdateCellDisplay(cell.clone(), ValueDisplay::Image)),
+                        )
+                        .menu(
+                            "Reset View",
+                            Box::new(QueryTableAction::UpdateCellDisplay(cell.clone(), ValueDisplay::Default)),
+                        )
                 }
             })
             .into_any_element()
@@ -1005,7 +1038,7 @@ struct ImageCache {
     ///
     /// A given key can also contain [`None`] within the cache, meaning an image failed to create for the data corresponding to the key.
     /// This saves us from having to constantly do the work otherwise to determine whether the data is able to be converted into an image.
-    cache: HashMap<Cell, Option<Arc<RenderImage>>>,
+    cache: HashMap<Cell, Option<Image>>,
 }
 
 impl ImageCache {
@@ -1029,13 +1062,18 @@ impl ImageCache {
         self.cache.retain(|cell, _| &cell.column != column);
     }
 
-    /// Returns the image for the given key.
-    fn get(&self, key: &Cell) -> Option<Option<Arc<RenderImage>>> {
-        self.cache.get(key).cloned()
+    /// Returns whether the cache contains the given cell.
+    fn contains(&self, cell: &Cell) -> bool {
+        self.cache.contains_key(cell)
     }
 
-    /// Inserts the given image for the given key.
-    fn set(&mut self, key: Cell, value: Option<Arc<RenderImage>>) {
-        self.cache.insert(key, value);
+    /// Returns the image for the given cell.
+    fn get(&self, cell: &Cell) -> Option<Option<Image>> {
+        self.cache.get(cell).cloned()
+    }
+
+    /// Inserts the given value for the given cell.
+    fn set(&mut self, cell: Cell, value: Option<Image>) {
+        self.cache.insert(cell, value);
     }
 }

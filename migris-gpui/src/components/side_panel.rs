@@ -2,16 +2,23 @@ use std::collections::{BTreeMap, HashSet};
 
 use gpui_kit::{
     Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, KeystrokeEvent,
-    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window,
+    ParentElement, Pixels, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window,
     base::{
-        TreeItem, TreeState, h_flex,
+        ResizablePanelEvent, ResizableState, TreeItem, TreeState, h_flex,
         input::{InputEvent, InputState},
-        v_flex,
+        resizable_panel, v_flex,
     },
     component::{
-        clipboard::Clipboard, input::Input, list::ListItem, scroll::ScrollableElement, tooltip::Tooltip, tree,
+        ActiveTheme, Sizable,
+        button::{Button, ButtonVariants},
+        clipboard::Clipboard,
+        input::Input,
+        list::ListItem,
+        scroll::ScrollableElement,
+        tooltip::Tooltip,
+        tree, v_resizable,
     },
-    div,
+    div, img,
     prelude::FluentBuilder,
     px,
 };
@@ -24,11 +31,14 @@ use crate::{
     },
     events::{Event, EventManager, EventVariant},
     history::{QueryHistory, QueryHistoryGroup, QueryHistoryId, QueryStatus},
-    shared,
+    shared::{self, types::Image},
     state::AppState,
 };
 
 const SIDE_PANEL: &str = "SIDE_PANEL";
+
+const DEFAULT_SECONDARY_HEIGHT: Pixels = px(300.0);
+const SECONDARY_PANEL_IDX: usize = 1;
 
 /// Initializes configuration for the side panel.
 pub fn init(cx: &mut App) {
@@ -69,6 +79,11 @@ impl SidePanelTab {
     }
 }
 
+#[derive(Clone)]
+enum SidePanelSecondary {
+    Image(Option<Image>),
+}
+
 #[derive(IntoElement)]
 pub struct SidePanel {
     /// The state for the side panel.
@@ -89,11 +104,63 @@ impl RenderOnce for SidePanel {
         div()
             .key_context(SIDE_PANEL)
             .size_full()
-            .py_1()
-            .child(match active_tab {
-                SidePanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
-                SidePanelTab::History => history_tab(window, cx, &self.state).into_any_element(),
-            })
+            .child(
+                v_resizable(SIDE_PANEL)
+                    .with_state(&self.state.read(cx).resizable)
+                    .child(resizable_panel().child(match active_tab {
+                        SidePanelTab::Connection => connection_tab(cx, &self.state).into_any_element(),
+                        SidePanelTab::History => history_tab(window, cx, &self.state).into_any_element(),
+                    }))
+                    .when_some(self.state.read(cx).secondary.as_ref(), |this, secondary| {
+                        this.child(
+                            resizable_panel().child(match secondary {
+                                SidePanelSecondary::Image(image) => v_flex()
+                                    .size_full()
+                                    .min_h_0()
+                                    .gap_1()
+                                    .p_1()
+                                    .text_sm()
+                                    .child(
+                                        h_flex()
+                                            .justify_between()
+                                            .child(if let Some(image) = image {
+                                                let image_size = image.render_image.size(0);
+                                                format!(
+                                                    "{} • {} x {} • {}",
+                                                    image.format(),
+                                                    image_size.width.0,
+                                                    image_size.height.0,
+                                                    shared::format_bytes(image.size)
+                                                )
+                                            } else {
+                                                "No Image Detected".to_string()
+                                            })
+                                            .child(
+                                                Button::new("btn-close-image")
+                                                    .ghost()
+                                                    .small()
+                                                    .icon(IconName::X)
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .on_click(window.listener_for(&self.state, |state, _, _, _| {
+                                                        state.close_secondary();
+                                                    })),
+                                            ),
+                                    )
+                                    .child(if let Some(image) = image {
+                                        img(image.render_image.clone()).max_size_full().into_any_element()
+                                    } else {
+                                        h_flex()
+                                            .flex_1()
+                                            .items_center()
+                                            .justify_center()
+                                            .text_3xl()
+                                            .child(Icon::new(cx, IconName::ImageOff).disabled(true))
+                                            .into_any_element()
+                                    }),
+                            }),
+                        )
+                    }),
+            )
             .on_action(window.listener_for(&self.state, |state, action, window, cx| {
                 state.handle_action(window, cx, action);
             }))
@@ -104,7 +171,7 @@ fn connection_tab(cx: &mut App, state: &Entity<SidePanelState>) -> impl IntoElem
     v_flex()
         .size_full()
         .gap_1()
-        .px_1()
+        .p_1()
         .child(
             Input::new(&state.read(cx).search_input)
                 .cleanable(true)
@@ -178,6 +245,7 @@ fn history_tab(window: &mut Window, cx: &mut App, state: &Entity<SidePanelState>
         .gap_5()
         .mr_4()
         .pl_2()
+        .py_1()
         .text_sm()
         .overflow_y_scrollbar()
         .children(history.groups.iter().map(|group| {
@@ -269,8 +337,17 @@ pub struct SidePanelState {
     /// The currently hovered history within the history tab.
     hovered_history: Option<QueryHistoryId>,
 
+    /// The state for the resizable panels.
+    resizable: Entity<ResizableState>,
+
     /// The state for the search input.
     search_input: Entity<InputState>,
+
+    /// The active mode for the secondary panel.
+    secondary: Option<SidePanelSecondary>,
+
+    /// The height of the secondary panel.
+    secondary_height: Pixels,
 
     /// The state for the tree.
     tree: Entity<TreeState>,
@@ -279,20 +356,6 @@ pub struct SidePanelState {
 impl SidePanelState {
     /// Creates a new [`SidePanelState`].
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
-        let tree = cx.new(|cx| TreeState::new(cx));
-
-        cx.observe_keystrokes(|this, event, _, cx| {
-            this.handle_keystroke(cx, event);
-        })
-        .detach();
-        cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
-            if let InputEvent::Change = event {
-                this.load_entities(cx);
-            }
-        })
-        .detach();
-
         // Load data for history tab.
         let database = AppState::database(cx);
         cx.spawn(async move |this, cx| {
@@ -303,13 +366,42 @@ impl SidePanelState {
         })
         .detach();
 
+        let resizable = cx.new(|_| ResizableState::default());
+        cx.subscribe(&resizable, |this, resizable, event, cx| {
+            match event {
+                ResizablePanelEvent::Resized => {
+                    // Track any size changes to the secondary panel while it's visible.
+                    if this.secondary.is_some() {
+                        this.secondary_height = resizable.read(cx).sizes()[SECONDARY_PANEL_IDX];
+                    }
+                }
+            }
+        })
+        .detach();
+
+        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(shared::SEARCH_PLACEHOLDER));
+        cx.subscribe(&search_input, |this, _, event: &InputEvent, cx| {
+            if let InputEvent::Change = event {
+                this.load_entities(cx);
+            }
+        })
+        .detach();
+
+        cx.observe_keystrokes(|this, event, _, cx| {
+            this.handle_keystroke(cx, event);
+        })
+        .detach();
+
         Self {
             active_tab: SidePanelTab::Connection,
             expanded: HashSet::new(),
             history: None,
             hovered_history: None,
+            resizable,
             search_input,
-            tree,
+            secondary: None,
+            secondary_height: DEFAULT_SECONDARY_HEIGHT,
+            tree: cx.new(|cx| TreeState::new(cx)),
         }
     }
 
@@ -401,6 +493,16 @@ impl SidePanelState {
         items
     }
 
+    /// Closes the secondary panel.
+    fn close_secondary(&mut self) {
+        self.secondary = None;
+    }
+
+    /// Returns whether the entity with the given id is expanded.
+    fn is_expanded(&self, id: &SharedString) -> bool {
+        self.expanded.contains(id)
+    }
+
     /// Loads the entities from the application's connection into the tree.
     pub fn load_entities(&mut self, cx: &mut Context<Self>) {
         let filter = self.search_input.read(cx).value().to_lowercase();
@@ -411,15 +513,26 @@ impl SidePanelState {
         });
     }
 
-    /// Returns whether the entity with the given id is expanded.
-    fn is_expanded(&self, id: &SharedString) -> bool {
-        self.expanded.contains(id)
-    }
-
     /// Emits an event to open the given entity.
     fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) {
         let event = Event::new(EventVariant::OpenEntity(entity));
         EventManager::emit(window, cx, event);
+    }
+
+    /// Opens the given image inside the secondary panel.
+    pub fn open_image(&mut self, cx: &mut App, image: Option<Image>) {
+        if self.secondary.is_none() {
+            self.open_secondary(cx);
+        }
+
+        self.secondary = Some(SidePanelSecondary::Image(image));
+    }
+
+    /// Opens the secondary panel.
+    fn open_secondary(&self, cx: &mut App) {
+        self.resizable.update(cx, |resizable, cx| {
+            resizable.insert_panel(Some(self.secondary_height), Some(SECONDARY_PANEL_IDX), cx);
+        });
     }
 
     /// Opens the given tab within the panel.
