@@ -240,7 +240,12 @@ impl CompletionProvider for LspStore {
             })
             .collect();
 
-        items.sort_unstable_by(|a, b| a.label.cmp(&b.label).then(a.detail.cmp(&b.detail)));
+        items.sort_by_cached_key(|item| {
+            (
+                item.label.to_lowercase(),
+                item.detail.as_ref().map(|detail| detail.to_lowercase()),
+            )
+        });
         Task::ready(Ok(CompletionResponse::Array(items)))
     }
 
