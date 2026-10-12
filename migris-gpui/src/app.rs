@@ -85,6 +85,7 @@ enum ApplicationAction {
     OpenPreviousTab,
     OpenQueryTab,
     OpenSettings,
+    Quit,
 }
 
 const DEFAULT_SIDE_PANEL_WIDTH: Pixels = px(300.0);
@@ -184,6 +185,7 @@ impl Application {
             }
             ApplicationAction::OpenConnectionDialog => components::open_connection_dialog(window, cx),
             ApplicationAction::OpenSettings => components::open_settings_dialog(window, cx),
+            ApplicationAction::Quit => cx.quit(),
         }
     }
 
@@ -570,9 +572,15 @@ fn render_menu_bar() -> impl IntoElement {
             .small()
             .label("File")
             .dropdown_menu(|menu, _, _| {
-                menu.menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))
+                menu.menu("New Query Tab", Box::new(ApplicationAction::OpenQueryTab))
+                    .menu("Next Tab", Box::new(ApplicationAction::OpenNextTab))
+                    .menu("Previous Tab", Box::new(ApplicationAction::OpenPreviousTab))
+                    .menu("Close Active Tab", Box::new(ApplicationAction::CloseActiveTab))
                     .separator()
+                    .menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))
                     .menu("Settings", Box::new(ApplicationAction::OpenSettings))
+                    .separator()
+                    .menu("Exit", Box::new(ApplicationAction::Quit))
             }),
     )
 }

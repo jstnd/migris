@@ -148,17 +148,19 @@ impl TabPanelState {
             return;
         }
 
-        self.tabs[idx].close(window, cx);
-        self.tabs.remove(idx);
+        cx.defer_in(window, move |this, window, cx| {
+            this.tabs[idx].close(window, cx);
+            this.tabs.remove(idx);
 
-        // Adjust the active tab if needed.
-        let new_tab = if self.active_tab >= idx && self.active_tab > 0 {
-            self.active_tab - 1
-        } else {
-            self.active_tab
-        };
+            // Adjust the active tab if needed.
+            let new_tab = if this.active_tab >= idx && this.active_tab > 0 {
+                this.active_tab - 1
+            } else {
+                this.active_tab
+            };
 
-        self.open_tab(window, cx, new_tab);
+            this.open_tab(window, cx, new_tab);
+        });
     }
 
     /// Returns the index for the tab displaying the given entity, if one is found.
