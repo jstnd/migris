@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use gpui_kit::{
     App, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
     StatefulInteractiveElement, Styled, Window,
@@ -50,7 +52,7 @@ impl RenderOnce for TabPanel {
                                         Icon::new(cx, tab.icon())
                                             .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
                                     )
-                                    .child(tab.label())
+                                    .child(tab.label(cx))
                                     .when(state.tabs.len() > 1, |this| {
                                         this.child(
                                             Button::new(("btn-close-tab", idx))
@@ -124,15 +126,13 @@ impl TabPanelState {
 
     /// Adds a new query tab to the panel.
     pub fn add_query_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let variant = TabVariant::Query(self.next_query_number());
+        let variant = TabVariant::Query(self.next_query_number(), None);
         self.add_tab(window, cx, variant);
     }
 
     /// Adds a new tab to the panel.
     pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, variant: TabVariant) {
         self.tabs.push(TabView::new(window, cx, variant));
-
-        // Open the newly added tab.
         self.open_tab(window, cx, self.tabs.len() - 1);
     }
 
@@ -169,7 +169,7 @@ impl TabPanelState {
             .iter()
             .enumerate()
             .find(|(_, tab)| match tab.variant() {
-                TabVariant::Query(_) => false,
+                TabVariant::Query(_, _) => false,
                 TabVariant::Table(tab_entity) => tab_entity == entity,
                 TabVariant::View(tab_entity) => tab_entity == entity,
             })
@@ -183,7 +183,7 @@ impl TabPanelState {
         self.tabs
             .iter()
             .filter_map(|tab| {
-                let TabVariant::Query(number) = tab.variant() else {
+                let TabVariant::Query(number, _) = tab.variant() else {
                     return None;
                 };
 
@@ -192,6 +192,13 @@ impl TabPanelState {
             .max()
             .unwrap_or_default()
             + 1
+    }
+
+    /// Opens a query tab with the given path.
+    pub fn open_file_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, path: PathBuf) {
+        // TODO: check for existing file tab
+        let variant = TabVariant::Query(self.next_query_number(), Some(path));
+        self.add_tab(window, cx, variant);
     }
 
     /// Opens the next tab relative to the active tab.

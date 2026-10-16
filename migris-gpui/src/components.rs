@@ -1,8 +1,7 @@
 use gpui_kit::{
-    App, BorrowAppContext, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement,
-    Styled, Window,
+    App, BorrowAppContext, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, Window,
     base::{h_flex, v_flex},
-    component::{ActiveTheme, WindowExt, dialog::AlertDialog},
+    component::{ActiveTheme, WindowExt},
     div,
 };
 
@@ -49,12 +48,6 @@ pub fn entry_screen(cx: &App) -> impl IntoElement {
                 )
                 .child("."),
         )
-}
-
-pub fn error_dialog(dialog: AlertDialog, cx: &mut App, error: &str) -> AlertDialog {
-    dialog
-        .title(h_flex().gap_2().child(Icon::red(cx, IconName::CircleX2)).child("Error"))
-        .description(SharedString::new(error))
 }
 
 pub fn labeled(label: impl IntoElement, element: impl IntoElement) -> impl IntoElement {

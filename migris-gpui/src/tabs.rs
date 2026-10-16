@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use gpui_kit::{AnyElement, App, IntoElement, SharedString, Window};
 use migris::Entity as MigrisEntity;
 
@@ -22,7 +24,7 @@ enum TabState {
 }
 
 pub enum TabVariant {
-    Query(usize),
+    Query(usize, Option<PathBuf>),
     Table(MigrisEntity),
     View(MigrisEntity),
 }
@@ -39,7 +41,11 @@ impl TabView {
     /// Creates a new [`TabView`].
     pub fn new(window: &mut Window, cx: &mut App, variant: TabVariant) -> Self {
         let tab = match &variant {
-            TabVariant::Query(number) => TabState::Query(QueryTab::new(window, cx, *number)),
+            TabVariant::Query(number, path) => TabState::Query(if let Some(path) = path.clone() {
+                QueryTab::with_path(window, cx, *number, path)
+            } else {
+                QueryTab::new(window, cx, *number)
+            }),
             TabVariant::Table(entity) => TabState::Table(TableTab::new(window, cx, entity.clone())),
             TabVariant::View(entity) => TabState::View(ViewTab::new(window, cx, entity.clone())),
         };
@@ -56,7 +62,7 @@ impl TabView {
         }
     }
 
-    /// Returns the content for the tab view.
+    /// Returns the content for the tab.
     pub fn content(&self, window: &mut Window, cx: &App) -> AnyElement {
         match &self.tab {
             TabState::Query(tab) => tab.content(window, cx).into_any_element(),
@@ -65,7 +71,7 @@ impl TabView {
         }
     }
 
-    /// Focuses the content in the tab view.
+    /// Focuses the content in the tab.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         match &self.tab {
             TabState::Query(tab) => tab.focus(window, cx),
@@ -74,25 +80,25 @@ impl TabView {
         }
     }
 
-    /// Returns the icon for the tab view.
+    /// Returns the icon for the tab.
     pub fn icon(&self) -> IconName {
         match self.variant {
-            TabVariant::Query(_) => IconName::Code,
+            TabVariant::Query(_, _) => IconName::Code,
             TabVariant::Table(_) => IconName::Grid3x3,
             TabVariant::View(_) => IconName::Eye,
         }
     }
 
-    /// Returns the label for the tab view.
-    pub fn label(&self) -> SharedString {
+    /// Returns the label for the tab.
+    pub fn label(&self, cx: &App) -> SharedString {
         match &self.tab {
-            TabState::Query(tab) => tab.label(),
+            TabState::Query(tab) => tab.label(cx),
             TabState::Table(tab) => tab.label(),
             TabState::View(tab) => tab.label(),
         }
     }
 
-    /// Returns the variant of the tab view.
+    /// Returns the variant of the tab.
     pub fn variant(&self) -> &TabVariant {
         &self.variant
     }

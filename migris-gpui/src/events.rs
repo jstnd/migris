@@ -51,7 +51,8 @@ impl EventManager {
     }
 
     /// Emits the given [`Event`].
-    pub fn emit(window: &mut Window, cx: &mut App, event: Event) {
+    pub fn emit(window: &mut Window, cx: &mut App, event: impl Into<Event>) {
+        let event = event.into();
         let id = event.id;
         Self::global_mut(cx).push(event);
         AppState::handle(cx)
@@ -143,12 +144,19 @@ impl EventCallbacks {
 
 #[derive(Clone)]
 pub enum EventVariant {
+    CloseActiveTab,
     KillProcess(u64),
     LoadEntity(LoadEntityEvent),
     OpenConnection(ConnectionId),
     OpenEntity(MigrisEntity),
     OpenImage(Option<Image>),
     RunSql(RunSqlEvent),
+}
+
+impl From<EventVariant> for Event {
+    fn from(value: EventVariant) -> Self {
+        Self::new(value)
+    }
 }
 
 #[derive(Clone)]

@@ -69,6 +69,7 @@ pub fn init(window: &mut Window, cx: &mut App, database: Arc<Database>) {
 fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("secondary-w", ApplicationAction::CloseActiveTab, None),
+        KeyBinding::new("secondary-o", ApplicationAction::OpenFile, None),
         KeyBinding::new("secondary-tab", ApplicationAction::OpenNextTab, None),
         KeyBinding::new("secondary-shift-tab", ApplicationAction::OpenPreviousTab, None),
         KeyBinding::new("secondary-t", ApplicationAction::OpenQueryTab, None),
@@ -81,6 +82,7 @@ fn init_keybindings(cx: &mut App) {
 enum ApplicationAction {
     CloseActiveTab,
     OpenConnectionDialog,
+    OpenFile,
     OpenNextTab,
     OpenPreviousTab,
     OpenQueryTab,
@@ -184,6 +186,7 @@ impl Application {
                 });
             }
             ApplicationAction::OpenConnectionDialog => components::open_connection_dialog(window, cx),
+            ApplicationAction::OpenFile => self.open_file(cx),
             ApplicationAction::OpenSettings => components::open_settings_dialog(window, cx),
             ApplicationAction::Quit => cx.quit(),
         }
@@ -197,6 +200,7 @@ impl Application {
         let event = event.clone();
         let event_variant = event.variant.clone();
         match event_variant {
+            EventVariant::CloseActiveTab => self.handle_action(window, cx, &ApplicationAction::CloseActiveTab),
             EventVariant::KillProcess(process_id) => self.kill_process(window, cx, event, process_id),
             EventVariant::LoadEntity(inner) => {
                 self.load_entity(window, cx, event, inner);
@@ -337,6 +341,24 @@ impl Application {
 
             cx.notify();
         })
+    }
+
+    fn open_file(&self, cx: &mut Context<Self>) {
+        cx.spawn(async |this, cx| {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("*.sql", &["sql"])
+                .pick_file()
+                .await;
+
+            if let Some(file) = file {
+                _ = this.update_in(cx, |this, window, cx| {
+                    this.tab_panel.update(cx, |tab_panel, cx| {
+                        tab_panel.open_file_tab(window, cx, file.path().to_path_buf());
+                    });
+                });
+            }
+        })
+        .detach();
     }
 
     fn run_sql(&self, window: &mut Window, cx: &mut Context<Self>, event: Event, run_event: RunSqlEvent) {
@@ -576,6 +598,8 @@ fn render_menu_bar() -> impl IntoElement {
                     .menu("Next Tab", Box::new(ApplicationAction::OpenNextTab))
                     .menu("Previous Tab", Box::new(ApplicationAction::OpenPreviousTab))
                     .menu("Close Active Tab", Box::new(ApplicationAction::CloseActiveTab))
+                    .separator()
+                    .menu("Open File...", Box::new(ApplicationAction::OpenFile))
                     .separator()
                     .menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))
                     .menu("Settings", Box::new(ApplicationAction::OpenSettings))

@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use anyhow::Result;
 use gpui_kit::{
-    Action, App, AppContext, Context, DispatchPhase, Entity, InteractiveElement, IntoElement, KeyBinding,
+    Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, InteractiveElement, IntoElement, KeyBinding,
     ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled, Task,
     Window,
-    base::input::{CompletionProvider, TabSize},
+    base::input::{CompletionProvider, InputEvent, TabSize},
     component::{
         Rope, RopeExt, input,
         menu::{ContextMenuExt, PopupMenu},
@@ -31,6 +31,11 @@ pub fn init(cx: &mut App) {
 enum EditorAction {
     DecreaseSize,
     IncreaseSize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum EditorEvent {
+    Change,
 }
 
 /// An editor component for handling SQL editing.
@@ -121,7 +126,12 @@ pub struct EditorState {
 
     /// Whether the editor is hovered over.
     is_hovered: bool,
+
+    /// Whether the editor has a pending content replacement.
+    pending_replace: bool,
 }
+
+impl EventEmitter<EditorEvent> for EditorState {}
 
 impl EditorState {
     /// Creates a new [`EditorState`].
@@ -135,6 +145,18 @@ impl EditorState {
                     hard_tabs: false,
                 })
         });
+        cx.subscribe(&editor, |this, _, event, cx| {
+            if let InputEvent::Change = event {
+                // Only emit the change event if we're not replacing the full content of the editor.
+                if !this.pending_replace {
+                    cx.emit(EditorEvent::Change);
+                }
+
+                this.pending_replace = false;
+            }
+        })
+        .detach();
+
         editor.update(cx, |editor, _| {
             editor.lsp_mut().completion_menu.max_width = px(500.0);
             editor.lsp_mut().completion_provider = Some(Rc::new(LspStore));
@@ -143,6 +165,7 @@ impl EditorState {
         Self {
             editor,
             is_hovered: false,
+            pending_replace: false,
         }
     }
 
@@ -188,7 +211,8 @@ impl EditorState {
     }
 
     /// Sets the content within the editor.
-    pub fn set_value(&self, window: &mut Window, cx: &mut App, value: &str) {
+    pub fn set_value(&mut self, window: &mut Window, cx: &mut App, value: &str) {
+        self.pending_replace = true;
         self.editor.update(cx, |editor, cx| {
             editor.replace_all(value, window, cx);
         });

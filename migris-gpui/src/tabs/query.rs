@@ -1,8 +1,9 @@
-use std::time::Duration;
+use std::{ffi::OsStr, path::PathBuf, time::Duration};
 
+use anyhow::Result;
 use gpui_kit::{
-    Action, Anchor, App, AppContext, Context, Entity, InteractiveElement, IntoElement, KeyBinding, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Task, Window,
+    Action, Anchor, App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyBinding,
+    ParentElement, SharedString, StatefulInteractiveElement, Styled, Task, Window,
     base::{Disableable, h_flex, resizable_panel, v_flex, v_resizable},
     component::{
         ActiveTheme, Sizable,
@@ -14,10 +15,11 @@ use gpui_kit::{
     div,
     prelude::FluentBuilder,
 };
+use notify::{RecursiveMode, Watcher};
 
 use crate::{
     components::{
-        editor::{Editor, EditorState},
+        editor::{Editor, EditorEvent, EditorState},
         icon::{Icon, IconName},
         table::{QueryTable, QueryTableEvent, QueryTableState},
     },
@@ -66,6 +68,9 @@ pub struct QueryTab {
     /// The query tab label.
     label: SharedString,
 
+    /// The query tab label used when the tab has pending changes.
+    label_changes: SharedString,
+
     /// The query tab number.
     number: usize,
 }
@@ -73,11 +78,24 @@ pub struct QueryTab {
 impl QueryTab {
     /// Creates a new [`QueryTab`].
     pub fn new(window: &mut Window, cx: &mut App, number: usize) -> Self {
-        let state = cx.new(|cx| QueryTabState::new(window, cx));
+        Self {
+            state: cx.new(|cx| QueryTabState::new(window, cx)),
+            label: SharedString::from(format!("Query #{}", number)),
+            label_changes: SharedString::from(format!("Query #{}*", number)),
+            number,
+        }
+    }
+
+    /// Creates a new [`QueryTab`] with the given path.
+    pub fn with_path(window: &mut Window, cx: &mut App, number: usize, path: PathBuf) -> Self {
+        let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
+        let label = SharedString::from(file_name);
+        let label_changes = SharedString::from(format!("{}*", file_name));
 
         Self {
-            state,
-            label: SharedString::from(format!("Query #{}", number)),
+            state: cx.new(|cx| QueryTabState::with_path(window, cx, path)),
+            label,
+            label_changes,
             number,
         }
     }
@@ -99,6 +117,7 @@ impl QueryTab {
 
         div()
             .key_context(KEY_CONTEXT)
+            .track_focus(&state.focus_handle)
             .size_full()
             .child(
                 v_resizable(format!("query-tab-{}", self.number))
@@ -241,8 +260,12 @@ impl QueryTab {
     }
 
     /// Returns the label for the tab.
-    pub fn label(&self) -> SharedString {
-        self.label.clone()
+    pub fn label(&self, cx: &App) -> SharedString {
+        if self.state.read(cx).has_changes {
+            self.label_changes.clone()
+        } else {
+            self.label.clone()
+        }
     }
 }
 
@@ -256,6 +279,21 @@ struct QueryTabState {
 
     /// The state for the editor.
     editor: Entity<EditorState>,
+
+    /// The focus handle for the tab content.
+    focus_handle: FocusHandle,
+
+    /// Whether the editor has changes.
+    has_changes: bool,
+
+    /// The saved file path for the editor content.
+    path: Option<PathBuf>,
+
+    /// Whether the file at the saved path has been externally modified.
+    path_modified: bool,
+
+    /// The task for watching the saved path for external modifications.
+    _path_watcher: Option<Task<Result<()>>>,
 
     /// The progress for the running query.
     query_progress: Option<QueryProgress>,
@@ -271,15 +309,72 @@ impl QueryTabState {
     /// Creates a new [`QueryTabState`].
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| EditorState::new(window, cx));
+        cx.subscribe(&editor, |this, _, event, _| match event {
+            EditorEvent::Change => {
+                // Only track changes if we have a saved path.
+                if this.path.is_some() {
+                    this.has_changes = true;
+                }
+            }
+        })
+        .detach();
+
+        let focus_handle = cx.focus_handle();
+        cx.on_focus_in(&focus_handle, window, |this, window, cx| {
+            // Check that the saved path still exists when refocusing the tab content.
+            if let Some(path) = &this.path
+                && !path.exists()
+            {
+                this.path_modified = true;
+            }
+
+            this.handle_path_modified(window, cx);
+        })
+        .detach();
 
         Self {
             active_event: None,
             active_table: 0,
             editor,
+            focus_handle,
+            has_changes: false,
+            path: None,
+            path_modified: false,
+            _path_watcher: None,
             query_progress: None,
             query_progress_task: None,
             tables: Vec::new(),
         }
+    }
+
+    /// Creates a new [`QueryTabState`] with the given path.
+    fn with_path(window: &mut Window, cx: &mut Context<Self>, path: PathBuf) -> Self {
+        let path_watcher = cx.spawn({
+            let path = path.clone();
+            async move |this, cx| {
+                let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+                let mut watcher = notify::recommended_watcher(move |result| {
+                    _ = tx.blocking_send(result);
+                })?;
+                watcher.watch(&path, RecursiveMode::NonRecursive)?;
+
+                while let Some(result) = rx.recv().await {
+                    if result.is_ok() {
+                        _ = this.update_in(cx, |this, window, cx| {
+                            this.path_modified = true;
+                            this.handle_path_modified(window, cx);
+                        });
+                    }
+                }
+                Ok(())
+            }
+        });
+
+        let mut state = Self::new(window, cx);
+        state.path = Some(path);
+        state._path_watcher = Some(path_watcher);
+        state.load_path(window, cx);
+        state
     }
 
     /// Handles actions originating from the tab.
@@ -305,6 +400,64 @@ impl QueryTabState {
         }
     }
 
+    /// Handles notification display for external path modifications.
+    fn handle_path_modified(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.path_modified || !self.focus_handle.contains_focused(window, cx) {
+            return;
+        }
+
+        let Some(path) = &self.path else {
+            return;
+        };
+
+        let this = cx.entity();
+        if path.exists() {
+            notifications::show_confirmation(
+                window,
+                cx,
+                "File Modified",
+                "This file has been modified by another program. Do you want to reload it?",
+                {
+                    let this = this.clone();
+                    move |_, cx| {
+                        this.update(cx, |this, _| {
+                            this.has_changes = true;
+                            this.path_modified = false;
+                        });
+                    }
+                },
+                {
+                    let this = this.clone();
+                    move |window, cx| {
+                        this.update(cx, |this, cx| {
+                            this.path_modified = false;
+                            this.load_path(window, cx);
+                        });
+                    }
+                },
+            );
+        } else {
+            notifications::show_confirmation(
+                window,
+                cx,
+                "File Removed",
+                "This file doesn't exist anymore. Do you want to keep this tab open?",
+                move |window, cx| {
+                    EventManager::emit(window, cx, EventVariant::CloseActiveTab);
+                },
+                {
+                    let this = this.clone();
+                    move |_, cx| {
+                        this.update(cx, |this, _| {
+                            this.has_changes = true;
+                            this.path_modified = false;
+                        });
+                    }
+                },
+            );
+        }
+    }
+
     /// Returns a reference to the active table.
     fn active_table(&self) -> &Entity<QueryTableState> {
         &self.tables[self.active_table]
@@ -324,10 +477,24 @@ impl QueryTabState {
     }
 
     /// Formats the SQL within the editor.
-    fn format_sql(&self, window: &mut Window, cx: &mut Context<Self>) {
+    fn format_sql(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let formatted = migris::sql::format(&self.editor.read(cx).value(cx));
+        self.has_changes = true;
         self.editor.update(cx, |editor, cx| {
             editor.set_value(window, cx, &formatted);
+        });
+    }
+
+    /// Loads the editor with the content from the saved path.
+    fn load_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = &self.path else {
+            return;
+        };
+
+        // TODO: keep content if path doesn't exist
+        let content = std::fs::read_to_string(path).unwrap_or_default();
+        self.editor.update(cx, |editor, cx| {
+            editor.set_value(window, cx, &content);
         });
     }
 
