@@ -248,7 +248,7 @@ impl CompletionProvider for LspStore {
 
         let word = word.as_str().unwrap_or_default().to_lowercase();
         let (schema, name) = word.split_once('.').unwrap_or(("", word.as_str()));
-        let range = Range::new(text.offset_to_position(start), text.offset_to_position(offset));
+        let range = Range::new(text.offset_to_position(offset - name.len()), text.offset_to_position(offset));
         let mut items: Vec<CompletionItem> = AppState::connection_unchecked(cx)
             .entities()
             .iter()
