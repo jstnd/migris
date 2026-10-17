@@ -311,6 +311,9 @@ struct QueryTabState {
     /// Whether to suppress the next path modified event.
     suppress_path_modified: bool,
 
+    /// Whether to suppress the path removed notification.
+    suppress_path_removed: bool,
+
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
 }
@@ -334,6 +337,7 @@ impl QueryTabState {
             // Check that the saved path still exists when refocusing the tab content.
             if let Some(path) = &this.path
                 && !path.exists()
+                && !this.suppress_path_removed
             {
                 this.path_modified = true;
             }
@@ -354,6 +358,7 @@ impl QueryTabState {
             query_progress: None,
             query_progress_task: None,
             suppress_path_modified: false,
+            suppress_path_removed: false,
             tables: Vec::new(),
         }
     }
@@ -468,6 +473,7 @@ impl QueryTabState {
                         this.update(cx, |this, _| {
                             this.has_changes = true;
                             this.path_modified = false;
+                            this.suppress_path_removed = true;
                         });
                     }
                 },
@@ -612,10 +618,13 @@ impl QueryTabState {
 
         // TODO: log errors
         let content = self.editor.read(cx).value(cx);
-        _ = std::fs::create_dir_all(path);
+        if let Some(parent) = path.parent() {
+            _ = std::fs::create_dir_all(parent);
+        }
         _ = std::fs::write(path, content.as_str());
 
         self.has_changes = false;
         self.suppress_path_modified = true;
+        self.suppress_path_removed = false;
     }
 }
