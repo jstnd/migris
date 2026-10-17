@@ -9,7 +9,7 @@ use gpui_kit::{
     Action, App, AppContext, Context, DispatchPhase, Entity, EventEmitter, Focusable, InteractiveElement, IntoElement,
     KeyBinding, ParentElement, Pixels, RenderOnce, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled,
     Subscription, Window,
-    base::h_flex,
+    base::{FocusableExt, h_flex},
     component::{
         ActiveTheme, Sizable,
         menu::ContextMenuExt,
@@ -132,6 +132,7 @@ impl RenderOnce for QueryTable {
                 div().absolute().top_0().left_0().size_full().child(
                     DataTable::new(&state.table)
                         .bordered(false)
+                        .focus_ring(false)
                         .with_size(SettingsManager::table_size(cx).table_size()),
                 ),
             )
