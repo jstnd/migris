@@ -183,18 +183,24 @@ impl Application {
             | ApplicationAction::OpenQueryTab
             | ApplicationAction::Save
             | ApplicationAction::SaveAs => {
-                self.tab_panel.update(cx, |tab_panel, cx| match action {
-                    ApplicationAction::CloseActiveTab => tab_panel.close_active_tab(window, cx),
-                    ApplicationAction::OpenNextTab => tab_panel.open_next_tab(window, cx),
-                    ApplicationAction::OpenPreviousTab => tab_panel.open_previous_tab(window, cx),
-                    ApplicationAction::OpenQueryTab => tab_panel.add_query_tab(window, cx),
-                    ApplicationAction::Save => tab_panel.save(cx),
-                    ApplicationAction::SaveAs => tab_panel.save_as(cx),
-                    _ => {}
-                });
+                if AppState::connection(cx).is_some() {
+                    self.tab_panel.update(cx, |tab_panel, cx| match action {
+                        ApplicationAction::CloseActiveTab => tab_panel.close_active_tab(window, cx),
+                        ApplicationAction::OpenNextTab => tab_panel.open_next_tab(window, cx),
+                        ApplicationAction::OpenPreviousTab => tab_panel.open_previous_tab(window, cx),
+                        ApplicationAction::OpenQueryTab => tab_panel.add_query_tab(window, cx),
+                        ApplicationAction::Save => tab_panel.save(cx),
+                        ApplicationAction::SaveAs => tab_panel.save_as(cx),
+                        _ => {}
+                    });
+                }
             }
             ApplicationAction::OpenConnectionDialog => components::open_connection_dialog(window, cx),
-            ApplicationAction::OpenFile => self.open_file(cx),
+            ApplicationAction::OpenFile => {
+                if AppState::connection(cx).is_some() {
+                    self.open_file(cx);
+                }
+            }
             ApplicationAction::OpenSettings => components::open_settings_dialog(window, cx),
             ApplicationAction::Quit => cx.quit(),
         }
