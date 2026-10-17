@@ -116,6 +116,15 @@ impl TabView {
         }
     }
 
+    /// Returns the tooltip for the tab.
+    pub fn tooltip(&self, cx: &App) -> Option<SharedString> {
+        match &self.tab {
+            TabState::Query(tab) => tab.tooltip(cx),
+            TabState::Table(_) => None,
+            TabState::View(_) => None,
+        }
+    }
+
     /// Returns the variant of the tab.
     pub fn variant(&self) -> &TabVariant {
         &self.variant

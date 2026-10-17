@@ -8,6 +8,7 @@ use gpui_kit::{
         ActiveTheme, Sizable,
         button::{Button, ButtonVariants},
         tab::{Tab, TabBar},
+        tooltip::Tooltip,
     },
     prelude::FluentBuilder,
 };
@@ -70,6 +71,9 @@ impl RenderOnce for TabPanel {
                                         )
                                     }),
                             )
+                            .when_some(tab.tooltip(cx), |this, tooltip| {
+                                this.tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+                            })
                             .on_hover(
                                 window.listener_for(&self.state, move |state, is_hovered: &bool, _, cx| {
                                     // Skip handling the unhover event if the currently saved hovered tab does not match this tab.

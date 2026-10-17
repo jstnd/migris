@@ -268,6 +268,15 @@ impl QueryTab {
             state.save_as(cx);
         });
     }
+
+    /// Returns the tooltip for the tab.
+    pub fn tooltip(&self, cx: &App) -> Option<SharedString> {
+        self.state
+            .read(cx)
+            .path
+            .as_ref()
+            .map(|path| SharedString::from(path.display().to_string()))
+    }
 }
 
 /// The state used with a [`QueryTab`].
