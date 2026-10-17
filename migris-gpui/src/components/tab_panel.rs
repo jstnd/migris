@@ -232,6 +232,11 @@ impl TabPanelState {
         });
     }
 
+    /// Saves the content of the active tab.
+    pub fn save_active_tab(&self, cx: &mut App) {
+        self.active_tab().save(cx);
+    }
+
     /// Returns a reference to the tabs within the panel.
     pub fn tabs(&self) -> &[TabView] {
         &self.tabs

@@ -15,7 +15,7 @@ use gpui_kit::{
     div,
     prelude::FluentBuilder,
 };
-use notify::{RecursiveMode, Watcher};
+use notify_debouncer_mini::notify::RecursiveMode;
 
 use crate::{
     components::{
@@ -267,6 +267,13 @@ impl QueryTab {
             self.label.clone()
         }
     }
+
+    /// Saves the content of the tab.
+    pub fn save(&self, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.save(cx);
+        });
+    }
 }
 
 /// The state used with a [`QueryTab`].
@@ -300,6 +307,9 @@ struct QueryTabState {
 
     /// The task for updating the timer associated with query progress.
     query_progress_task: Option<Task<()>>,
+
+    /// Whether to suppress the next path modified event.
+    suppress_path_modified: bool,
 
     /// The states for the tables showing query results.
     tables: Vec<Entity<QueryTableState>>,
@@ -343,6 +353,7 @@ impl QueryTabState {
             _path_watcher: None,
             query_progress: None,
             query_progress_task: None,
+            suppress_path_modified: false,
             tables: Vec::new(),
         }
     }
@@ -353,10 +364,10 @@ impl QueryTabState {
             let path = path.clone();
             async move |this, cx| {
                 let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-                let mut watcher = notify::recommended_watcher(move |result| {
+                let mut debouncer = notify_debouncer_mini::new_debouncer(Duration::from_millis(100), move |result| {
                     _ = tx.blocking_send(result);
                 })?;
-                watcher.watch(&path, RecursiveMode::NonRecursive)?;
+                debouncer.watcher().watch(&path, RecursiveMode::NonRecursive)?;
 
                 while let Some(result) = rx.recv().await {
                     if result.is_ok() {
@@ -403,6 +414,12 @@ impl QueryTabState {
     /// Handles notification display for external path modifications.
     fn handle_path_modified(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.path_modified || !self.focus_handle.contains_focused(window, cx) {
+            return;
+        }
+
+        if self.suppress_path_modified {
+            self.path_modified = false;
+            self.suppress_path_modified = false;
             return;
         }
 
@@ -585,5 +602,20 @@ impl QueryTabState {
 
         self.active_event = Some(event.id);
         EventManager::emit(window, cx, event);
+    }
+
+    /// Saves the content of the tab.
+    fn save(&mut self, cx: &App) {
+        let Some(path) = &self.path else {
+            return;
+        };
+
+        // TODO: log errors
+        let content = self.editor.read(cx).value(cx);
+        _ = std::fs::create_dir_all(path);
+        _ = std::fs::write(path, content.as_str());
+
+        self.has_changes = false;
+        self.suppress_path_modified = true;
     }
 }

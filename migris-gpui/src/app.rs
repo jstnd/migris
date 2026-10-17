@@ -74,6 +74,7 @@ fn init_keybindings(cx: &mut App) {
         KeyBinding::new("secondary-shift-tab", ApplicationAction::OpenPreviousTab, None),
         KeyBinding::new("secondary-t", ApplicationAction::OpenQueryTab, None),
         KeyBinding::new("secondary-,", ApplicationAction::OpenSettings, None),
+        KeyBinding::new("secondary-s", ApplicationAction::Save, None),
     ]);
 }
 
@@ -88,6 +89,7 @@ enum ApplicationAction {
     OpenQueryTab,
     OpenSettings,
     Quit,
+    Save,
 }
 
 const DEFAULT_SIDE_PANEL_WIDTH: Pixels = px(300.0);
@@ -176,12 +178,14 @@ impl Application {
             ApplicationAction::CloseActiveTab
             | ApplicationAction::OpenNextTab
             | ApplicationAction::OpenPreviousTab
-            | ApplicationAction::OpenQueryTab => {
+            | ApplicationAction::OpenQueryTab
+            | ApplicationAction::Save => {
                 self.tab_panel.update(cx, |tab_panel, cx| match action {
                     ApplicationAction::CloseActiveTab => tab_panel.close_active_tab(window, cx),
                     ApplicationAction::OpenNextTab => tab_panel.open_next_tab(window, cx),
                     ApplicationAction::OpenPreviousTab => tab_panel.open_previous_tab(window, cx),
                     ApplicationAction::OpenQueryTab => tab_panel.add_query_tab(window, cx),
+                    ApplicationAction::Save => tab_panel.save_active_tab(cx),
                     _ => {}
                 });
             }

@@ -19,7 +19,7 @@ image = "0.25.10"
 indexmap = "2.14.0"
 keyring-core = "1.0.0"
 lsp-types = "0.97.0"
-notify = "8.2.0"
+notify-debouncer-mini = "0.7.0"
 rfd = "0.17.2"
 rust-embed = "8.11.0"
 serde = { workspace = true }

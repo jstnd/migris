@@ -98,6 +98,15 @@ impl TabView {
         }
     }
 
+    /// Saves the content of the tab.
+    pub fn save(&self, cx: &mut App) {
+        match &self.tab {
+            TabState::Query(tab) => tab.save(cx),
+            TabState::Table(_) => {}
+            TabState::View(_) => {}
+        }
+    }
+
     /// Returns the variant of the tab.
     pub fn variant(&self) -> &TabVariant {
         &self.variant
