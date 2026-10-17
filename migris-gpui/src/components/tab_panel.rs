@@ -233,8 +233,13 @@ impl TabPanelState {
     }
 
     /// Saves the content of the active tab.
-    pub fn save_active_tab(&self, cx: &mut App) {
+    pub fn save(&self, cx: &mut App) {
         self.active_tab().save(cx);
+    }
+
+    /// Saves the content of the active tab, prompting the user for a save location.
+    pub fn save_as(&self, cx: &mut App) {
+        self.active_tab().save_as(cx);
     }
 
     /// Returns a reference to the tabs within the panel.

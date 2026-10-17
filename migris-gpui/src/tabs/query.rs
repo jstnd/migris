@@ -261,6 +261,13 @@ impl QueryTab {
             state.save(cx);
         });
     }
+
+    /// Saves the content of the active tab, prompting the user for a save location.
+    pub fn save_as(&self, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            state.save_as(cx);
+        });
+    }
 }
 
 /// The state used with a [`QueryTab`].
@@ -597,24 +604,29 @@ impl QueryTabState {
             self.suppress_path_modified = true;
             self.suppress_path_removed = false;
         } else {
-            cx.spawn(async |this, cx| {
-                let file = rfd::AsyncFileDialog::new()
-                    .add_filter("SQL (*.sql)", &["sql"])
-                    .set_file_name("query.sql")
-                    .save_file()
-                    .await;
-
-                if let Some(file) = file {
-                    _ = this.update(cx, |this, cx| {
-                        let content = this.editor.read(cx).value(cx);
-                        let path = file.path().to_path_buf();
-                        _ = std::fs::write(&path, content.as_str());
-                        this.set_path(cx, path);
-                    });
-                }
-            })
-            .detach();
+            self.save_as(cx);
         }
+    }
+
+    /// Saves the content of the active tab, prompting the user for a save location.
+    fn save_as(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async |this, cx| {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("SQL (*.sql)", &["sql"])
+                .set_file_name("query.sql")
+                .save_file()
+                .await;
+
+            if let Some(file) = file {
+                _ = this.update(cx, |this, cx| {
+                    let content = this.editor.read(cx).value(cx);
+                    let path = file.path().to_path_buf();
+                    _ = std::fs::write(&path, content.as_str());
+                    this.set_path(cx, path);
+                });
+            }
+        })
+        .detach();
     }
 
     /// Sets the saved path for the tab.

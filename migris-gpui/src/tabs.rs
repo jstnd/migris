@@ -107,6 +107,15 @@ impl TabView {
         }
     }
 
+    /// Saves the content of the active tab, prompting the user for a save location.
+    pub fn save_as(&self, cx: &mut App) {
+        match &self.tab {
+            TabState::Query(tab) => tab.save_as(cx),
+            TabState::Table(_) => {}
+            TabState::View(_) => {}
+        }
+    }
+
     /// Returns the variant of the tab.
     pub fn variant(&self) -> &TabVariant {
         &self.variant

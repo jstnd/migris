@@ -75,6 +75,7 @@ fn init_keybindings(cx: &mut App) {
         KeyBinding::new("secondary-t", ApplicationAction::OpenQueryTab, None),
         KeyBinding::new("secondary-,", ApplicationAction::OpenSettings, None),
         KeyBinding::new("secondary-s", ApplicationAction::Save, None),
+        KeyBinding::new("secondary-shift-s", ApplicationAction::SaveAs, None),
     ]);
 }
 
@@ -90,6 +91,7 @@ enum ApplicationAction {
     OpenSettings,
     Quit,
     Save,
+    SaveAs,
 }
 
 const DEFAULT_SIDE_PANEL_WIDTH: Pixels = px(300.0);
@@ -179,13 +181,15 @@ impl Application {
             | ApplicationAction::OpenNextTab
             | ApplicationAction::OpenPreviousTab
             | ApplicationAction::OpenQueryTab
-            | ApplicationAction::Save => {
+            | ApplicationAction::Save
+            | ApplicationAction::SaveAs => {
                 self.tab_panel.update(cx, |tab_panel, cx| match action {
                     ApplicationAction::CloseActiveTab => tab_panel.close_active_tab(window, cx),
                     ApplicationAction::OpenNextTab => tab_panel.open_next_tab(window, cx),
                     ApplicationAction::OpenPreviousTab => tab_panel.open_previous_tab(window, cx),
                     ApplicationAction::OpenQueryTab => tab_panel.add_query_tab(window, cx),
-                    ApplicationAction::Save => tab_panel.save_active_tab(cx),
+                    ApplicationAction::Save => tab_panel.save(cx),
+                    ApplicationAction::SaveAs => tab_panel.save_as(cx),
                     _ => {}
                 });
             }
@@ -604,6 +608,9 @@ fn render_menu_bar() -> impl IntoElement {
                     .menu("Close Active Tab", Box::new(ApplicationAction::CloseActiveTab))
                     .separator()
                     .menu("Open File...", Box::new(ApplicationAction::OpenFile))
+                    .separator()
+                    .menu("Save", Box::new(ApplicationAction::Save))
+                    .menu("Save As...", Box::new(ApplicationAction::SaveAs))
                     .separator()
                     .menu("Connections", Box::new(ApplicationAction::OpenConnectionDialog))
                     .menu("Settings", Box::new(ApplicationAction::OpenSettings))
