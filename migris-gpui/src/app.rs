@@ -350,7 +350,7 @@ impl Application {
     fn open_file(&self, cx: &mut Context<Self>) {
         cx.spawn(async |this, cx| {
             let file = rfd::AsyncFileDialog::new()
-                .add_filter("*.sql", &["sql"])
+                .add_filter("SQL (*.sql)", &["sql"])
                 .pick_file()
                 .await;
 

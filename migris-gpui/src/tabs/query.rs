@@ -65,12 +65,6 @@ pub struct QueryTab {
     /// The state for the query tab.
     state: Entity<QueryTabState>,
 
-    /// The query tab label.
-    label: SharedString,
-
-    /// The query tab label used when the tab has pending changes.
-    label_changes: SharedString,
-
     /// The query tab number.
     number: usize,
 }
@@ -79,23 +73,15 @@ impl QueryTab {
     /// Creates a new [`QueryTab`].
     pub fn new(window: &mut Window, cx: &mut App, number: usize) -> Self {
         Self {
-            state: cx.new(|cx| QueryTabState::new(window, cx)),
-            label: SharedString::from(format!("Query #{}", number)),
-            label_changes: SharedString::from(format!("Query #{}*", number)),
+            state: cx.new(|cx| QueryTabState::new(window, cx, number)),
             number,
         }
     }
 
     /// Creates a new [`QueryTab`] with the given path.
     pub fn with_path(window: &mut Window, cx: &mut App, number: usize, path: PathBuf) -> Self {
-        let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
-        let label = SharedString::from(file_name);
-        let label_changes = SharedString::from(format!("{}*", file_name));
-
         Self {
-            state: cx.new(|cx| QueryTabState::with_path(window, cx, path)),
-            label,
-            label_changes,
+            state: cx.new(|cx| QueryTabState::with_path(window, cx, number, path)),
             number,
         }
     }
@@ -261,10 +247,11 @@ impl QueryTab {
 
     /// Returns the label for the tab.
     pub fn label(&self, cx: &App) -> SharedString {
-        if self.state.read(cx).has_changes {
-            self.label_changes.clone()
+        let state = self.state.read(cx);
+        if state.has_changes {
+            state.label_changes.clone()
         } else {
-            self.label.clone()
+            state.label.clone()
         }
     }
 
@@ -293,6 +280,12 @@ struct QueryTabState {
     /// Whether the editor has changes.
     has_changes: bool,
 
+    /// The tab label.
+    label: SharedString,
+
+    /// The tab label used when there are pending changes.
+    label_changes: SharedString,
+
     /// The saved file path for the editor content.
     path: Option<PathBuf>,
 
@@ -320,7 +313,7 @@ struct QueryTabState {
 
 impl QueryTabState {
     /// Creates a new [`QueryTabState`].
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(window: &mut Window, cx: &mut Context<Self>, number: usize) -> Self {
         let editor = cx.new(|cx| EditorState::new(window, cx));
         cx.subscribe(&editor, |this, _, event, _| match event {
             EditorEvent::Change => {
@@ -352,6 +345,8 @@ impl QueryTabState {
             editor,
             focus_handle,
             has_changes: false,
+            label: SharedString::from(format!("Query #{}", number)),
+            label_changes: SharedString::from(format!("Query #{}*", number)),
             path: None,
             path_modified: false,
             _path_watcher: None,
@@ -364,31 +359,9 @@ impl QueryTabState {
     }
 
     /// Creates a new [`QueryTabState`] with the given path.
-    fn with_path(window: &mut Window, cx: &mut Context<Self>, path: PathBuf) -> Self {
-        let path_watcher = cx.spawn({
-            let path = path.clone();
-            async move |this, cx| {
-                let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-                let mut debouncer = notify_debouncer_mini::new_debouncer(Duration::from_millis(100), move |result| {
-                    _ = tx.blocking_send(result);
-                })?;
-                debouncer.watcher().watch(&path, RecursiveMode::NonRecursive)?;
-
-                while let Some(result) = rx.recv().await {
-                    if result.is_ok() {
-                        _ = this.update_in(cx, |this, window, cx| {
-                            this.path_modified = true;
-                            this.handle_path_modified(window, cx);
-                        });
-                    }
-                }
-                Ok(())
-            }
-        });
-
-        let mut state = Self::new(window, cx);
-        state.path = Some(path);
-        state._path_watcher = Some(path_watcher);
+    fn with_path(window: &mut Window, cx: &mut Context<Self>, number: usize, path: PathBuf) -> Self {
+        let mut state = Self::new(window, cx, number);
+        state.set_path(cx, path);
         state.load_path(window, cx);
         state
     }
@@ -611,20 +584,61 @@ impl QueryTabState {
     }
 
     /// Saves the content of the tab.
-    fn save(&mut self, cx: &App) {
-        let Some(path) = &self.path else {
-            return;
-        };
-
+    fn save(&mut self, cx: &mut Context<Self>) {
         // TODO: log errors
-        let content = self.editor.read(cx).value(cx);
-        if let Some(parent) = path.parent() {
-            _ = std::fs::create_dir_all(parent);
-        }
-        _ = std::fs::write(path, content.as_str());
+        if let Some(path) = &self.path {
+            let content = self.editor.read(cx).value(cx);
+            if let Some(parent) = path.parent() {
+                _ = std::fs::create_dir_all(parent);
+            }
+            _ = std::fs::write(path, content.as_str());
 
-        self.has_changes = false;
-        self.suppress_path_modified = true;
-        self.suppress_path_removed = false;
+            self.has_changes = false;
+            self.suppress_path_modified = true;
+            self.suppress_path_removed = false;
+        } else {
+            cx.spawn(async |this, cx| {
+                let file = rfd::AsyncFileDialog::new()
+                    .add_filter("SQL (*.sql)", &["sql"])
+                    .set_file_name("query.sql")
+                    .save_file()
+                    .await;
+
+                if let Some(file) = file {
+                    _ = this.update(cx, |this, cx| {
+                        let content = this.editor.read(cx).value(cx);
+                        let path = file.path().to_path_buf();
+                        _ = std::fs::write(&path, content.as_str());
+                        this.set_path(cx, path);
+                    });
+                }
+            })
+            .detach();
+        }
+    }
+
+    /// Sets the saved path for the tab.
+    fn set_path(&mut self, cx: &mut Context<Self>, path: PathBuf) {
+        let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
+        self.label = SharedString::from(file_name);
+        self.label_changes = SharedString::from(format!("{}*", file_name));
+        self.path = Some(path.clone());
+        self._path_watcher = Some(cx.spawn(async move |this, cx| {
+            let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+            let mut debouncer = notify_debouncer_mini::new_debouncer(Duration::from_millis(100), move |result| {
+                _ = tx.blocking_send(result);
+            })?;
+            debouncer.watcher().watch(&path, RecursiveMode::NonRecursive)?;
+
+            while let Some(result) = rx.recv().await {
+                if result.is_ok() {
+                    _ = this.update_in(cx, |this, window, cx| {
+                        this.path_modified = true;
+                        this.handle_path_modified(window, cx);
+                    });
+                }
+            }
+            Ok(())
+        }));
     }
 }
