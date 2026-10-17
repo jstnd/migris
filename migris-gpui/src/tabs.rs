@@ -4,7 +4,8 @@ use gpui_kit::{AnyElement, App, IntoElement, SharedString, Window};
 use migris::Entity as MigrisEntity;
 
 use crate::{
-    components::icon::IconName,
+    components::icon::{Icon, IconName},
+    shared,
     tabs::{query::QueryTab, table::TableTab, view::ViewTab},
 };
 
@@ -81,11 +82,10 @@ impl TabView {
     }
 
     /// Returns the icon for the tab.
-    pub fn icon(&self) -> IconName {
-        match self.variant {
-            TabVariant::Query(_, _) => IconName::Code,
-            TabVariant::Table(_) => IconName::Grid3x3,
-            TabVariant::View(_) => IconName::Eye,
+    pub fn icon(&self, cx: &App) -> Icon {
+        match &self.variant {
+            TabVariant::Query(_, _) => Icon::magenta(cx, IconName::Code),
+            TabVariant::Table(entity) | TabVariant::View(entity) => shared::entity::icon(cx, entity),
         }
     }
 

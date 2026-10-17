@@ -129,6 +129,11 @@ impl Icon {
         Self::colored(icon, cx.theme().green)
     }
 
+    /// Creates a new [`Icon`] with the theme's magenta color.
+    pub fn magenta(cx: &App, icon: IconName) -> Self {
+        Self::colored(icon, cx.theme().magenta)
+    }
+
     /// Creates a new [`Icon`] with the theme's red color.
     pub fn red(cx: &App, icon: IconName) -> Self {
         Self::colored(icon, cx.theme().red)

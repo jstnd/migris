@@ -157,6 +157,42 @@ pub mod colors {
     }
 }
 
+pub mod entity {
+    use gpui_kit::{App, Hsla, component::ActiveTheme};
+    use migris::{Entity, EntityKind};
+
+    use crate::components::icon::{Icon, IconName};
+
+    /// Returns the color for the given entity.
+    pub fn color(cx: &App, entity: &Entity) -> Hsla {
+        match entity.kind {
+            EntityKind::Event => cx.theme().red,
+            EntityKind::Function => cx.theme().green,
+            EntityKind::Procedure => cx.theme().magenta,
+            EntityKind::Schema => cx.theme().button_primary,
+            EntityKind::Table => cx.theme().cyan,
+            EntityKind::Trigger => cx.theme().yellow,
+            EntityKind::View => cx.theme().blue,
+        }
+    }
+
+    /// Returns the icon for the given entity.
+    pub fn icon(cx: &App, entity: &Entity) -> Icon {
+        let color = color(cx, entity);
+        let icon = match entity.kind {
+            EntityKind::Event => IconName::Calendar,
+            EntityKind::Function => IconName::SquareFunction,
+            EntityKind::Procedure => IconName::ScrollText,
+            EntityKind::Schema => IconName::Database,
+            EntityKind::Table => IconName::Grid3x3,
+            EntityKind::Trigger => IconName::Zap,
+            EntityKind::View => IconName::Eye,
+        };
+
+        Icon::colored(icon, color)
+    }
+}
+
 pub mod types {
     use std::sync::Arc;
 

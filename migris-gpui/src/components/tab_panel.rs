@@ -15,7 +15,7 @@ use gpui_kit::{
 use migris::Entity as MigrisEntity;
 
 use crate::{
-    components::icon::{Icon, IconName},
+    components::icon::IconName,
     tabs::{TabVariant, TabView},
 };
 
@@ -50,7 +50,7 @@ impl RenderOnce for TabPanel {
                                     .gap_1p5()
                                     .items_center()
                                     .child(
-                                        Icon::new(cx, tab.icon())
+                                        tab.icon(cx)
                                             .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
                                     )
                                     .child(tab.label(cx))

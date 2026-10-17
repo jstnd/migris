@@ -202,18 +202,7 @@ fn connection_tab(cx: &mut App, state: &Entity<SidePanelState>) -> impl IntoElem
                                     },
                                 ))
                             })
-                            .child(Icon::new(
-                                cx,
-                                match entity.kind {
-                                    EntityKind::Event => IconName::Calendar,
-                                    EntityKind::Function => IconName::SquareFunction,
-                                    EntityKind::Procedure => IconName::ScrollText,
-                                    EntityKind::Schema => IconName::Database,
-                                    EntityKind::Table => IconName::Grid3x3,
-                                    EntityKind::Trigger => IconName::Zap,
-                                    EntityKind::View => IconName::Eye,
-                                },
-                            ))
+                            .child(shared::entity::icon(cx, entity))
                             .child(text_ellipsis(entry.item().label.clone())),
                     )
                     .on_click(window.listener_for(&state, {
