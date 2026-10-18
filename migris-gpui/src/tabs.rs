@@ -120,8 +120,8 @@ impl TabView {
     pub fn tooltip(&self, cx: &App) -> Option<SharedString> {
         match &self.tab {
             TabState::Query(tab) => tab.tooltip(cx),
-            TabState::Table(_) => None,
-            TabState::View(_) => None,
+            TabState::Table(tab) => Some(tab.tooltip()),
+            TabState::View(tab) => Some(tab.tooltip()),
         }
     }
 

@@ -26,12 +26,7 @@ impl Entity {
     }
 
     pub fn id(&self) -> String {
-        let mut id = self.schema.clone();
-        if !self.name.is_empty() {
-            id.push_str(&self.name);
-        }
-
-        id
+        format!("{}.{}", self.schema, self.name)
     }
 
     /// Returns whether the entity is a schema.

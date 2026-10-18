@@ -24,16 +24,24 @@ pub struct ViewTab {
     /// The state for the tab.
     state: Entity<ViewTabState>,
 
-    /// The tab label.
+    /// The label for the tab.
     label: SharedString,
+
+    /// The tooltip for the tab.
+    tooltip: SharedString,
 }
 
 impl ViewTab {
     /// Creates a new [`ViewTab`].
     pub fn new(window: &mut Window, cx: &mut App, entity: MigrisEntity) -> Self {
         let label = SharedString::from(&entity.name);
-        let state = cx.new(|cx| ViewTabState::new(window, cx, entity));
-        Self { state, label }
+        let tooltip = SharedString::from(entity.id());
+
+        Self {
+            state: cx.new(|cx| ViewTabState::new(window, cx, entity)),
+            label,
+            tooltip,
+        }
     }
 
     /// Performs any needed behavior for closing the tab.
@@ -144,6 +152,11 @@ impl ViewTab {
     /// Returns the label for the tab.
     pub fn label(&self) -> SharedString {
         self.label.clone()
+    }
+
+    /// Returns the tooltip for the tab.
+    pub fn tooltip(&self) -> SharedString {
+        self.tooltip.clone()
     }
 }
 
