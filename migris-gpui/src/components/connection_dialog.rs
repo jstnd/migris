@@ -345,11 +345,6 @@ fn connection_tree(state: Entity<ConnectionDialogState>, window: &mut Window, cx
                         Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
                     )
                     .menu_with_icon(
-                        "Delete",
-                        Icon::red(cx, IconName::Trash),
-                        Box::new(ConnectionDialogAction::DeleteConnection(id)),
-                    )
-                    .menu_with_icon(
                         "Duplicate",
                         Icon::primary(cx, IconName::Copy),
                         Box::new(ConnectionDialogAction::DuplicateConnection(id)),
@@ -361,6 +356,12 @@ fn connection_tree(state: Entity<ConnectionDialogState>, window: &mut Window, cx
                             Box::new(ConnectionDialogAction::MoveConnection(id, None)),
                         )
                     })
+                    .separator()
+                    .menu_with_icon(
+                        "Delete",
+                        Icon::red(cx, IconName::Trash),
+                        Box::new(ConnectionDialogAction::DeleteConnection(id)),
+                    )
                 } else if let Some(id) = folder_id {
                     menu.menu_with_icon(
                         "Rename",
@@ -368,9 +369,14 @@ fn connection_tree(state: Entity<ConnectionDialogState>, window: &mut Window, cx
                         Box::new(ConnectionDialogAction::RenameItem(id.to_string())),
                     )
                     .menu_with_icon(
-                        "Delete",
-                        Icon::red(cx, IconName::Trash),
-                        Box::new(ConnectionDialogAction::DeleteFolder(id)),
+                        "New Connection",
+                        Icon::primary(cx, IconName::DatabasePlus),
+                        Box::new(ConnectionDialogAction::AddConnection(Some(id))),
+                    )
+                    .menu_with_icon(
+                        "New Folder",
+                        Icon::primary(cx, IconName::FolderPlus),
+                        Box::new(ConnectionDialogAction::AddFolder(Some(id))),
                     )
                     .when(!is_root_item, |menu| {
                         menu.separator().menu_with_icon(
@@ -381,14 +387,9 @@ fn connection_tree(state: Entity<ConnectionDialogState>, window: &mut Window, cx
                     })
                     .separator()
                     .menu_with_icon(
-                        "New Connection",
-                        Icon::primary(cx, IconName::DatabasePlus),
-                        Box::new(ConnectionDialogAction::AddConnection(Some(id))),
-                    )
-                    .menu_with_icon(
-                        "New Folder",
-                        Icon::primary(cx, IconName::FolderPlus),
-                        Box::new(ConnectionDialogAction::AddFolder(Some(id))),
+                        "Delete",
+                        Icon::red(cx, IconName::Trash),
+                        Box::new(ConnectionDialogAction::DeleteFolder(id)),
                     )
                 } else {
                     menu
