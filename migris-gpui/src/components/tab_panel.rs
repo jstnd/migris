@@ -1,23 +1,36 @@
 use std::path::PathBuf;
 
 use gpui_kit::{
-    App, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
-    StatefulInteractiveElement, Styled, Window,
-    base::{h_flex, v_flex},
+    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
+    StatefulInteractiveElement, Styled, TextRun, Window,
+    base::{
+        h_flex,
+        input::{InputEvent, InputState},
+        v_flex,
+    },
     component::{
         ActiveTheme, Sizable,
         button::{Button, ButtonVariants},
+        input::Input,
+        menu::ContextMenuExt,
         tab::{Tab, TabBar},
         tooltip::Tooltip,
     },
     prelude::FluentBuilder,
+    px,
 };
 use migris::Entity as MigrisEntity;
 
 use crate::{
-    components::icon::IconName,
+    components::icon::{Icon, IconName},
     tabs::{TabVariant, TabView},
 };
+
+#[derive(Action, Clone, Copy, PartialEq, Eq)]
+#[action(no_json)]
+enum TabPanelAction {
+    RenameTab(usize),
+}
 
 #[derive(IntoElement)]
 pub struct TabPanel {
@@ -53,7 +66,32 @@ impl RenderOnce for TabPanel {
                                         tab.icon(cx)
                                             .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
                                     )
-                                    .child(tab.label(cx))
+                                    .child(if state.name_input_tab == Some(idx) {
+                                        // Calculate the width of the input from the current value.
+                                        let value = state.name_input.read(cx).value();
+                                        let text_run = TextRun {
+                                            len: value.len(),
+                                            font: window.text_style().font(),
+                                            color: cx.theme().foreground,
+                                            background_color: None,
+                                            underline: None,
+                                            strikethrough: None,
+                                        };
+                                        let width = window
+                                            .text_system()
+                                            .shape_line(value, px(14.0), &[text_run], None)
+                                            .width()
+                                            + px(10.0);
+
+                                        Input::new(&state.name_input)
+                                            .appearance(false)
+                                            .w(width)
+                                            .p_0()
+                                            .small()
+                                            .into_any_element()
+                                    } else {
+                                        tab.label(cx).into_any_element()
+                                    })
                                     .when(state.tabs.len() > 1, |this| {
                                         this.child(
                                             Button::new(("btn-close-tab", idx))
@@ -68,6 +106,13 @@ impl RenderOnce for TabPanel {
                                                         cx.stop_propagation();
                                                     },
                                                 )),
+                                        )
+                                    })
+                                    .context_menu(move |menu, _, cx| {
+                                        menu.menu_with_icon(
+                                            "Rename",
+                                            Icon::primary(cx, IconName::TextCursorInput),
+                                            Box::new(TabPanelAction::RenameTab(idx)),
                                         )
                                     }),
                             )
@@ -94,32 +139,70 @@ impl RenderOnce for TabPanel {
             .when(!state.tabs.is_empty(), |this| {
                 this.child(state.active_tab().content(window, cx))
             })
+            .on_action(window.listener_for(&self.state, |state, action, window, cx| {
+                state.handle_action(window, cx, action);
+            }))
     }
 }
 
 /// The state used with a [`TabPanel`].
 pub struct TabPanelState {
-    /// The tabs shown in the panel.
-    tabs: Vec<TabView>,
-
     /// The index of the active tab.
     active_tab: usize,
 
     /// The index of the currently hovered tab, if any.
     hovered_tab: Option<usize>,
 
+    /// The state for the tab name input.
+    name_input: Entity<InputState>,
+
+    /// The index of the tab whose name is being edited.
+    name_input_tab: Option<usize>,
+
     /// The scroll handle used with the tab bar.
     scroll_handle: ScrollHandle,
+
+    /// The tabs shown in the panel.
+    tabs: Vec<TabView>,
 }
 
 impl TabPanelState {
     /// Creates a new [`TabPanelState`].
-    pub fn new() -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let name_input = cx.new(|cx| InputState::new(window, cx).context_menu(false));
+        cx.subscribe(&name_input, |this, _, event: &InputEvent, cx| {
+            if let Some(idx) = this.name_input_tab
+                && let Some(tab) = this.tabs.get(idx)
+                && matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. })
+            {
+                this.name_input_tab = None;
+                let name = this.name_input.read(cx).value();
+                tab.rename(cx, name);
+            }
+        })
+        .detach();
+
         Self {
-            tabs: Vec::new(),
             active_tab: 0,
             hovered_tab: None,
+            name_input,
+            name_input_tab: None,
             scroll_handle: ScrollHandle::new(),
+            tabs: Vec::new(),
+        }
+    }
+
+    /// Handles actions originating from the tab panel.
+    fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &TabPanelAction) {
+        match action {
+            TabPanelAction::RenameTab(idx) => {
+                let name = self.tabs[*idx].label(cx);
+                self.name_input_tab = Some(*idx);
+                self.name_input.update(cx, |name_input, cx| {
+                    name_input.focus(window, cx);
+                    name_input.set_value(name, window, cx);
+                });
+            }
         }
     }
 
@@ -150,6 +233,11 @@ impl TabPanelState {
         // Do not close if there's only one tab remaining.
         if self.tabs.len() == 1 {
             return;
+        }
+
+        // Remove the tab being closed from the name input.
+        if self.name_input_tab == Some(idx) {
+            self.name_input_tab = None;
         }
 
         cx.defer_in(window, move |this, window, cx| {

@@ -255,6 +255,13 @@ impl QueryTab {
         }
     }
 
+    /// Renames the tab using the given name.
+    pub fn rename(&self, cx: &mut App, name: SharedString) {
+        self.state.update(cx, |state, _| {
+            state.set_label(name);
+        });
+    }
+
     /// Saves the content of the tab.
     pub fn save(&self, cx: &mut App) {
         self.state.update(cx, |state, cx| {
@@ -638,11 +645,16 @@ impl QueryTabState {
         .detach();
     }
 
+    /// Sets the label for the tab.
+    fn set_label(&mut self, label: SharedString) {
+        self.label_changes = SharedString::from(format!("{label}*"));
+        self.label = label;
+    }
+
     /// Sets the saved path for the tab.
     fn set_path(&mut self, cx: &mut Context<Self>, path: PathBuf) {
         let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
-        self.label = SharedString::from(file_name);
-        self.label_changes = SharedString::from(format!("{}*", file_name));
+        self.set_label(SharedString::from(file_name));
         self.path = Some(path.clone());
         self._path_watcher = Some(cx.spawn(async move |this, cx| {
             let (tx, mut rx) = tokio::sync::mpsc::channel(1);

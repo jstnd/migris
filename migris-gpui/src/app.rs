@@ -171,7 +171,7 @@ impl Application {
             side_panel: cx.new(|cx| SidePanelState::new(window, cx)),
             side_panel_expanded: true,
             side_panel_width: DEFAULT_SIDE_PANEL_WIDTH,
-            tab_panel: cx.new(|_| TabPanelState::new()),
+            tab_panel: cx.new(|cx| TabPanelState::new(window, cx)),
         }
     }
 

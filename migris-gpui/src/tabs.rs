@@ -98,6 +98,15 @@ impl TabView {
         }
     }
 
+    /// Renames the tab using the given name.
+    pub fn rename(&self, cx: &mut App, name: SharedString) {
+        match &self.tab {
+            TabState::Query(tab) => tab.rename(cx, name),
+            TabState::Table(_) => {}
+            TabState::View(_) => {}
+        }
+    }
+
     /// Saves the content of the tab.
     pub fn save(&self, cx: &mut App) {
         match &self.tab {
