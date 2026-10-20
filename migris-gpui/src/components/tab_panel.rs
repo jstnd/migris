@@ -29,6 +29,8 @@ use crate::{
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
 enum TabPanelAction {
+    CloseOtherTabs(usize),
+    CloseTab(usize),
     RenameTab(usize),
 }
 
@@ -83,10 +85,7 @@ impl RenderOnce for TabPanel {
                                             .width()
                                             + px(28.0);
 
-                                        Input::new(&state.name_input)
-                                            .w(width)
-                                            .small()
-                                            .into_any_element()
+                                        Input::new(&state.name_input).w(width).small().into_any_element()
                                     } else {
                                         tab.label(cx).into_any_element()
                                     })
@@ -112,6 +111,9 @@ impl RenderOnce for TabPanel {
                                             Icon::primary(cx, IconName::TextCursorInput),
                                             Box::new(TabPanelAction::RenameTab(idx)),
                                         )
+                                        .separator()
+                                        .menu("Close", Box::new(TabPanelAction::CloseTab(idx)))
+                                        .menu("Close Others", Box::new(TabPanelAction::CloseOtherTabs(idx)))
                                     }),
                             )
                             .when_some(tab.tooltip(cx), |this, tooltip| {
@@ -194,6 +196,8 @@ impl TabPanelState {
     /// Handles actions originating from the tab panel.
     fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &TabPanelAction) {
         match action {
+            TabPanelAction::CloseOtherTabs(_) => {}
+            TabPanelAction::CloseTab(idx) => self.close_tab(window, cx, *idx),
             TabPanelAction::RenameTab(idx) => {
                 let name = self.tabs[*idx].label(cx);
                 self.name_input_tab = Some(*idx);

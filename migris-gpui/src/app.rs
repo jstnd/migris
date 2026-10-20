@@ -611,7 +611,7 @@ fn render_menu_bar() -> impl IntoElement {
                 menu.menu("New Query Tab", Box::new(ApplicationAction::OpenQueryTab))
                     .menu("Next Tab", Box::new(ApplicationAction::OpenNextTab))
                     .menu("Previous Tab", Box::new(ApplicationAction::OpenPreviousTab))
-                    .menu("Close Active Tab", Box::new(ApplicationAction::CloseActiveTab))
+                    .menu("Close Tab", Box::new(ApplicationAction::CloseActiveTab))
                     .separator()
                     .menu("Open File...", Box::new(ApplicationAction::OpenFile))
                     .separator()
