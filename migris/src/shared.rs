@@ -12,3 +12,26 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
     }
     s
 }
+
+/// Sanitizes the given string to be safe as a file name.
+pub fn sanitize_file_name(s: &str) -> String {
+    const REPLACE_CHAR: char = '-';
+    let mut prev_replace = false;
+
+    s.chars()
+        .filter_map(|c| match c {
+            c if c.is_alphanumeric() => {
+                prev_replace = false;
+                Some(c)
+            }
+            _ => {
+                if prev_replace {
+                    None
+                } else {
+                    prev_replace = true;
+                    Some(REPLACE_CHAR)
+                }
+            }
+        })
+        .collect()
+}

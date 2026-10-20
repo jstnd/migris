@@ -626,10 +626,16 @@ impl QueryTabState {
 
     /// Saves the content of the active tab, prompting the user for a save location.
     fn save_as(&mut self, cx: &mut Context<Self>) {
-        cx.spawn(async |this, cx| {
+        let default_file_name = if let Some(path) = &self.path {
+            path.file_name().and_then(OsStr::to_str).unwrap_or_default().to_string()
+        } else {
+            format!("{}.sql", migris::shared::sanitize_file_name(&self.label).to_lowercase())
+        };
+
+        cx.spawn(async move |this, cx| {
             let file = rfd::AsyncFileDialog::new()
                 .add_filter("SQL (*.sql)", &["sql"])
-                .set_file_name("query.sql")
+                .set_file_name(default_file_name)
                 .save_file()
                 .await;
 

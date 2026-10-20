@@ -81,12 +81,10 @@ impl RenderOnce for TabPanel {
                                             .text_system()
                                             .shape_line(value, px(14.0), &[text_run], None)
                                             .width()
-                                            + px(10.0);
+                                            + px(28.0);
 
                                         Input::new(&state.name_input)
-                                            .appearance(false)
                                             .w(width)
-                                            .p_0()
                                             .small()
                                             .into_any_element()
                                     } else {
@@ -178,6 +176,7 @@ impl TabPanelState {
                 this.name_input_tab = None;
                 let name = this.name_input.read(cx).value();
                 tab.rename(cx, name);
+                cx.notify();
             }
         })
         .detach();
