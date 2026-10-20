@@ -157,7 +157,7 @@ pub struct TabPanelState {
     /// The state for the tab name input.
     name_input: Entity<InputState>,
 
-    /// The index of the tab whose name is being edited.
+    /// The ID of the tab whose name is being edited.
     name_input_tab: Option<TabId>,
 
     /// The scroll handle used with the tab bar.
@@ -197,7 +197,13 @@ impl TabPanelState {
     /// Handles actions originating from the tab panel.
     fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &TabPanelAction) {
         match action {
-            TabPanelAction::CloseOtherTabs(_) => {}
+            TabPanelAction::CloseOtherTabs(id) => {
+                self.open_tab(window, cx, *id);
+                let removed: Vec<TabId> = self.tabs.keys().cloned().filter(|tab_id| tab_id != id).collect();
+                for id in removed {
+                    self.close_tab(window, cx, id);
+                }
+            }
             TabPanelAction::CloseTab(id) => self.close_tab(window, cx, *id),
             TabPanelAction::RenameTab(id) => {
                 if let Some(tab) = self.tabs.get(id) {
@@ -243,7 +249,7 @@ impl TabPanelState {
         }
     }
 
-    /// Closes the tab at the given index.
+    /// Closes the tab with the given ID.
     fn close_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, id: TabId) {
         // Do not close if there's only one tab remaining.
         if self.tabs.len() == 1 {
