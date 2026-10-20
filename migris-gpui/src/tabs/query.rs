@@ -255,6 +255,11 @@ impl QueryTab {
         }
     }
 
+    /// Returns the number for the tab.
+    pub fn number(&self) -> usize {
+        self.number
+    }
+
     /// Renames the tab using the given name.
     pub fn rename(&self, cx: &mut App, name: SharedString) {
         self.state.update(cx, |state, _| {

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use gpui_kit::{AnyElement, App, IntoElement, SharedString, Window};
 use migris::Entity as MigrisEntity;
+use uuid::Uuid;
 
 use crate::{
     components::icon::{Icon, IconName},
@@ -18,7 +19,22 @@ pub fn init(cx: &mut App) {
     query::init(cx);
 }
 
-enum TabState {
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct TabId(Uuid);
+
+impl TabId {
+    /// Creates a new [`TabId`].
+    fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    /// Returns the underlying UUID.
+    pub fn uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+pub enum TabState {
     Query(QueryTab),
     Table(TableTab),
     View(ViewTab),
@@ -31,32 +47,35 @@ pub enum TabVariant {
 }
 
 pub struct TabView {
-    /// The state for the tab view.
-    tab: TabState,
+    /// The ID for the tab view.
+    pub id: TabId,
 
-    /// The variant of the tab view.
-    variant: TabVariant,
+    /// The state for the tab view.
+    pub state: TabState,
 }
 
 impl TabView {
     /// Creates a new [`TabView`].
     pub fn new(window: &mut Window, cx: &mut App, variant: TabVariant) -> Self {
-        let tab = match &variant {
-            TabVariant::Query(number, path) => TabState::Query(if let Some(path) = path.clone() {
-                QueryTab::with_path(window, cx, *number, path)
+        let state = match variant {
+            TabVariant::Query(number, path) => TabState::Query(if let Some(path) = path {
+                QueryTab::with_path(window, cx, number, path)
             } else {
-                QueryTab::new(window, cx, *number)
+                QueryTab::new(window, cx, number)
             }),
-            TabVariant::Table(entity) => TabState::Table(TableTab::new(window, cx, entity.clone())),
-            TabVariant::View(entity) => TabState::View(ViewTab::new(window, cx, entity.clone())),
+            TabVariant::Table(entity) => TabState::Table(TableTab::new(window, cx, entity)),
+            TabVariant::View(entity) => TabState::View(ViewTab::new(window, cx, entity)),
         };
 
-        Self { tab, variant }
+        Self {
+            id: TabId::new(),
+            state,
+        }
     }
 
     /// Performs any needed behavior for closing the tab.
     pub fn close(&self, window: &mut Window, cx: &mut App) {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.close(cx),
             TabState::Table(tab) => tab.close(window, cx),
             TabState::View(tab) => tab.close(window, cx),
@@ -65,7 +84,7 @@ impl TabView {
 
     /// Returns the content for the tab.
     pub fn content(&self, window: &mut Window, cx: &App) -> AnyElement {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.content(window, cx).into_any_element(),
             TabState::Table(tab) => tab.content(window, cx).into_any_element(),
             TabState::View(tab) => tab.content(window, cx).into_any_element(),
@@ -74,7 +93,7 @@ impl TabView {
 
     /// Focuses the content in the tab.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.focus(window, cx),
             TabState::Table(tab) => tab.focus(window, cx),
             TabState::View(tab) => tab.focus(window, cx),
@@ -83,15 +102,16 @@ impl TabView {
 
     /// Returns the icon for the tab.
     pub fn icon(&self, cx: &App) -> Icon {
-        match &self.variant {
-            TabVariant::Query(_, _) => Icon::magenta(cx, IconName::Code),
-            TabVariant::Table(entity) | TabVariant::View(entity) => shared::entity::icon(cx, entity),
+        match &self.state {
+            TabState::Query(_) => Icon::magenta(cx, IconName::Code),
+            TabState::Table(tab) => shared::entity::icon(cx, tab.entity(cx)),
+            TabState::View(tab) => shared::entity::icon(cx, tab.entity(cx)),
         }
     }
 
     /// Returns the label for the tab.
     pub fn label(&self, cx: &App) -> SharedString {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.label(cx),
             TabState::Table(tab) => tab.label(),
             TabState::View(tab) => tab.label(),
@@ -100,7 +120,7 @@ impl TabView {
 
     /// Renames the tab using the given name.
     pub fn rename(&self, cx: &mut App, name: SharedString) {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.rename(cx, name),
             TabState::Table(_) => {}
             TabState::View(_) => {}
@@ -109,7 +129,7 @@ impl TabView {
 
     /// Saves the content of the tab.
     pub fn save(&self, cx: &mut App) {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.save(cx),
             TabState::Table(_) => {}
             TabState::View(_) => {}
@@ -118,7 +138,7 @@ impl TabView {
 
     /// Saves the content of the active tab, prompting the user for a save location.
     pub fn save_as(&self, cx: &mut App) {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.save_as(cx),
             TabState::Table(_) => {}
             TabState::View(_) => {}
@@ -127,15 +147,10 @@ impl TabView {
 
     /// Returns the tooltip for the tab.
     pub fn tooltip(&self, cx: &App) -> Option<SharedString> {
-        match &self.tab {
+        match &self.state {
             TabState::Query(tab) => tab.tooltip(cx),
             TabState::Table(tab) => Some(tab.tooltip()),
             TabState::View(tab) => Some(tab.tooltip()),
         }
-    }
-
-    /// Returns the variant of the tab.
-    pub fn variant(&self) -> &TabVariant {
-        &self.variant
     }
 }

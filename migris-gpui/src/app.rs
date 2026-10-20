@@ -18,7 +18,7 @@ use gpui_kit::{
     prelude::FluentBuilder,
     px,
 };
-use migris::{Entity as MigrisEntity, EntityKind, MigrisError, query::Query};
+use migris::{Entity as MigrisEntity, MigrisError, query::Query};
 
 use crate::{
     assets,
@@ -35,7 +35,7 @@ use crate::{
     settings::SettingsManager,
     shared,
     state::AppState,
-    tabs::{self, TabVariant},
+    tabs,
     types::OpenConnection,
 };
 
@@ -325,7 +325,7 @@ impl Application {
 
                 // Open a query tab after opening the connection.
                 this.tab_panel.update(cx, |tab_panel, cx| {
-                    if tab_panel.tabs().is_empty() {
+                    if tab_panel.is_empty() {
                         tab_panel.add_query_tab(window, cx);
                     }
                 });
@@ -339,20 +339,7 @@ impl Application {
 
     fn open_entity(&self, window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) {
         self.tab_panel.update(cx, |tab_panel, cx| {
-            let existing_tab = tab_panel.entity_tab(&entity);
-
-            if let Some(tab_idx) = existing_tab {
-                tab_panel.open_tab(window, cx, tab_idx);
-            } else {
-                let variant = match entity.kind {
-                    EntityKind::Table => TabVariant::Table(entity),
-                    EntityKind::View => TabVariant::View(entity),
-                    _ => unreachable!(),
-                };
-
-                tab_panel.add_tab(window, cx, variant);
-            }
-
+            tab_panel.open_entity_tab(window, cx, entity);
             cx.notify();
         })
     }

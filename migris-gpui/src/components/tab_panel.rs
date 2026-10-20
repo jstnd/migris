@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use gpui_kit::{
-    Action, App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, ScrollHandle,
-    StatefulInteractiveElement, Styled, TextRun, Window,
+    Action, App, AppContext, Context, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    ScrollHandle, StatefulInteractiveElement, Styled, TextRun, Window,
     base::{
         h_flex,
         input::{InputEvent, InputState},
@@ -19,19 +19,20 @@ use gpui_kit::{
     prelude::FluentBuilder,
     px,
 };
-use migris::Entity as MigrisEntity;
+use indexmap::IndexMap;
+use migris::{Entity as MigrisEntity, EntityKind};
 
 use crate::{
     components::icon::{Icon, IconName},
-    tabs::{TabVariant, TabView},
+    tabs::{TabId, TabState, TabVariant, TabView},
 };
 
 #[derive(Action, Clone, Copy, PartialEq, Eq)]
 #[action(no_json)]
 enum TabPanelAction {
-    CloseOtherTabs(usize),
-    CloseTab(usize),
-    RenameTab(usize),
+    CloseOtherTabs(TabId),
+    CloseTab(TabId),
+    RenameTab(TabId),
 }
 
 #[derive(IntoElement)]
@@ -50,25 +51,27 @@ impl TabPanel {
 impl RenderOnce for TabPanel {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = self.state.read(cx);
+        let selected_index = state.active_tab_index().unwrap_or_default();
 
         v_flex()
             .size_full()
             .child(
                 TabBar::new("panel-tabs")
-                    .selected_index(state.active_tab)
+                    .selected_index(selected_index)
                     .track_scroll(&state.scroll_handle)
-                    .children(state.tabs.iter().enumerate().map(|(idx, tab)| {
+                    .children(state.tabs.values().map(|tab| {
+                        let tab_id = tab.id;
+
                         Tab::new()
                             .child(
                                 h_flex()
-                                    .id(("panel-tab", idx))
+                                    .id(tab_id.uuid())
                                     .gap_1p5()
                                     .items_center()
-                                    .child(
-                                        tab.icon(cx)
-                                            .disabled(state.active_tab != idx && state.hovered_tab != Some(idx)),
-                                    )
-                                    .child(if state.name_input_tab == Some(idx) {
+                                    .child(tab.icon(cx).disabled(
+                                        state.active_tab != Some(tab_id) && state.hovered_tab != Some(tab_id),
+                                    ))
+                                    .child(if state.name_input_tab == Some(tab_id) {
                                         // Calculate the width of the input from the current value.
                                         let value = state.name_input.read(cx).value();
                                         let text_run = TextRun {
@@ -91,7 +94,7 @@ impl RenderOnce for TabPanel {
                                     })
                                     .when(state.tabs.len() > 1, |this| {
                                         this.child(
-                                            Button::new(("btn-close-tab", idx))
+                                            Button::new((ElementId::Uuid(tab_id.uuid()), "btn-close-tab"))
                                                 .ghost()
                                                 .xsmall()
                                                 .icon(IconName::X)
@@ -99,7 +102,7 @@ impl RenderOnce for TabPanel {
                                                 .on_click(window.listener_for(
                                                     &self.state,
                                                     move |state, _, window, cx| {
-                                                        state.close_tab(window, cx, idx);
+                                                        state.close_tab(window, cx, tab_id);
                                                         cx.stop_propagation();
                                                     },
                                                 )),
@@ -109,11 +112,11 @@ impl RenderOnce for TabPanel {
                                         menu.menu_with_icon(
                                             "Rename",
                                             Icon::primary(cx, IconName::TextCursorInput),
-                                            Box::new(TabPanelAction::RenameTab(idx)),
+                                            Box::new(TabPanelAction::RenameTab(tab_id)),
                                         )
                                         .separator()
-                                        .menu("Close", Box::new(TabPanelAction::CloseTab(idx)))
-                                        .menu("Close Others", Box::new(TabPanelAction::CloseOtherTabs(idx)))
+                                        .menu("Close", Box::new(TabPanelAction::CloseTab(tab_id)))
+                                        .menu("Close Others", Box::new(TabPanelAction::CloseOtherTabs(tab_id)))
                                     }),
                             )
                             .when_some(tab.tooltip(cx), |this, tooltip| {
@@ -123,22 +126,20 @@ impl RenderOnce for TabPanel {
                                 window.listener_for(&self.state, move |state, is_hovered: &bool, _, cx| {
                                     // Skip handling the unhover event if the currently saved hovered tab does not match this tab.
                                     // This is to prevent issues where the unhover event for a tab fires after the hover event for a different tab.
-                                    if state.hovered_tab != Some(idx) && !is_hovered {
+                                    if state.hovered_tab != Some(tab_id) && !is_hovered {
                                         return;
                                     }
 
-                                    state.hovered_tab = is_hovered.then_some(idx);
+                                    state.hovered_tab = is_hovered.then_some(tab_id);
                                     cx.notify();
                                 }),
                             )
                     }))
                     .on_click(window.listener_for(&self.state, |state, idx, window, cx| {
-                        state.open_tab(window, cx, *idx);
+                        state.open_tab_index(window, cx, *idx);
                     })),
             )
-            .when(!state.tabs.is_empty(), |this| {
-                this.child(state.active_tab().content(window, cx))
-            })
+            .when_some(state.active_tab(), |this, tab| this.child(tab.content(window, cx)))
             .on_action(window.listener_for(&self.state, |state, action, window, cx| {
                 state.handle_action(window, cx, action);
             }))
@@ -147,23 +148,23 @@ impl RenderOnce for TabPanel {
 
 /// The state used with a [`TabPanel`].
 pub struct TabPanelState {
-    /// The index of the active tab.
-    active_tab: usize,
+    /// The ID of the active tab.
+    active_tab: Option<TabId>,
 
-    /// The index of the currently hovered tab, if any.
-    hovered_tab: Option<usize>,
+    /// The ID of the hovered tab.
+    hovered_tab: Option<TabId>,
 
     /// The state for the tab name input.
     name_input: Entity<InputState>,
 
     /// The index of the tab whose name is being edited.
-    name_input_tab: Option<usize>,
+    name_input_tab: Option<TabId>,
 
     /// The scroll handle used with the tab bar.
     scroll_handle: ScrollHandle,
 
     /// The tabs shown in the panel.
-    tabs: Vec<TabView>,
+    tabs: IndexMap<TabId, TabView>,
 }
 
 impl TabPanelState {
@@ -171,8 +172,8 @@ impl TabPanelState {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let name_input = cx.new(|cx| InputState::new(window, cx).context_menu(false));
         cx.subscribe(&name_input, |this, _, event: &InputEvent, cx| {
-            if let Some(idx) = this.name_input_tab
-                && let Some(tab) = this.tabs.get(idx)
+            if let Some(id) = this.name_input_tab
+                && let Some(tab) = this.tabs.get(&id)
                 && matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. })
             {
                 this.name_input_tab = None;
@@ -184,12 +185,12 @@ impl TabPanelState {
         .detach();
 
         Self {
-            active_tab: 0,
+            active_tab: None,
             hovered_tab: None,
             name_input,
             name_input_tab: None,
             scroll_handle: ScrollHandle::new(),
-            tabs: Vec::new(),
+            tabs: IndexMap::new(),
         }
     }
 
@@ -197,21 +198,28 @@ impl TabPanelState {
     fn handle_action(&mut self, window: &mut Window, cx: &mut Context<Self>, action: &TabPanelAction) {
         match action {
             TabPanelAction::CloseOtherTabs(_) => {}
-            TabPanelAction::CloseTab(idx) => self.close_tab(window, cx, *idx),
-            TabPanelAction::RenameTab(idx) => {
-                let name = self.tabs[*idx].label(cx);
-                self.name_input_tab = Some(*idx);
-                self.name_input.update(cx, |name_input, cx| {
-                    name_input.focus(window, cx);
-                    name_input.set_value(name, window, cx);
-                });
+            TabPanelAction::CloseTab(id) => self.close_tab(window, cx, *id),
+            TabPanelAction::RenameTab(id) => {
+                if let Some(tab) = self.tabs.get(id) {
+                    let name = tab.label(cx);
+                    self.name_input_tab = Some(*id);
+                    self.name_input.update(cx, |name_input, cx| {
+                        name_input.focus(window, cx);
+                        name_input.set_value(name, window, cx);
+                    });
+                }
             }
         }
     }
 
     /// Returns a reference to the active tab.
-    fn active_tab(&self) -> &TabView {
-        &self.tabs[self.active_tab]
+    fn active_tab(&self) -> Option<&TabView> {
+        self.active_tab.and_then(|id| self.tabs.get(&id))
+    }
+
+    /// Returns the index of the active tab.
+    fn active_tab_index(&self) -> Option<usize> {
+        self.active_tab.map(|id| self.tab_index(id))
     }
 
     /// Adds a new query tab to the panel.
@@ -222,53 +230,57 @@ impl TabPanelState {
 
     /// Adds a new tab to the panel.
     pub fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, variant: TabVariant) {
-        self.tabs.push(TabView::new(window, cx, variant));
-        self.open_tab(window, cx, self.tabs.len() - 1);
+        let tab = TabView::new(window, cx, variant);
+        let tab_id = tab.id;
+        self.tabs.insert(tab_id, tab);
+        self.open_tab(window, cx, tab_id);
     }
 
     /// Closes the active tab.
     pub fn close_active_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.close_tab(window, cx, self.active_tab);
+        if let Some(id) = self.active_tab {
+            self.close_tab(window, cx, id);
+        }
     }
 
     /// Closes the tab at the given index.
-    fn close_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, idx: usize) {
+    fn close_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, id: TabId) {
         // Do not close if there's only one tab remaining.
         if self.tabs.len() == 1 {
             return;
         }
 
         // Remove the tab being closed from the name input.
-        if self.name_input_tab == Some(idx) {
+        if self.name_input_tab == Some(id) {
             self.name_input_tab = None;
         }
 
         cx.defer_in(window, move |this, window, cx| {
-            this.tabs[idx].close(window, cx);
-            this.tabs.remove(idx);
-
-            // Adjust the active tab if needed.
-            let new_tab = if this.active_tab >= idx && this.active_tab > 0 {
-                this.active_tab - 1
-            } else {
-                this.active_tab
+            let Some(tab) = this.tabs.get(&id) else {
+                return;
             };
 
-            this.open_tab(window, cx, new_tab);
+            tab.close(window, cx);
+
+            // Adjust the active tab if needed.
+            if this.active_tab == Some(id) {
+                let active_tab_idx = this.active_tab_index().unwrap_or_default();
+                let new_idx = if active_tab_idx == this.tabs.len() - 1 {
+                    active_tab_idx.saturating_sub(1)
+                } else {
+                    active_tab_idx + 1
+                };
+
+                this.open_tab_index(window, cx, new_idx);
+            }
+
+            this.tabs.shift_remove(&id);
         });
     }
 
-    /// Returns the index for the tab displaying the given entity, if one is found.
-    pub fn entity_tab(&self, entity: &MigrisEntity) -> Option<usize> {
-        self.tabs
-            .iter()
-            .enumerate()
-            .find(|(_, tab)| match tab.variant() {
-                TabVariant::Query(_, _) => false,
-                TabVariant::Table(tab_entity) => tab_entity == entity,
-                TabVariant::View(tab_entity) => tab_entity == entity,
-            })
-            .map(|(idx, _)| idx)
+    /// Returns whether the tab panel is empty.
+    pub fn is_empty(&self) -> bool {
+        self.tabs.is_empty()
     }
 
     /// Calculates and returns what the next query tab number should be based on the current query tabs.
@@ -276,17 +288,38 @@ impl TabPanelState {
     /// The next query tab number should always be equal to the highest current query tab number plus one.
     fn next_query_number(&self) -> usize {
         self.tabs
-            .iter()
+            .values()
             .filter_map(|tab| {
-                let TabVariant::Query(number, _) = tab.variant() else {
+                let TabState::Query(tab) = &tab.state else {
                     return None;
                 };
 
-                Some(*number)
+                Some(tab.number())
             })
             .max()
             .unwrap_or_default()
             + 1
+    }
+
+    /// Opens a tab for the given entity.
+    pub fn open_entity_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, entity: MigrisEntity) {
+        let existing_tab = self.tabs.values().find(|tab| match &tab.state {
+            TabState::Query(_) => false,
+            TabState::Table(tab) => tab.entity(cx) == &entity,
+            TabState::View(tab) => tab.entity(cx) == &entity,
+        });
+
+        if let Some(tab) = existing_tab {
+            self.open_tab(window, cx, tab.id);
+        } else {
+            let variant = match entity.kind {
+                EntityKind::Table => TabVariant::Table(entity),
+                EntityKind::View => TabVariant::View(entity),
+                _ => unreachable!(),
+            };
+
+            self.add_tab(window, cx, variant);
+        }
     }
 
     /// Opens a query tab with the given path.
@@ -298,47 +331,71 @@ impl TabPanelState {
 
     /// Opens the next tab relative to the active tab.
     pub fn open_next_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Do nothing if we're already at the end of the tab bar.
-        if self.active_tab == self.tabs.len() - 1 {
-            return;
-        }
+        if let Some(idx) = self.active_tab_index() {
+            // Do nothing if we're already at the end of the tab bar.
+            if idx == self.tabs.len() - 1 {
+                return;
+            }
 
-        self.open_tab(window, cx, self.active_tab + 1);
+            let new_idx = idx + 1;
+            self.open_tab_index(window, cx, new_idx);
+        }
     }
 
     /// Opens the previous tab relative to the active tab.
     pub fn open_previous_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Do nothing if we're already at the start of the tab bar.
-        if self.active_tab == 0 {
-            return;
-        }
+        if let Some(idx) = self.active_tab_index() {
+            // Do nothing if we're already at the start of the tab bar.
+            if idx == 0 {
+                return;
+            }
 
-        self.open_tab(window, cx, self.active_tab - 1);
+            let new_idx = idx.saturating_sub(1);
+            self.open_tab_index(window, cx, new_idx);
+        }
     }
 
-    /// Opens the tab at the given index.
-    pub fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, idx: usize) {
-        self.active_tab = idx;
-        self.scroll_handle.scroll_to_item(idx);
+    /// Opens the tab with the given ID.
+    fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>, id: TabId) {
+        self.active_tab = Some(id);
+        self.scroll_handle.scroll_to_item(self.tab_index(id));
 
         // Focus the opened tab.
         cx.defer_in(window, |this, window, cx| {
-            this.active_tab().focus(window, cx);
+            if let Some(tab) = this.active_tab() {
+                tab.focus(window, cx);
+            }
         });
+    }
+
+    /// Opens the tab at the given index.
+    fn open_tab_index(&mut self, window: &mut Window, cx: &mut Context<Self>, idx: usize) {
+        if let Some(tab) = self.tab_from_index(idx) {
+            self.open_tab(window, cx, tab.id);
+        }
     }
 
     /// Saves the content of the active tab.
     pub fn save(&self, cx: &mut App) {
-        self.active_tab().save(cx);
+        if let Some(tab) = self.active_tab() {
+            tab.save(cx);
+        }
     }
 
     /// Saves the content of the active tab, prompting the user for a save location.
     pub fn save_as(&self, cx: &mut App) {
-        self.active_tab().save_as(cx);
+        if let Some(tab) = self.active_tab() {
+            tab.save_as(cx);
+        }
     }
 
-    /// Returns a reference to the tabs within the panel.
-    pub fn tabs(&self) -> &[TabView] {
-        &self.tabs
+    /// Returns the tab at the given index.
+    fn tab_from_index(&self, idx: usize) -> Option<&TabView> {
+        self.tabs.get_index(idx).map(|(_, tab)| tab)
+    }
+
+    /// Returns the index for the tab with the given ID.
+    fn tab_index(&self, id: TabId) -> usize {
+        self.tabs.get_index_of(&id).unwrap_or_default()
     }
 }

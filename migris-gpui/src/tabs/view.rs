@@ -140,6 +140,11 @@ impl ViewTab {
             )
     }
 
+    /// Returns the entity loaded in the tab.
+    pub fn entity<'a>(&self, cx: &'a App) -> &'a MigrisEntity {
+        &self.state.read(cx).entity
+    }
+
     /// Focuses the content in the tab.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         self.state.update(cx, |state, cx| {
