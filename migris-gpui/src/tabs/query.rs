@@ -502,8 +502,11 @@ impl QueryTabState {
 
     /// Formats the SQL within the editor.
     fn format_sql(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.path.is_some() {
+            self.has_changes = true;
+        }
+
         let formatted = migris::sql::format(&self.editor.read(cx).value(cx));
-        self.has_changes = true;
         self.editor.update(cx, |editor, cx| {
             editor.set_value(window, cx, &formatted);
         });
